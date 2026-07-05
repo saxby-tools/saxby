@@ -1,0 +1,6 @@
+{
+  "workspace": [
+    "./packages/llm-router",
+    "./packages/cli"
+  ]
+}
