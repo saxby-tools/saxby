@@ -1,1 +1,1 @@
-export { vramCommand } from "./cli/index.js";
+export { vramMacGuardCommand } from "./cli/index.js";
