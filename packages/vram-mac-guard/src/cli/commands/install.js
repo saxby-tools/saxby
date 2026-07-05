@@ -1,9 +1,8 @@
-import { Command } from "jsr:@cliffy/command@1.0.0-rc.4";
-import { join } from "jsr:@std/path";
-import { generatePlist } from "../../../core/src/utils/plist.js";
-import { executeAsRootMac as executeAsRoot } from "../../../core/src/utils/root.js";
+import { Command } from "@cliffy/command";
+import { executeAsRootMac as executeAsRoot, generatePlist } from "@shuntd/core";
+import { join } from "@std/path";
 
-const VRAM_SCRIPT_PATH = join(import.meta.dirname, "../../mac-vram-guard.sh");
+const VRAM_SCRIPT_PATH = join(import.meta.dirname, "../../vram-mac-guard.sh");
 const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
 
 export const installCommand = new Command()
@@ -30,7 +29,9 @@ export const installCommand = new Command()
             chmod 644 ${PLIST_DESTINATION}
             launchctl load -w ${PLIST_DESTINATION}`;
 
-        console.log("🔐 Requesting system permissions (Look for Touch ID prompt)...");
+        console.log(
+            "🔐 Requesting system permissions (Look for Touch ID prompt)...",
+        );
 
         try {
             await executeAsRoot(rootScript);

@@ -1,5 +1,5 @@
-import { Command } from "jsr:@cliffy/command@1.0.0-rc.4";
-import { executeAsRootMac as executeAsRoot } from "../../../core/src/utils/root.js";
+import { Command } from "@cliffy/command";
+import { executeAsRootMac as executeAsRoot } from "@shuntd/core";
 
 const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
 

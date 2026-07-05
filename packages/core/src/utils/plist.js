@@ -1,4 +1,4 @@
-import plist from "npm:plist@3.1.0";
+import plist from "plist";
 
 /**
  * Generates a macOS LaunchDaemon/LaunchAgent XML string.

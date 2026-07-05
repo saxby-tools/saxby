@@ -5,8 +5,12 @@
  */
 export const executeAsRootMac = async (shellScript) => {
     // Escape backslashes and double quotes so AppleScript doesn't break
-    const escapedScript = shellScript.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
-    const appleScript = `do shell script "${escapedScript}" with administrator privileges`;
+    const escapedScript = shellScript.replace(/\\/g, "\\\\").replace(
+        /"/g,
+        '\\"',
+    );
+    const appleScript =
+        `do shell script "${escapedScript}" with administrator privileges`;
 
     const command = new Deno.Command("osascript", {
         args: ["-e", appleScript],

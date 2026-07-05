@@ -1,4 +1,4 @@
-import { Command } from "jsr:@cliffy/command@1.0.0-rc.4";
+import { Command } from "@cliffy/command";
 import { installCommand } from "./commands/install.js";
 import { statusCommand } from "./commands/status.js";
 import { uninstallCommand } from "./commands/uninstall.js";

@@ -1,5 +1,5 @@
-import { Command } from "jsr:@cliffy/command@1.0.0-rc.4";
-import { vramCommand } from "../../vram-mac-guard/cli/index.js";
+import { Command } from "@cliffy/command";
+import { vramCommand } from "@shuntd/vram-mac-guard";
 
 await new Command()
     .name("shunt")

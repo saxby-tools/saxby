@@ -1,0 +1,12 @@
+{
+    "useTabs": false,
+    "indentWidth": 4,
+    "proseWrap": "preserve",
+    "exclude": ["**/node_modules/", "**/*.sh"],
+    "yaml": {
+        "indentWidth": 4
+    },
+    "json": {
+        "indentWidth": 4
+    }
+}

@@ -1,4 +1,4 @@
-import { Command } from "jsr:@cliffy/command@1.0.0-rc.4";
+import { Command } from "@cliffy/command";
 
 export const statusCommand = new Command()
     .description("Check the current memory limits and daemon status.")
@@ -11,9 +11,15 @@ export const statusCommand = new Command()
             stdout: "piped",
         });
         const { stdout: launchOut } = await launchctlCmd.output();
-        const isLoaded = new TextDecoder().decode(launchOut).includes("com.shuntd.vram-guard");
+        const isLoaded = new TextDecoder().decode(launchOut).includes(
+            "com.shuntd.vram-guard",
+        );
 
-        console.log(`Daemon Loaded : ${isLoaded ? "✅ Yes" : "❌ No (Run 'shunt vram install')"}`);
+        console.log(
+            `Daemon Loaded : ${
+                isLoaded ? "✅ Yes" : "❌ No (Run 'shunt vram install')"
+            }`,
+        );
 
         // 2. Check the current VRAM ceiling applied to the kernel
         const sysctlCmd = new Deno.Command("sysctl", {
