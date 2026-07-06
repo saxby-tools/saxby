@@ -17,6 +17,8 @@ export const installCommand = new Command()
         const plistContent = generatePlist({
             Label: "com.shuntd.vram-guard",
             ProgramArguments: ["/usr/bin/env", "bash", VRAM_SCRIPT_PATH],
+            StandardErrorPath: "/var/log/com.shuntd.vram-guard.error.log",
+            StandardOutPath: "/var/log/com.shuntd.vram-guard.out.log",
         });
 
         // 1. Write the XML to an unprivileged temporary file

@@ -5,23 +5,26 @@ export const statusCommand = new Command()
     .action(async () => {
         console.log("📊 Fetching vram-mac-guard status...\n");
 
-        // 1. Check if the daemon is actively loaded in launchd
+        // 1. Query the SYSTEM domain explicitly (does not require sudo to read)
         const launchctlCmd = new Deno.Command("launchctl", {
-            args: ["list"],
+            args: ["print", "system/com.shuntd.vram-guard"],
             stdout: "piped",
+            stderr: "piped",
         });
-        const { stdout: launchOut } = await launchctlCmd.output();
-        const isLoaded = new TextDecoder().decode(launchOut).includes(
-            "com.shuntd.vram-guard",
-        );
+
+        // If exit code is 0, it found it. If it's non-zero, it's not loaded.
+        const { code } = await launchctlCmd.output();
+        const isLoaded = code === 0;
 
         console.log(
             `Daemon Loaded : ${
-                isLoaded ? "✅ Yes" : "❌ No (Run 'shunt vram install')"
+                isLoaded
+                    ? "✅ Yes"
+                    : "❌ No (Run 'shunt vram-mac-guard install')"
             }`,
         );
 
-        // 2. Check the current VRAM ceiling applied to the kernel
+        // 2. Check the current VRAM ceiling applied to the kernel (readable by any user)
         const sysctlCmd = new Deno.Command("sysctl", {
             args: ["-n", "iogpu.wired_limit_mb"],
             stdout: "piped",

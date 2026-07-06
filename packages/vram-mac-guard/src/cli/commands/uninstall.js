@@ -9,12 +9,12 @@ export const uninstallCommand = new Command()
         console.log("🗑️  Preparing to remove vram-mac-guard...");
 
         const rootScript = `
-      # 1. Unload it from the kernel (ignore error if it's already unloaded)
-      launchctl unload -w ${PLIST_DESTINATION} || true
+            # 1. Unload it from the kernel (ignore error if it's already unloaded)
+            launchctl unload -w ${PLIST_DESTINATION} || true
 
-      # 2. Delete the plist file
-      rm -f ${PLIST_DESTINATION}
-    `;
+            # 2. Delete the plist file
+            rm -f ${PLIST_DESTINATION}
+        `;
 
         console.log("🔐 Requesting system permissions to remove daemon...");
 
