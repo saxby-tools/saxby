@@ -1,9 +1,14 @@
 import { Command } from "@cliffy/command";
-import { executeAsRootMac as executeAsRoot, generatePlist } from "@shuntd/core";
+import {
+    executeAsRootMac as executeAsRoot,
+    generatePlist,
+    IS_DEV,
+} from "@shuntd/core";
 import { join } from "@std/path";
 
-const VRAM_SCRIPT_PATH = join(import.meta.dirname, "../../vram-mac-guard.sh");
 const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
+const DAEMON_DIR = "/usr/local/libexec/shuntd";
+const DAEMON_SCRIPT_DESTINATION = `${DAEMON_DIR}/vram-mac-guard.sh`;
 
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
@@ -13,23 +18,49 @@ export const installCommand = new Command()
             Deno.exit(1);
         }
 
-        console.log("🔧 Generating LaunchDaemon Plist...");
+        console.log("🔧 Preparing vram-mac-guard script and plist...");
+
+        // 1. Read the bash script (Works locally AND from Deno compiled VFS)
+        const localScriptPath = join(
+            import.meta.dirname,
+            "../../vram-mac-guard.sh",
+        );
+        const scriptContent = await Deno.readTextFile(localScriptPath);
+
+        // 2. Generate the Plist targeting the physical libexec destination
         const plistContent = generatePlist({
             Label: "com.shuntd.vram-guard",
-            ProgramArguments: ["/usr/bin/env", "bash", VRAM_SCRIPT_PATH],
+            ProgramArguments: [
+                "/usr/bin/env",
+                "bash",
+                DAEMON_SCRIPT_DESTINATION,
+            ],
+            EnvironmentVariables: {
+                DEV_MODE: IS_DEV ? "true" : "false", // Inject dev mode for the .sh script
+            },
             StandardErrorPath: "/var/log/com.shuntd.vram-guard.error.log",
             StandardOutPath: "/var/log/com.shuntd.vram-guard.out.log",
         });
 
-        // 1. Write the XML to an unprivileged temporary file
-        const tempFilePath = await Deno.makeTempFile({ suffix: ".plist" });
-        await Deno.writeTextFile(tempFilePath, plistContent);
+        // 3. Write BOTH payloads to unprivileged temp files first
+        const tempScriptPath = await Deno.makeTempFile({ suffix: ".sh" });
+        await Deno.writeTextFile(tempScriptPath, scriptContent);
 
-        // 2. Build the shell script for Apple to execute as root
-        const rootScript = `cp ${tempFilePath} ${PLIST_DESTINATION}
+        const tempPlistPath = await Deno.makeTempFile({ suffix: ".plist" });
+        await Deno.writeTextFile(tempPlistPath, plistContent);
+
+        // 4. The Single Root Transaction: Move, permission, and load everything at once
+        const rootScript = `
+            mkdir -p ${DAEMON_DIR}
+            cp ${tempScriptPath} ${DAEMON_SCRIPT_DESTINATION}
+            chmod +x ${DAEMON_SCRIPT_DESTINATION}
+
+            cp ${tempPlistPath} ${PLIST_DESTINATION}
             chown root:wheel ${PLIST_DESTINATION}
             chmod 644 ${PLIST_DESTINATION}
-            launchctl load -w ${PLIST_DESTINATION}`;
+
+            launchctl load -w ${PLIST_DESTINATION}
+        `;
 
         console.log(
             "🔐 Requesting system permissions (Look for Touch ID prompt)...",
@@ -39,10 +70,10 @@ export const installCommand = new Command()
             await executeAsRoot(rootScript);
             console.log("✅ Successfully installed and loaded vram-mac-guard!");
         } catch (error) {
-            console.error("❌ Installation aborted or failed:");
-            console.error(error.message);
+            console.error("❌ Installation aborted or failed:", error.message);
         } finally {
-            // Clean up the temp file
-            await Deno.remove(tempFilePath).catch(() => {});
+            // Clean up temp files silently
+            await Deno.remove(tempScriptPath).catch(() => {});
+            await Deno.remove(tempPlistPath).catch(() => {});
         }
     });

@@ -15,8 +15,8 @@ fi
 
 # We explicitly inject HOME to satisfy Go-lang CLI requirements
 if ! HOME=/var/root command -v ollama >/dev/null 2>&1; then
-  echo "$(date) - FATAL: 'ollama' command not found in PATH. Exiting." >> "$LOG_FILE"
-  exit 1
+    echo "$(date) - FATAL: 'ollama' command not found in PATH. Exiting." >>"$LOG_FILE"
+    exit 1
 fi
 
 # ---------------------------------------------------------
@@ -55,36 +55,38 @@ LAST_STATE=""
 FIRST_RUN_LOGGED=0
 
 while true; do
-  # ---------------------------------------------------------
-  # DEBUG: CAPTURE STDERR INSTEAD OF SUPPRESSING IT
-  # ---------------------------------------------------------
-  RAW_OLLAMA_OUTPUT=$(HOME=/var/root OLLAMA_HOST=127.0.0.1:11434 ollama ps 2>&1)
-  LINE_COUNT=$(echo "$RAW_OLLAMA_OUTPUT" | grep -v "^$" | wc -l)
+    # ---------------------------------------------------------
+    # DEBUG: CAPTURE STDERR INSTEAD OF SUPPRESSING IT
+    # ---------------------------------------------------------
+    RAW_OLLAMA_OUTPUT=$(HOME=/var/root OLLAMA_HOST=127.0.0.1:11434 ollama ps 2>&1)
+    LINE_COUNT=$(echo "$RAW_OLLAMA_OUTPUT" | grep -v "^$" | wc -l)
 
-  if [ "$FIRST_RUN_LOGGED" -eq 0 ]; then
-    echo "--- OLLAMA RAW OUTPUT ---" >> "$LOG_FILE"
-    echo "$RAW_OLLAMA_OUTPUT" >> "$LOG_FILE"
-    echo "LINE COUNT: $LINE_COUNT" >> "$LOG_FILE"
-    echo "-------------------------" >> "$LOG_FILE"
-    FIRST_RUN_LOGGED=1
-  fi
-
-  if [ "$LINE_COUNT" -gt 1 ]; then
-    STATE="heavy"
-  else
-    STATE="safe"
-  fi
-
-  if [ "$STATE" != "$LAST_STATE" ]; then
-    if [ "$STATE" = "heavy" ]; then
-      sysctl iogpu.wired_limit_mb=$HEAVY_MB
-      echo "$(date) - Models detected. Raised limit to ${HEAVY_MB}MB" >> "$LOG_FILE"
-    else
-      sysctl iogpu.wired_limit_mb=$SAFE_MB
-      echo "$(date) - Models idled. Lowered limit to ${SAFE_MB}MB" >> "$LOG_FILE"
+    if [ "$FIRST_RUN_LOGGED" -eq 0 ]; then
+        if [ "$DEV_MODE" = "true" ]; then
+            echo "--- OLLAMA RAW OUTPUT ---" >>"$LOG_FILE"
+            echo "$RAW_OLLAMA_OUTPUT" >>"$LOG_FILE"
+            echo "LINE COUNT: $LINE_COUNT" >>"$LOG_FILE"
+            echo "-------------------------" >>"$LOG_FILE"
+        fi
+        FIRST_RUN_LOGGED=1
     fi
-    LAST_STATE="$STATE"
-  fi
 
-  sleep 5
+    if [ "$LINE_COUNT" -gt 1 ]; then
+        STATE="heavy"
+    else
+        STATE="safe"
+    fi
+
+    if [ "$STATE" != "$LAST_STATE" ]; then
+        if [ "$STATE" = "heavy" ]; then
+            sysctl iogpu.wired_limit_mb="$HEAVY_MB"
+            echo "$(date) - Models detected. Raised limit to ${HEAVY_MB}MB" >>"$LOG_FILE"
+        else
+            sysctl iogpu.wired_limit_mb="$SAFE_MB"
+            echo "$(date) - Models idled. Lowered limit to ${SAFE_MB}MB" >>"$LOG_FILE"
+        fi
+        LAST_STATE="$STATE"
+    fi
+
+    sleep 5
 done

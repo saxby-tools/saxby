@@ -2,6 +2,7 @@ import { Command } from "@cliffy/command";
 import { executeAsRootMac as executeAsRoot } from "@shuntd/core";
 
 const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
+const DAEMON_DIR = "/usr/local/libexec/shuntd";
 
 export const uninstallCommand = new Command()
     .description("Unload and remove the macOS LaunchDaemon.")
@@ -12,8 +13,9 @@ export const uninstallCommand = new Command()
             # 1. Unload it from the kernel (ignore error if it's already unloaded)
             launchctl unload -w ${PLIST_DESTINATION} || true
 
-            # 2. Delete the plist file
+            # 2. Delete the plist file and the script directory
             rm -f ${PLIST_DESTINATION}
+            rm -rf ${DAEMON_DIR}
         `;
 
         console.log("🔐 Requesting system permissions to remove daemon...");
