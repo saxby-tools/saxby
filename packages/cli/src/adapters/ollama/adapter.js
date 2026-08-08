@@ -1,15 +1,18 @@
 export class OllamaAdapter {
     static id = "ollama";
-    static name = "Ollama";
+    static displayName = "Ollama";
     static defaultUrl = "http://127.0.0.1:11434";
 
     /**
-     * Checks if the local Ollama server is responding.
+     * Checks if an Ollama instance is alive.
+     * @param {string} [url=this.defaultUrl]
      * @returns {Promise<boolean>}
      */
-    static async detect() {
+    static async detect(url = this.defaultUrl) {
         try {
-            const res = await fetch(this.defaultUrl);
+            const res = await fetch(url, {
+                signal: AbortSignal.timeout(1000), // 1s hard timeout
+            });
             return res.ok;
         } catch {
             return false;
@@ -17,12 +20,15 @@ export class OllamaAdapter {
     }
 
     /**
-     * Fetches installed model tags.
+     * Fetches installed model tags from the target host.
+     * @param {string} [url=this.defaultUrl]
      * @returns {Promise<string[]>}
      */
-    static async fetchInventory() {
+    static async fetchInventory(url = this.defaultUrl) {
         try {
-            const res = await fetch(`${this.defaultUrl}/api/tags`);
+            const res = await fetch(`${url}/api/tags`, {
+                signal: AbortSignal.timeout(3000),
+            });
             if (!res.ok) throw new Error("Failed to fetch tags");
             const data = await res.json();
             return data.models.map((m) => m.name);
@@ -37,14 +43,16 @@ export class OllamaAdapter {
     /**
      * Inspects a specific model via /api/show to pull real context length.
      * @param {string} modelName
+     * @param {string} [url=this.defaultUrl]
      * @returns {Promise<{ max_context: number }>}
      */
-    static async fetchModelDetails(modelName) {
+    static async fetchModelDetails(modelName, url = this.defaultUrl) {
         try {
-            const res = await fetch(`${this.defaultUrl}/api/show`, {
+            const res = await fetch(`${url}/api/show`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: modelName }),
+                signal: AbortSignal.timeout(3000),
             });
 
             if (!res.ok) return { max_context: 4096 };
@@ -52,7 +60,6 @@ export class OllamaAdapter {
             const data = await res.json();
             const modelInfo = data.model_info || {};
 
-            // Dynamically find context_length key (e.g., 'general.context_length')
             const contextKey = Object.keys(modelInfo).find((k) =>
                 k.endsWith(".context_length")
             );
