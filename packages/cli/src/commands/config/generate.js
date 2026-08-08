@@ -2,7 +2,7 @@ import { Command } from "@cliffy/command";
 import { Confirm, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
 import { getConfigDir } from "@shuntd/core";
-import { OllamaAdapter } from "../../adapters/ollama.js";
+import { ADAPTERS } from "../../adapters/index.js";
 
 const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_NAME = "config.json";
@@ -19,14 +19,14 @@ export const generateCommand = new Command()
         "Overwrite the file if it already exists without prompting.",
     )
     .action(async (options) => {
-        // --- 1. Determine Target Path ---
+        // 1. Determine Target Path
         const configDir = join(getConfigDir(), SHUNTD_DIR_NAME);
         const targetPath = options.out || join(configDir, CONFIG_FILE_NAME);
 
-        // --- 2. Check Overwrite (Chaos Hat: Protect the user's data) ---
+        // 2. Overwrite Protection
         if (!options.stdout && !options.force) {
             try {
-                await Deno.stat(targetPath); // Throws if file doesn't exist
+                await Deno.stat(targetPath);
                 const overwrite = await Confirm.prompt({
                     message:
                         `⚠️  File already exists at ${targetPath}. Overwrite?`,
@@ -44,85 +44,54 @@ export const generateCommand = new Command()
             }
         }
 
-        // --- 3. Scan & Select Models ---
+        // 3. Scan All Registered Adapters
         console.log("\n🔍 Scanning for local AI backends...");
-        const isOllamaAlive = await OllamaAdapter.detect();
+        const activeAdapters = [];
 
-        if (!isOllamaAlive) {
+        for (const entry of ADAPTERS) {
+            const isAlive = await entry.adapter.detect();
+            if (isAlive) {
+                activeAdapters.push(entry);
+            }
+        }
+
+        if (activeAdapters.length === 0) {
             console.error(
-                "❌ Could not detect Ollama on http://127.0.0.1:11434.",
+                "❌ Could not detect any active local AI backends (Ollama, etc.).",
+            );
+            console.error(
+                "Please ensure your AI backend is running and try again.",
             );
             Deno.exit(1);
         }
 
-        const models = await OllamaAdapter.fetchInventory();
-        if (models.length === 0) {
-            console.error(
-                "❌ No models found in Ollama. Please pull a model first.",
-            );
-            Deno.exit(1);
+        // 4. Select Active Adapter (Auto-pick if 1, Prompt if > 1)
+        let selectedAdapter = activeAdapters[0];
+
+        if (activeAdapters.length > 1) {
+            const choice = await Select.prompt({
+                message:
+                    "Multiple local AI backends detected. Select one to configure:",
+                options: activeAdapters.map((a) => ({
+                    name: a.name,
+                    value: a.id,
+                })),
+            });
+            selectedAdapter = activeAdapters.find((a) => a.id === choice);
+        } else {
+            console.log(`✅ Detected active backend: ${selectedAdapter.name}`);
         }
 
-        console.log(`📦 Found ${models.length} installed models.\n`);
-
-        const globalDefault = await Select.prompt({
-            message: "Global Fallback model (used when routing fails):",
-            options: models,
-        });
-
-        const coderModel = await Select.prompt({
-            message:
-                "'Coder' persona model (optimized for code and refactoring):",
-            options: models,
-        });
-
-        const writerModel = await Select.prompt({
-            message:
-                "'Writer' persona model (optimized for prose and reasoning):",
-            options: models,
-        });
-
-        // --- 4. Build Payload ---
-        const configPayload = {
-            listen_port: 11435,
-            upstream_url: OllamaAdapter.defaultUrl,
-            global_default_model: globalDefault,
-            catalog: {},
-            personas: {
-                coder: {
-                    description:
-                        "Assists with programming and software architecture.",
-                    exemplars: ["Refactor this function", "Write a unit test"],
-                    default_model: coderModel,
-                },
-                writer: {
-                    description: "Assists with prose and documentation.",
-                    exemplars: ["Summarize this article", "Draft an email"],
-                    default_model: writerModel,
-                },
-            },
-        };
-
-        const uniqueModels = [
-            ...new Set([globalDefault, coderModel, writerModel]),
-        ];
-        uniqueModels.forEach((model) => {
-            configPayload.catalog[model] = {
-                name: model,
-                max_context: 4096,
-                capabilities: [],
-            };
-        });
-
+        // 5. Delegate to Backend Generator Flow
+        const configPayload = await selectedAdapter.generate();
         const jsonString = JSON.stringify(configPayload, null, 4);
 
-        // --- 5. Output / Save ---
+        // 6. Save or Output
         if (options.stdout) {
             console.log("\n" + jsonString);
             return;
         }
 
-        // Ensure directory exists if saving to default or nested custom path
         const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/"));
         if (targetDir) await Deno.mkdir(targetDir, { recursive: true });
 
