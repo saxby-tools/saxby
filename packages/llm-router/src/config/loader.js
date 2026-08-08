@@ -4,11 +4,13 @@ import { getConfigDir } from "@shuntd/core";
 import { validateConfig } from "./schema.js";
 
 const SHUNTD_DIR_NAME = "shuntd";
-const CONFIG_FILE_NAME = "config.json";
+const CONFIG_FILE_JSONC = "config.jsonc";
+const CONFIG_FILE_JSON = "config.json";
 
 export async function loadConfig() {
     const configDir = join(getConfigDir(), SHUNTD_DIR_NAME);
-    const configPath = join(configDir, CONFIG_FILE_NAME);
+    const pathJsonc = join(configDir, CONFIG_FILE_JSONC);
+    const pathJson = join(configDir, CONFIG_FILE_JSON);
 
     try {
         await Deno.mkdir(configDir, { recursive: true });
@@ -20,26 +22,38 @@ export async function loadConfig() {
         }
     }
 
-    let rawJson;
+    // Try reading config.jsonc first, fall back to config.json
+    let rawContent;
+    let loadedPath;
+
     try {
-        rawJson = await Deno.readTextFile(configPath);
+        rawContent = await Deno.readTextFile(pathJsonc);
+        loadedPath = pathJsonc;
     } catch (err) {
         if (err instanceof Deno.errors.NotFound) {
-            throw new Error(
-                "❌ No config found!\n" +
-                    "Please run 'shunt config generate' to launch the interactive setup guide.",
-            );
+            try {
+                rawContent = await Deno.readTextFile(pathJson);
+                loadedPath = pathJson;
+            } catch (innerErr) {
+                if (innerErr instanceof Deno.errors.NotFound) {
+                    throw new Error(
+                        "❌ No config found!\n" +
+                            "Please run 'shunt config generate' to launch the interactive setup guide.",
+                    );
+                }
+                throw innerErr;
+            }
+        } else {
+            throw err;
         }
-        throw err;
     }
 
     let parsedData;
     try {
-        // Parse using JSONC parser to support inline comments in user configs
-        parsedData = parseJsonc(rawJson);
+        parsedData = parseJsonc(rawContent);
     } catch (err) {
         throw new Error(
-            `FATAL: Config file at ${configPath} contains invalid JSON/JSONC.\n${err.message}`,
+            `FATAL: Config file at ${loadedPath} contains invalid JSON/JSONC.\n${err.message}`,
         );
     }
 
