@@ -2,17 +2,19 @@ import { Select } from "@cliffy/prompt";
 import { OllamaAdapter } from "./adapter.js";
 
 /**
- * Runs the Ollama interactive wizard and returns a valid shuntd config payload.
+ * Runs the Ollama interactive wizard.
+ * @param {string} [targetUrl]
  * @returns {Promise<Object>}
  */
-export async function generateOllamaConfig() {
-    const models = await OllamaAdapter.fetchInventory();
+export async function generateOllamaConfig(
+    targetUrl = OllamaAdapter.defaultUrl,
+) {
+    const models = await OllamaAdapter.fetchInventory(targetUrl);
 
     if (models.length === 0) {
-        console.error(
-            "❌ No models found in Ollama. Please pull a model first (`ollama run <model>`).",
+        throw new Error(
+            `No models found in Ollama at ${targetUrl}. Please pull a model first (\`ollama run <model>\`).`,
         );
-        Deno.exit(1);
     }
 
     console.log(`📦 Found ${models.length} installed models in Ollama.\n`);
@@ -32,7 +34,6 @@ export async function generateOllamaConfig() {
         options: models,
     });
 
-    // Inspect unique models for physical hardware context lengths
     const uniqueModels = [...new Set([globalDefault, coderModel, writerModel])];
     const catalog = {};
 
@@ -40,7 +41,7 @@ export async function generateOllamaConfig() {
         "\n⚙️  Inspecting selected models for hardware specifications...",
     );
     for (const model of uniqueModels) {
-        const details = await OllamaAdapter.fetchModelDetails(model);
+        const details = await OllamaAdapter.fetchModelDetails(model, targetUrl);
         catalog[model] = {
             name: model,
             max_context: details.max_context,
@@ -50,7 +51,7 @@ export async function generateOllamaConfig() {
 
     return {
         listen_port: 11435,
-        upstream_url: OllamaAdapter.defaultUrl,
+        upstream_url: targetUrl,
         global_default_model: globalDefault,
         catalog,
         personas: {
