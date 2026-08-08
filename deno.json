@@ -8,6 +8,7 @@
     "imports": {
         "@cliffy/prompt": "jsr:@cliffy/prompt@^1.2.1",
         "@std/fmt": "jsr:@std/fmt@^1.0.10",
+        "@std/jsonc": "jsr:@std/jsonc@^1.0.2",
         "@std/path": "jsr:@std/path@1.0.6",
         "@cliffy/command": "jsr:@cliffy/command@^1.2.1",
         "plist": "npm:plist@3.1.0",
