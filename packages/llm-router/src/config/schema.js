@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-// 1. Capability Tags (e.g., ["TAG_CODER", "TAG_MULTI_FILE"])
-// We enforce uppercase strings to prevent weird matching bugs later.
 export const TagSchema = v.pipe(
     v.string(),
     v.regex(
@@ -10,10 +8,8 @@ export const TagSchema = v.pipe(
     ),
 );
 
-// 2. The Model Catalog Entry
-// Represents physical models on the hardware (or cloud)
-export const ModelSchema = v.object({
-    name: v.string("Model name is required (e.g., devstral-small-2)"),
+export const ModelSchema = v.strictObject({
+    name: v.string("Model name is required"),
     description: v.optional(v.string()),
     max_context: v.pipe(
         v.number(),
@@ -22,43 +18,68 @@ export const ModelSchema = v.object({
     capabilities: v.optional(v.array(TagSchema), []),
 });
 
-// 3. The Persona Entry
-// Represents the intent class (e.g., "coder", "writer")
-export const PersonaSchema = v.object({
+export const PersonaSchema = v.strictObject({
     description: v.optional(v.string()),
-    // Exemplars for Tier 3 Semantic Routing (e.g., "Refactor this file")
     exemplars: v.optional(v.array(v.string()), []),
-    // The ultimate fallback model if no capabilities match
     default_model: v.string(
         "Every persona must have a default fallback model ID",
     ),
 });
 
-// 4. The Root Config Document
-export const ShuntdConfigSchema = v.object({
-    // Upstream OpenAI-compatible endpoint
+export const ShuntdConfigSchema = v.strictObject({
+    listen_port: v.optional(
+        v.pipe(
+            v.number(),
+            v.minValue(1024, "Port must be > 1023"),
+            v.maxValue(65535, "Port must be < 65536"),
+        ),
+        11435,
+    ),
     upstream_url: v.optional(v.string(), "http://127.0.0.1:11434"),
-
-    // Fallback model if the router completely fails
-    global_default_model: v.string(),
-
-    // Dictionaries keyed by ID for deep merging
+    global_default_model: v.string("global_default_model is required"),
     personas: v.record(v.string(), PersonaSchema),
     catalog: v.record(v.string(), ModelSchema),
 });
 
 /**
- * Validates a raw config object against the schema.
- * Throws a clean error if validation fails.
+ * Asserts referential integrity across the config object.
+ * Ensures all referenced models actually exist in the catalog.
+ */
+function validateReferentialIntegrity(config) {
+    const catalogKeys = new Set(Object.keys(config.catalog));
+
+    // 1. Check global_default_model
+    if (!catalogKeys.has(config.global_default_model)) {
+        throw new Error(
+            `Referential Integrity Error: global_default_model '${config.global_default_model}' is not defined in catalog.`,
+        );
+    }
+
+    // 2. Check each persona's default_model
+    for (const [personaName, persona] of Object.entries(config.personas)) {
+        if (!catalogKeys.has(persona.default_model)) {
+            throw new Error(
+                `Referential Integrity Error: Persona '${personaName}' references default_model '${persona.default_model}', which is not in catalog.`,
+            );
+        }
+    }
+}
+
+/**
+ * Validates a raw config object against schema and integrity rules.
  */
 export function validateConfig(rawConfig) {
     try {
-        return v.parse(ShuntdConfigSchema, rawConfig);
+        const parsed = v.parse(ShuntdConfigSchema, rawConfig);
+        validateReferentialIntegrity(parsed);
+        return parsed;
     } catch (err) {
-        // We will want to format Valibot errors nicely for the CLI later,
-        // but for now, fail loud so we don't swallow config typos.
         console.error("❌ Config Validation Failed:");
-        console.error(err.issues);
+        if (err.issues) {
+            console.error(err.issues);
+        } else {
+            console.error(`- ${err.message}`);
+        }
         throw new Error("Invalid shuntd configuration.");
     }
 }
