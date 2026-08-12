@@ -7,6 +7,7 @@
     ],
     "imports": {
         "@cliffy/prompt": "jsr:@cliffy/prompt@^1.2.1",
+        "@hono/hono": "jsr:@hono/hono@^4.13.1",
         "@std/fmt": "jsr:@std/fmt@^1.0.10",
         "@std/jsonc": "jsr:@std/jsonc@^1.0.2",
         "@std/path": "jsr:@std/path@1.0.6",

@@ -1,5 +1,5 @@
 import { Command } from "@cliffy/command";
-import { Confirm, Select } from "@cliffy/prompt";
+import { Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
 import { getConfigDir } from "@shuntd/core";
 import { ADAPTERS } from "../../adapters/index.js";
@@ -124,10 +124,29 @@ export const generateCommand = new Command()
             );
         }
 
+        // 3.5 Prompt for the listen_port
+        const listenPortInput = await Input.prompt({
+            message: "What port should the shuntd proxy listen on?",
+            default: "11435",
+            validate: (value) => {
+                const port = parseInt(value, 10);
+                if (isNaN(port) || port < 1024 || port > 65535) {
+                    return "Port must be a valid number between 1024 and 65535.";
+                }
+                return true; // Validation passed
+            },
+        });
+        const parsedPort = parseInt(listenPortInput, 10);
+
         // 4. Run Generator
         let configPayload;
         try {
             configPayload = await selected.entry.generate(selected.targetUrl);
+
+            // Overwrite the payload's port with the user's choice
+            if (!isNaN(parsedPort)) {
+                configPayload.listen_port = parsedPort;
+            }
         } catch (err) {
             console.error(`❌ Generator Error: ${err.message}`);
             Deno.exit(1);

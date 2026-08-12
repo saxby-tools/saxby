@@ -22,10 +22,10 @@ A local-first, config-driven AI routing suite.
   - [x] Establish the XDG-compliant config loader (crash-on-missing to enforce sane defaults).
   - [x] Build the `shunt config generate` interactive TUI.
   - [x] Implement the `OllamaAdapter` for hardware capability detection.
-- [ ] **Milestone 2: The Core Proxy & SSE Engine**
-  - [ ] Spin up the Deno HTTP server to intercept `POST /v1/chat/completions` and `GET /v1/models`.
-  - [ ] Implement transparent payload rewriting (swapping requested models for routed models).
-  - [ ] Handle Server-Sent Events (SSE) streaming proxy logic.
+- [x] **Milestone 2: The Core Proxy & SSE Engine**
+  - [x] Spin up the Deno HTTP server to intercept `POST /v1/chat/completions` and `GET /v1/models`.
+  - [x] Implement transparent payload rewriting (swapping requested models for routed models).
+  - [x] Handle Server-Sent Events (SSE) streaming proxy logic.
 - [ ] **Milestone 3: Tier 1 & Tier 2 Routing**
   - [ ] Implement Tier 1 (Overrides): Parse prompts for explicit slash commands (`/coder`) or directives.
   - [ ] Implement Tier 2 (Owned Extractor): Build lightweight lexical parser to detect code fences, formatting, and keywords to emit canonical capability tags.
