@@ -6,38 +6,65 @@ import { ADAPTERS } from "../../adapters/index.js";
 
 const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
+const INDENT = 4;
+
+// Comments injected above each top-level config key in the generated file.
+// Keys absent here still render (see renderJsoncConfig) — they just render
+// without a comment, so this map never causes fields to be dropped.
+const HEADER_COMMENT = [
+    "shuntd configuration file.",
+    "Edit directly to add capabilities, exemplars, or custom personas.",
+];
+
+const CONFIG_COMMENTS = {
+    listen_port: ["The port shuntd will listen on (default: 11435)."],
+    upstream_url: ["Upstream OpenAI-compatible provider endpoint."],
+    global_default_model: [
+        "Fallback model used when no persona or capability matches.",
+    ],
+    catalog: [
+        "Hardware model catalog.",
+        "max_context was auto-detected from the backend via /api/show.",
+        'Add capability tags (e.g. "TAG_MULTI_FILE") to a model\'s',
+        '"capabilities" array to make it eligible for capability routing.',
+    ],
+    personas: [
+        "Intent personas.",
+        "exemplars train the Tier 3 semantic embedding matcher.",
+    ],
+};
 
 /**
- * Converts a raw config payload object into a well-commented JSONC string.
+ * Serializes a config payload to a commented JSONC string.
+ *
+ * The whole payload goes through JSON.stringify, so (a) every value is escaped
+ * correctly and (b) every field is emitted whether or not we have a comment for
+ * it — this never silently drops keys the schema/generator add later. Comments
+ * are then injected above matching top-level keys. It is a pure formatter and
+ * not a second authority on config shape.
+ *
  * @param {Object} payload
  * @returns {string}
  */
 function renderJsoncConfig(payload) {
-    return `// shuntd configuration file
-// Edit this file directly to add capabilities, modify exemplars, or add custom personas.
-{
-    // The port shuntd will listen on (default: 11435)
-    "listen_port": ${payload.listen_port},
+    const json = JSON.stringify(payload, null, INDENT);
+    const pad = " ".repeat(INDENT);
+    // Match a top-level key only: exactly one indent, then "key":
+    const topLevelKey = new RegExp(`^ {${INDENT}}"([^"]+)":`);
 
-    // Upstream AI provider endpoint
-    "upstream_url": "${payload.upstream_url}",
+    const out = HEADER_COMMENT.map((c) => `// ${c}`);
 
-    // Fallback model used when no persona or capability matches
-    "global_default_model": "${payload.global_default_model}",
-
-    // Hardware Model Catalog
-    // max_context was auto-detected from local hardware via /api/show
-    "catalog": ${
-        JSON.stringify(payload.catalog, null, 8).replace(/^/gm, "    ").trim()
-    },
-
-    // Intent Personas for Tier 1 and Tier 3 routing
-    // exemplars train the Tier 3 semantic embedding matcher
-    "personas": ${
-        JSON.stringify(payload.personas, null, 8).replace(/^/gm, "    ").trim()
+    for (const line of json.split("\n")) {
+        const match = line.match(topLevelKey);
+        if (match && CONFIG_COMMENTS[match[1]]) {
+            // Blank line between sections, but not right after the opening brace.
+            if (out[out.length - 1].trim() !== "{") out.push("");
+            for (const c of CONFIG_COMMENTS[match[1]]) out.push(`${pad}// ${c}`);
+        }
+        out.push(line);
     }
-}
-`;
+
+    return out.join("\n") + "\n";
 }
 
 export const generateCommand = new Command()

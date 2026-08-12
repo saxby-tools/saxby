@@ -29,6 +29,18 @@ export async function loadConfig() {
     try {
         rawContent = await Deno.readTextFile(pathJsonc);
         loadedPath = pathJsonc;
+
+        // Warn if a stale config.json is being shadowed by config.jsonc, so an
+        // edit to the wrong file doesn't silently do nothing.
+        try {
+            await Deno.stat(pathJson);
+            console.warn(
+                `⚠️  Both config.jsonc and config.json exist in ${configDir}; ` +
+                    `loading config.jsonc and ignoring config.json.`,
+            );
+        } catch (_) {
+            // config.json absent — nothing to warn about.
+        }
     } catch (err) {
         if (err instanceof Deno.errors.NotFound) {
             try {
