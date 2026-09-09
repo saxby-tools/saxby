@@ -59,7 +59,9 @@ function renderJsoncConfig(payload) {
         if (match && CONFIG_COMMENTS[match[1]]) {
             // Blank line between sections, but not right after the opening brace.
             if (out[out.length - 1].trim() !== "{") out.push("");
-            for (const c of CONFIG_COMMENTS[match[1]]) out.push(`${pad}// ${c}`);
+            for (const c of CONFIG_COMMENTS[match[1]]) {
+                out.push(`${pad}// ${c}`);
+            }
         }
         out.push(line);
     }
@@ -165,15 +167,95 @@ export const generateCommand = new Command()
         });
         const parsedPort = parseInt(listenPortInput, 10);
 
-        // 4. Run Generator
+        // 4. Run Generator & Build Payload
         let configPayload;
         try {
-            configPayload = await selected.entry.generate(selected.targetUrl);
+            // 4a. Get backend-specific data from the adapter
+            const backendData = await selected.entry.generate(
+                selected.targetUrl,
+            );
+            const { targetUrl, models } = backendData;
 
-            // Overwrite the payload's port with the user's choice
-            if (!isNaN(parsedPort)) {
-                configPayload.listen_port = parsedPort;
+            // 4b. Universal Prompts
+            const globalDefault = await Select.prompt({
+                message: "Global Fallback model (used when routing fails):",
+                options: models,
+            });
+
+            // 4b. Universal Persona Prompts
+            const coderModel = await Select.prompt({
+                message:
+                    "'Coder' persona model (optimized for code and refactoring):",
+                options: models,
+            });
+
+            const writerModel = await Select.prompt({
+                message:
+                    "'Writer' persona model (optimized for prose and reasoning):",
+                options: models,
+            });
+
+            // 4c. Catalog Catch-all
+            const baselineModels = new Set([
+                globalDefault,
+                coderModel,
+                writerModel,
+            ]);
+            const remainingModels = models.filter((m) =>
+                !baselineModels.has(m)
+            );
+
+            let additionalModels = [];
+            if (remainingModels.length > 0) {
+                additionalModels = await Checkbox.prompt({
+                    message:
+                        "Select any additional models to add to the routing catalog (capabilities are manually tagged later):",
+                    options: remainingModels,
+                });
             }
+
+            const uniqueModels = [...baselineModels, ...additionalModels];
+            const catalog = {};
+
+            console.log(
+                "\n⚙️  Inspecting selected models for hardware specifications...",
+            );
+            for (const model of uniqueModels) {
+                const details = await selected.entry.adapter.fetchModelDetails(
+                    model,
+                    targetUrl,
+                );
+                catalog[model] = {
+                    name: model,
+                    max_context: details.max_context,
+                    capabilities: [],
+                };
+            }
+
+            // 4d. Construct Final Payload
+            configPayload = {
+                // parsedPort is captured from the Input.prompt in step 3.5
+                listen_port: isNaN(parsedPort) ? 11435 : parsedPort,
+                upstream_url: targetUrl,
+                global_default_model: globalDefault,
+                catalog,
+                personas: {
+                    coder: {
+                        description:
+                            "Assists with programming and software architecture.",
+                        exemplars: [
+                            "Refactor this function",
+                            "Write a unit test",
+                        ],
+                        default_model: coderModel,
+                    },
+                    writer: {
+                        description: "Assists with prose and documentation.",
+                        exemplars: ["Summarize this article", "Draft an email"],
+                        default_model: writerModel,
+                    },
+                },
+            };
         } catch (err) {
             console.error(`❌ Generator Error: ${err.message}`);
             Deno.exit(1);
