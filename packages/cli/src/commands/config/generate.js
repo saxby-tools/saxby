@@ -1,5 +1,5 @@
 import { Command } from "@cliffy/command";
-import { Confirm, Input, Select } from "@cliffy/prompt";
+import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
 import { getConfigDir } from "@shuntd/core";
 import { ADAPTERS } from "../../adapters/index.js";
