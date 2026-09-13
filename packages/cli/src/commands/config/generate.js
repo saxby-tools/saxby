@@ -28,6 +28,10 @@ const CONFIG_COMMENTS = {
         'Add capability tags (e.g. "TAG_MULTI_FILE") to a model\'s',
         '"capabilities" array to make it eligible for capability routing.',
     ],
+    semantic: [
+        "Semantic fallback routing configuration.",
+        "WARNING: Changing the active model invalidates cached vectors and starts a new comparison epoch.",
+    ],
     personas: [
         "Intent personas.",
         "exemplars train the Tier 3 semantic embedding matcher.",
@@ -232,13 +236,69 @@ export const generateCommand = new Command()
                 };
             }
 
-            // 4d. Construct Final Payload
+            // 4d. Semantic Fallback Prompts
+            console.log("\n🧠 Configuring Embedded Semantic Fallback...");
+
+            const configureSemantic = await Confirm.prompt({
+                message:
+                    "Configure a Semantic Fallback model now? (Requires a dedicated embedding model like bge-m3 or nomic-embed-text)",
+                default: false,
+            });
+
+            let semanticConfig = undefined;
+
+            if (configureSemantic) {
+                const semanticModel = await Select.prompt({
+                    message: "Select the semantic fallback model:",
+                    options: models,
+                });
+
+                const defaultDim = semanticModel.includes("nomic")
+                    ? "768"
+                    : "1024";
+                const defaultThreshold = semanticModel.includes("nomic")
+                    ? "0.65"
+                    : "0.72";
+
+                const semanticDimInput = await Input.prompt({
+                    message:
+                        `Vector dimensions for ${semanticModel}? (e.g., 1024 for bge-m3):`,
+                    default: defaultDim,
+                    validate: (v) =>
+                        !isNaN(parseInt(v, 10)) || "Must be a valid integer.",
+                });
+
+                const semanticThresholdInput = await Input.prompt({
+                    message:
+                        `Confidence threshold for ${semanticModel}? (0.0 to 1.0):`,
+                    default: defaultThreshold,
+                    validate: (v) => {
+                        const parsed = parseFloat(v);
+                        return (!isNaN(parsed) && parsed > 0 && parsed < 1) ||
+                            "Must be a float between 0.0 and 1.0.";
+                    },
+                });
+
+                semanticConfig = {
+                    active: semanticModel,
+                    profiles: {
+                        [semanticModel]: {
+                            model: semanticModel,
+                            dim: parseInt(semanticDimInput, 10),
+                            threshold: parseFloat(semanticThresholdInput),
+                        },
+                    },
+                };
+            }
+
+            // 4e. Construct Final Payload
             configPayload = {
                 // parsedPort is captured from the Input.prompt in step 3.5
                 listen_port: isNaN(parsedPort) ? 11435 : parsedPort,
                 upstream_url: targetUrl,
                 global_default_model: globalDefault,
                 catalog,
+                ...(semanticConfig ? { semantic: semanticConfig } : {}),
                 personas: {
                     coder: {
                         description:
