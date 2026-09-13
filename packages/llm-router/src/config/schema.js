@@ -26,6 +26,24 @@ export const PersonaSchema = v.strictObject({
     ),
 });
 
+export const SemanticProfileSchema = v.strictObject({
+    model: v.string("Semantic model name is required"),
+    dim: v.pipe(
+        v.number("Dimension must be a number"),
+        v.minValue(1, "Dimension must be at least 1"),
+    ),
+    threshold: v.pipe(
+        v.number("Threshold must be a number"),
+        v.minValue(0, "Threshold must be >= 0.0"),
+        v.maxValue(1, "Threshold must be <= 1.0"),
+    ),
+});
+
+export const SemanticSchema = v.strictObject({
+    active: v.string("Active semantic profile is required"),
+    profiles: v.record(v.string(), SemanticProfileSchema),
+});
+
 export const ShuntdConfigSchema = v.strictObject({
     listen_port: v.optional(
         v.pipe(
@@ -37,6 +55,7 @@ export const ShuntdConfigSchema = v.strictObject({
     ),
     upstream_url: v.optional(v.string(), "http://127.0.0.1:11434"),
     global_default_model: v.string("global_default_model is required"),
+    semantic: v.optional(SemanticSchema),
     personas: v.record(v.string(), PersonaSchema),
     catalog: v.record(v.string(), ModelSchema),
 });
@@ -60,6 +79,15 @@ function validateReferentialIntegrity(config) {
         if (!catalogKeys.has(persona.default_model)) {
             throw new Error(
                 `Referential Integrity Error: Persona '${personaName}' references default_model '${persona.default_model}', which is not in catalog.`,
+            );
+        }
+    }
+
+    // 3. Check semantic active profile
+    if (config.semantic && config.semantic.active) {
+        if (!config.semantic.profiles[config.semantic.active]) {
+            throw new Error(
+                `Referential Integrity Error: Semantic active profile '${config.semantic.active}' is not defined in semantic.profiles.`,
             );
         }
     }
