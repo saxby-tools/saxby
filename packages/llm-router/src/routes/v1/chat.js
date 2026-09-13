@@ -1,3 +1,6 @@
+import { extractIntent } from "../../pipeline/extract.js";
+import { resolvePipeline } from "../../pipeline/resolve.js";
+
 /**
  * Registers all /v1/chat endpoints directly onto the Hono app.
  * @param {import("hono").Hono} app
@@ -10,21 +13,38 @@ export function registerChatRoutes(app) {
 
         let targetModel = rawModel; // Default to passing through exactly what they asked for
 
-        // 1. If they request the smart router, fallback to default (until Milestone 3)
-        if (rawModel === "shuntd") {
-            targetModel = config.global_default_model;
-        } // 2. If they explicitly bypassed the router (e.g., shuntd/gemma4)
-        else if (rawModel.startsWith("shuntd/")) {
+        // 1. Direct hardware bypass (e.g., shuntd/devstral-small)
+        if (rawModel.startsWith("shuntd/")) {
             targetModel = rawModel.replace("shuntd/", "");
-        }
+            body.model = targetModel;
+            console.log(`\n➡️ Proxying direct request to: ${targetModel}`);
+        } // 2. Smart Routing Triggered
+        else if (rawModel === "shuntd") {
+            // Grab the last user message for the extraction layer
+            const messages = body.messages || [];
+            const lastUserMsg = messages.slice().reverse().find((m) =>
+                m.role === "user"
+            );
+            const rawPrompt = lastUserMsg ? lastUserMsg.content : "";
 
-        // Apply the resolved model
-        body.model = targetModel;
+            // Run the Pipeline
+            const extracted = extractIntent(rawPrompt, config);
+            const decision = await resolvePipeline(extracted, config);
 
-        if (rawModel !== targetModel) {
-            console.log(`\n➡️ Proxying request to: ${targetModel}`);
-            console.log(`   (Routed '${rawModel}' -> '${targetModel}')`);
-        } else {
+            targetModel = decision.model;
+            body.model = targetModel;
+
+            // Mask explicit slash commands so the LLM doesn't see "/coder"
+            if (lastUserMsg && extracted.override) {
+                lastUserMsg.content = decision.prompt;
+            }
+
+            console.log(`\n🧠 Router Decision:`);
+            console.log(`   Tier   : ${decision.tier}`);
+            console.log(`   Route  : ${decision.route}`);
+            console.log(`➡️ Proxying request to: ${targetModel}`);
+        } // 3. Unmanaged model pass-through
+        else {
             console.log(`\n➡️ Proxying raw request to: ${targetModel}`);
         }
 
@@ -46,6 +66,7 @@ export function registerChatRoutes(app) {
 
         const headers = new Headers(upstreamRes.headers);
 
+        // Strip headers that interfere with streaming or chunked payloads
         headers.delete("content-encoding");
         headers.delete("content-length");
 
