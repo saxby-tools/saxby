@@ -21,6 +21,10 @@ export const ModelSchema = v.strictObject({
 export const PersonaSchema = v.strictObject({
     description: v.optional(v.string()),
     exemplars: v.optional(v.array(v.string()), []),
+    //  Tier 2b: personas claim tags too, so a partially tagged
+    //  catalog still routes instead of collapsing to the global
+    //  default. Catalog capabilities win when both match.
+    tags: v.optional(v.array(TagSchema), []),
     default_model: v.string(
         "Every persona must have a default fallback model ID",
     ),
@@ -54,6 +58,9 @@ export const ShuntdConfigSchema = v.strictObject({
         11435,
     ),
     upstream_url: v.optional(v.string(), "http://127.0.0.1:11434"),
+    //  When true, a non-streaming request that also wants structured
+    //  output or sets a small token budget is tagged TAG_BACKGROUND.
+    route_background_tasks: v.optional(v.boolean(), true),
     global_default_model: v.string("global_default_model is required"),
     semantic: v.optional(SemanticSchema),
     personas: v.record(v.string(), PersonaSchema),

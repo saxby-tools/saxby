@@ -1,8 +1,12 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getConfigDir } from "@shuntd/core";
+import { getConfigDir, PERSONA_TAG_DEFAULTS } from "@shuntd/core";
 import { ADAPTERS } from "../../adapters/index.js";
+import {
+    isEmbeddingModel,
+    suggestCapabilities,
+} from "../../capabilities/index.js";
 
 const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
@@ -34,6 +38,7 @@ const CONFIG_COMMENTS = {
     ],
     personas: [
         "Intent personas.",
+        "tags are matched by Tier 2 when no catalog model claims them.",
         "exemplars train the Tier 3 semantic embedding matcher.",
     ],
 };
@@ -206,7 +211,7 @@ export const generateCommand = new Command()
                 writerModel,
             ]);
             const remainingModels = models.filter((m) =>
-                !baselineModels.has(m)
+                !baselineModels.has(m) && !isEmbeddingModel(m)
             );
 
             let additionalModels = [];
@@ -229,11 +234,28 @@ export const generateCommand = new Command()
                     model,
                     targetUrl,
                 );
+
+                const suggested = suggestCapabilities(model);
+
                 catalog[model] = {
                     name: model,
                     max_context: details.max_context,
-                    capabilities: [],
+                    capabilities: suggested.tags,
                 };
+
+                if (suggested.tags.length > 0) {
+                    console.log(
+                        `   ${model}: ${suggested.tags.join(", ")}` +
+                            (suggested.why ? `  (${suggested.why})` : ""),
+                    );
+                }
+
+                if (suggested.tags.length === 0) {
+                    console.log(
+                        `   ${model}: no capability match — tag it by ` +
+                            `hand in config.jsonc if it should route.`,
+                    );
+                }
             }
 
             // 4d. Semantic Fallback Prompts
@@ -303,6 +325,7 @@ export const generateCommand = new Command()
                     coder: {
                         description:
                             "Assists with programming and software architecture.",
+                        tags: PERSONA_TAG_DEFAULTS.coder || [],
                         exemplars: [
                             "Refactor this function",
                             "Write a unit test",
@@ -311,6 +334,7 @@ export const generateCommand = new Command()
                     },
                     writer: {
                         description: "Assists with prose and documentation.",
+                        tags: PERSONA_TAG_DEFAULTS.writer || [],
                         exemplars: ["Summarize this article", "Draft an email"],
                         default_model: writerModel,
                     },

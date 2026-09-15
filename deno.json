@@ -18,6 +18,9 @@
         "regex": "npm:regex@^6.1.0",
         "valibot": "npm:valibot@^0.36.0"
     },
+    "tasks": {
+        "test": "deno test packages/"
+    }
     "fmt": {
         "useTabs": false,
         "indentWidth": 4,
@@ -29,5 +32,6 @@
             "tags": ["recommended"]
         },
         "exclude": ["**/node_modules/"]
-    }
+    },
+    "unstable": ["no-legacy-abort"]
 }
