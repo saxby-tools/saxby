@@ -65,6 +65,9 @@ export const ShuntdConfigSchema = v.strictObject({
     semantic: v.optional(SemanticSchema),
     personas: v.record(v.string(), PersonaSchema),
     catalog: v.record(v.string(), ModelSchema),
+    log_prompts: v.optional(v.boolean(), true),
+    client_names: v.optional(v.record(v.string(), v.string()), {}),
+    log_path: v.optional(v.string()),
 });
 
 /**
