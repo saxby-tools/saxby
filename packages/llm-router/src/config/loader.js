@@ -69,5 +69,13 @@ export async function loadConfig() {
         );
     }
 
-    return validateConfig(parsedData);
+    const config = validateConfig(parsedData);
+
+    //  Resolved here so every consumer — daemon, dashboard, CLI — finds
+    //  the same file without repeating the XDG logic.
+    if (!config.log_path) {
+        config.log_path = join(configDir, "decision-log.db");
+    }
+
+    return config;
 }
