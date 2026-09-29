@@ -52,38 +52,36 @@ function readRequestShape(body) {
 }
 
 /**
- * Two independent signals must agree before we call something a
- * background task. One alone is too weak: plenty of real work is
- * non-streaming, and plenty of real work is short.
+ * An interactive chat turn streams. A request that explicitly
+ * asks NOT to stream is a utility call — a title, a tag set, a
+ * follow-up list.
+ *
+ * This originally also required a response_format or a small
+ * max_tokens. Open WebUI's task requests send neither, so the
+ * AND never fired and every background task was intent-routed
+ * off its own boilerplate. Two weak signals ANDed together are
+ * weaker than one good one.
  */
 function looksLikeBackgroundTask(shape) {
-    if (!shape.explicitlyNonStreaming) {
-        return false;
-    }
-
-    if (shape.wantsStructuredOutput) {
-        return true;
-    }
-
-    if (shape.smallBudget) {
-        return true;
-    }
-
-    return false;
+    return shape.explicitlyNonStreaming;
 }
 
 /**
  * Maps structural features and request shape to canonical tags.
  */
 function mapToTags(features, shape, config) {
-    const tags = new Set();
-
-    //  ---- Request-shape signals -------------------------------------
+    //  ---- Background tasks short-circuit ----------------------------
+    //  A utility prompt is an INSTRUCTION ABOUT a conversation, not a
+    //  user request. Its headings, lists and example file paths belong
+    //  to the template, so reading intent from them sent a title
+    //  generator to a 51GB coding model. Structure is noise here.
     if (config.route_background_tasks !== false) {
         if (looksLikeBackgroundTask(shape)) {
-            tags.add(TAGS.BACKGROUND);
+            return [TAGS.BACKGROUND];
         }
     }
+
+    const tags = new Set();
 
     //  ---- Code and engineering --------------------------------------
     if (features.fencedCode) {
