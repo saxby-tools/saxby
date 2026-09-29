@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -131,6 +131,37 @@ export const MIGRATIONS = [
         value TEXT NOT NULL
     ) STRICT;
     `,
+    //  ---- v2 --------------------------------------------------------
+    //  Tier 3 exemplar vectors.
+    //
+    //  Keyed by embedding model, so switching semantic.active to a
+    //  different profile and back does not throw away either set —
+    //  an A/B between embedders becomes a config line rather than a
+    //  re-embed. Dimensions differ between models (bge-m3 is 1024,
+    //  nomic-embed-text is 768), which is exactly why one shared
+    //  table without the model in the key would be unusable.
+    //
+    //  exemplar_hash detects edited text: change an exemplar and its
+    //  hash changes, the old row stops matching, and the new text is
+    //  embedded on next boot.
+    //
+    //  Vectors are stored NORMALISED as Float32 blobs, so every read
+    //  is comparison-ready and cosine() is a plain dot product.
+    `
+    CREATE TABLE exemplar_vectors (
+        embedding_model TEXT    NOT NULL,
+        persona         TEXT    NOT NULL,
+        exemplar        TEXT    NOT NULL,
+        exemplar_hash   TEXT    NOT NULL,
+        dim             INTEGER NOT NULL,
+        vector          BLOB    NOT NULL,
+        created_at      TEXT    NOT NULL,
+
+        PRIMARY KEY (embedding_model, persona, exemplar_hash)
+    ) STRICT;
+
+    CREATE INDEX idx_exemplar_model ON exemplar_vectors (embedding_model);
+    `,
 ];
 
 //  ---------------------------------------------------------------------
@@ -188,4 +219,18 @@ export const VIEWS = `
     WHERE completed_at IS NULL
        OR outcome != 'completed'
     ORDER BY received_at DESC;
+
+    --  Which embedding profiles have cached vectors, and how many.
+    --  Rows for more than one model mean an A/B is in flight.
+    DROP VIEW IF EXISTS v_exemplar_cache;
+    CREATE VIEW v_exemplar_cache AS
+    SELECT
+        embedding_model,
+        dim,
+        COUNT(*)                  AS vectors,
+        COUNT(DISTINCT persona)   AS personas,
+        MIN(created_at)           AS first_cached,
+        MAX(created_at)           AS last_cached
+    FROM exemplar_vectors
+    GROUP BY embedding_model, dim;
 `;
