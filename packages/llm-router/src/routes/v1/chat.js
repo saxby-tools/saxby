@@ -162,6 +162,47 @@ export function registerChatRoutes(app) {
             }
         }
 
+        //  Bypass and raw passthrough are not routing decisions, but
+        //  they ARE traffic. Excluding them makes client mix and
+        //  latency stats silently wrong.
+        if (!logId) {
+            const passthroughTier = rawModel.startsWith(SHUNTD_PREFIX)
+                ? "bypass"
+                : "raw";
+
+            logId = log?.record({
+                requestId: tracer.id,
+                receivedAt,
+                client,
+                requestedModel: rawModel,
+                stream: body.stream ?? null,
+                decision: {
+                    tier: passthroughTier,
+                    route: passthroughTier,
+                    model: targetModel,
+                    candidates: [targetModel],
+                    scores: [],
+                    skipped: [],
+                    abstentions: [],
+                    exhausted: false,
+                },
+                intent: {
+                    override: null,
+                    tags: [],
+                    features: {},
+                    histogram: {},
+                    metrics: {
+                        estimatedTokens: 0,
+                        chars: 0,
+                        lines: 0,
+                        codeRatio: 0,
+                    },
+                },
+                prompt: null,
+                promptHash: await hashPrompt(""),
+            });
+        }
+
         requestUsageReporting(body);
 
         //  ---- Closing the row ---------------------------------------
