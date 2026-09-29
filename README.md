@@ -76,12 +76,12 @@ in the suite — one machine's catalog is not a project invariant.
   - [x] Build the `selectModel` gauntlet: Intersect emitted tags with the model catalog and pick the victor.
   - [x] Enforce the tag contract at boot; seed catalog capabilities from curated defaults.
   - [x] Add request tracing (`--verbose` / `--trace`) and the `/shuntd/explain` audit endpoint.
-- [ ] **Milestone 4: The SQLite Decision Logger**
-  - [ ] Wire up the Deno standard SQLite module.
-  - [ ] Create the schema for the transparent `decision_log` table.
-  - [ ] Asynchronously log prompt metadata, extracted tags, routing tier, and final model selection.
-  - [ ] Capture `client_id` so agent traffic and human traffic stay separable.
-  - [ ] Record delivery outcome via `info.completed` (fully streamed vs. aborted).
+- [x] **Milestone 4: The SQLite Decision Logger**
+  - [x] Wire up the Deno standard SQLite module.
+  - [x] Create the schema for the transparent `decision_log` table.
+  - [x] Asynchronously log prompt metadata, extracted tags, routing tier, and final model selection.
+  - [x] Capture `client_id` so agent traffic and human traffic stay separable.
+  - [x] Record delivery outcome via `info.completed` (fully streamed vs. aborted).
 - [ ] **Milestone 5: Tier 3 Semantic Fallback**
   - [ ] Detect low-confidence Tier 2 resolutions.
   - [ ] Implement upstream `POST /v1/embeddings` requests.
