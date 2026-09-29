@@ -216,8 +216,6 @@ export function registerChatRoutes(app) {
             );
         }
 
-        tracer.done(upstreamRes.status);
-
         if (!upstreamRes.ok) {
             closeRow("upstream_error");
         }
@@ -236,6 +234,7 @@ export function registerChatRoutes(app) {
             //  abandoned stream closes its row rather than hanging
             //  open forever.
             onEnd: () => {
+                tracer.done(upstreamRes.status);
                 closeRow("completed");
             },
         });
