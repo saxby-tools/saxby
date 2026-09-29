@@ -4,6 +4,7 @@ import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
 import { validateTagContract } from "@shuntd/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
+import { openDecisionLog } from "./log/db.js";
 
 async function main() {
     console.log("🚀 Starting shuntd llm-router...");
@@ -37,6 +38,35 @@ async function main() {
         console.log(`🔍 Tracing enabled (level ${level}).`);
     }
 
+    //  The decision log is observability, never load-bearing. If it
+    //  cannot be opened the router still routes — it just stops
+    //  remembering, loudly.
+    let log = null;
+
+    try {
+        log = openDecisionLog(config.log_path, config);
+
+        const applied = log.migration.applied;
+
+        console.log(`📓 Decision log: ${config.log_path}`);
+
+        if (applied > 0) {
+            console.log(
+                `   migrated v${log.migration.from} -> ` +
+                    `v${log.migration.to} (${applied} step(s))`,
+            );
+        }
+
+        if (!config.log_prompts) {
+            console.log("   prompt text disabled (hashes only)");
+        }
+    } catch (error) {
+        console.warn(
+            `⚠️  Decision log unavailable, continuing without it: ` +
+                error.message,
+        );
+    }
+
     const app = new Hono();
 
     //  Hono's access logger duplicates the tracer when verbose, so it
@@ -47,6 +77,7 @@ async function main() {
 
     app.use("*", async (c, next) => {
         c.set("config", config);
+        c.set("log", log);
         await next();
     });
 
@@ -59,10 +90,6 @@ async function main() {
 
         const isGetOrHead = ["GET", "HEAD"].includes(c.req.method);
 
-        //  Forwarding the client's headers wholesale sends an
-        //  Accept-Encoding that makes the upstream gzip a stream we
-        //  then re-frame, plus a Content-Length that may not match.
-        //  Copy and strip instead.
         const upstreamHeaders = new Headers(c.req.raw.headers);
 
         upstreamHeaders.delete("accept-encoding");

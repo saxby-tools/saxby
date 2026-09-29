@@ -226,22 +226,3 @@ export function startTrace(label) {
         },
     };
 }
-
-/**
- * Wraps a response body so the first streamed byte is timestamped
- * without buffering anything. The stream passes straight through.
- */
-export function observeStream(body, tracer) {
-    if (!body) {
-        return body;
-    }
-
-    const observer = new TransformStream({
-        transform(chunk, controller) {
-            tracer.firstByte();
-            controller.enqueue(chunk);
-        },
-    });
-
-    return body.pipeThrough(observer);
-}
