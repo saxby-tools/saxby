@@ -82,11 +82,11 @@ in the suite — one machine's catalog is not a project invariant.
   - [x] Asynchronously log prompt metadata, extracted tags, routing tier, and final model selection.
   - [x] Capture `client_id` so agent traffic and human traffic stay separable.
   - [x] Record delivery outcome via `info.completed` (fully streamed vs. aborted).
-- [ ] **Milestone 5: Tier 3 Semantic Fallback**
-  - [ ] Detect low-confidence Tier 2 resolutions.
-  - [ ] Implement upstream `POST /v1/embeddings` requests.
-  - [ ] Write Cosine Similarity math to compare incoming prompt vectors against cached persona exemplars.
-  - [ ] Key the exemplar vector cache by embedding model so profiles can be A/B compared.
+- [x] **Milestone 5: Tier 3 Semantic Fallback**
+  - [x] Detect low-confidence Tier 2 resolutions.
+  - [x] Implement upstream `POST /v1/embeddings` requests.
+  - [x] Write Cosine Similarity math to compare incoming prompt vectors against cached persona exemplars.
+  - [x] Key the exemplar vector cache by embedding model so profiles can be A/B compared.
 - [ ] **Milestone 6: MVP / v1 Release**
   - [ ] **Build & release**
     - [ ] `deno task build` cross-compiling `shuntd` and `shunt` for darwin-arm64, darwin-x64, linux-x64, linux-arm64.
@@ -98,21 +98,18 @@ in the suite — one machine's catalog is not a project invariant.
     - [ ] `ServiceAdapter` registry mirroring the backend adapter pattern: `LaunchdAdapter` (macOS) and `SystemdAdapter` (Linux).
     - [ ] `shunt service install | uninstall | status`, generating a user-level LaunchAgent or a `systemd --user` unit.
     - [ ] Persist Ollama environment (`OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`) via the same adapter, since `launchctl setenv` does not survive a reboot.
-    - [ ] Document the dev/prod split: `deno task dev` (`--watch`, no service) vs. compiled binary under a supervisor.
+    - [ ] Implement the dev/prod split: `deno task dev` (`--watch`, no service) vs. compiled binary under a supervisor.
     - [ ] shunt audit — productize the live routing smoke test as a CLI command alongside shunt status.
   - [ ] **Documentation**
     - [ ] Create `docs/` — `getting-started.md`, `configuration.md`, `routing.md`, `services.md`, `clients.md`, `troubleshooting.md`, `architecture.md`.
     - [ ] Rewrite the README as a landing page that links into `docs/`.
   - [ ] **Client integration**
-    - [ ] Point OpenClaw at shuntd and complete its onboarding.
+    - [ ] Document how to point OpenClaw at shuntd
     - [ ] Document Open WebUI setup, including the Task Model setting for background generation.
 
 ## Development
 
 ```bash
-#  Run the router with hot reload and full tracing
-deno task dev
-
 #  Audit routing without generating a single token
 deno task test
 
