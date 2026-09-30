@@ -6,13 +6,18 @@
 //    resolveIntent(extracted, config)  -> ordered candidate models
 //    selectModel(intent, tokens, …)    -> one concrete model id
 //
-//  Tier 3 (semantic) will replace only the first. The second stays
-//  identical, which is why they are not merged.
+//  Tiers 1 and 2 are synchronous and cost microseconds. Tier 3 makes
+//  ONE network call, so it runs only when the cheap tiers abstain —
+//  which is why resolveIntent stays sync and the semantic step sits
+//  outside it. The fast path never awaits anything.
 //
-//  EVERY abstention records a reason. Falling silently from Tier 2 to
-//  the global default made a config problem (no model claimed any
-//  tag) look like correct behaviour. Silence was the bug; the
-//  fallback was only the symptom.
+//  EVERY abstention records a reason, and Tier 3 records its score
+//  EVEN WHEN IT LOSES. A rejected 0.58 is the single most useful
+//  number for tuning the threshold later; throwing it away would
+//  leave the threshold a permanent guess.
+
+import { bestMatch, normalize } from "../semantic/vector.js";
+import { embedOne } from "../semantic/embed.js";
 
 /**
  * Every model named as a persona's default. Used to break scoring
@@ -36,8 +41,7 @@ function collectPersonaDefaults(personas) {
  * Orders two equally-scoring models deterministically.
  *
  * Without this, ties fell to catalog key order — meaning routing
- * changed when someone reordered their config file. Three levels:
- * overlap, then persona preference, then name.
+ * changed when someone reordered their config file.
  */
 function compareCandidates(a, b, personaDefaults) {
     if (b.score !== a.score) {
@@ -51,8 +55,6 @@ function compareCandidates(a, b, personaDefaults) {
         return bPreferred - aPreferred;
     }
 
-    //  Final tiebreak is alphabetical purely for determinism: the
-    //  same config must always route the same way.
     return a.modelId.localeCompare(b.modelId);
 }
 
@@ -135,7 +137,7 @@ function scorePersonasByTags(tags, personas) {
 }
 
 /**
- * Phase 1 — which persona / capability class does this prompt want?
+ * Phase 1 — tiers 1 and 2 only. Synchronous by design.
  *
  * @returns {{tier, route, candidates, scores, abstentions}}
  */
@@ -178,8 +180,6 @@ export function resolveIntent(extracted, config) {
             };
         }
 
-        //  Catalog claimed nothing. Personas are the second place a
-        //  tag can find a home.
         const byPersona = scorePersonasByTags(
             extracted.tags,
             config.personas,
@@ -206,22 +206,78 @@ export function resolveIntent(extracted, config) {
         });
     }
 
-    //  ---- TIER 3: semantic fallback (Milestone 5) -------------------
-    if (!config.semantic) {
-        abstentions.push({ tier: 3, reason: "semantic not configured" });
-    }
-
-    if (config.semantic) {
-        abstentions.push({ tier: 3, reason: "semantic not yet implemented" });
-    }
-
-    //  ---- GLOBAL FALLBACK -------------------------------------------
     return {
         tier: "fallback",
         route: "global_default",
         candidates: [config.global_default_model],
         scores: [],
         abstentions,
+    };
+}
+
+/**
+ * Tier 3 — semantic similarity against cached persona exemplars.
+ *
+ * Never throws. A missing, slow or broken embedder must cost a
+ * fallback, never a failed request: observability and cleverness are
+ * both optional, routing is not.
+ *
+ * @returns {{matched, label, score, margin, runnerUp, exemplar,
+ *            model, dim, error}}
+ */
+async function resolveSemantic(extracted, semantic) {
+    const { profile, candidates, upstreamUrl } = semantic;
+
+    const empty = {
+        matched: false,
+        label: null,
+        score: null,
+        margin: null,
+        runnerUp: null,
+        exemplar: null,
+        model: profile.model,
+        dim: profile.dim ?? null,
+        error: null,
+    };
+
+    if (candidates.length === 0) {
+        return { ...empty, error: "no exemplars cached" };
+    }
+
+    const prompt = extracted.cleanPrompt.trim();
+
+    if (prompt.length === 0) {
+        return { ...empty, error: "empty prompt" };
+    }
+
+    let raw;
+
+    try {
+        raw = await embedOne(prompt, profile, upstreamUrl);
+    } catch (err) {
+        return { ...empty, error: err.message };
+    }
+
+    let match;
+
+    try {
+        match = bestMatch(normalize(raw), candidates);
+    } catch (err) {
+        //  Dimension mismatch: cached vectors came from a different
+        //  model than the one now answering.
+        return { ...empty, error: err.message };
+    }
+
+    return {
+        matched: match.score >= profile.threshold,
+        label: match.label,
+        score: match.score,
+        margin: match.margin,
+        runnerUp: match.runnerUp,
+        exemplar: match.exemplar,
+        model: profile.model,
+        dim: raw.length,
+        error: null,
     };
 }
 
@@ -251,9 +307,6 @@ export function selectModel(intent, estimatedTokens, config) {
         return { model: modelId, skipped };
     }
 
-    //  Every candidate was too small. The global default is the last
-    //  resort, and this is worth surfacing — it means the prompt is
-    //  bigger than the whole candidate chain.
     return {
         model: config.global_default_model,
         skipped,
@@ -262,12 +315,79 @@ export function selectModel(intent, estimatedTokens, config) {
 }
 
 /**
- * The full pipeline. Returns everything the tracer, the explain
- * endpoint and the future decision log need — not just the answer,
- * but the reasoning.
+ * The full pipeline.
+ *
+ * @param {Object} extracted
+ * @param {Object} config
+ * @param {Object|null} semantic - {profile, candidates, upstreamUrl},
+ *   or null when Tier 3 is unconfigured or failed to warm.
  */
-export function resolvePipeline(extracted, config) {
-    const intent = resolveIntent(extracted, config);
+export async function resolvePipeline(extracted, config, semantic = null) {
+    let intent = resolveIntent(extracted, config);
+    let semanticResult = null;
+
+    //  Tier 3 runs ONLY when the cheap tiers found nothing. A prompt
+    //  Tier 2 could read does not need an embedding.
+    const cheapTiersAbstained = intent.tier === "fallback";
+
+    if (cheapTiersAbstained) {
+        if (!semantic) {
+            intent.abstentions.push({
+                tier: 3,
+                reason: "semantic not configured",
+            });
+        }
+
+        if (semantic) {
+            semanticResult = await resolveSemantic(extracted, semantic);
+
+            if (semanticResult.error) {
+                intent.abstentions.push({
+                    tier: 3,
+                    reason: `semantic unavailable: ${semanticResult.error}`,
+                });
+            }
+
+            if (semanticResult.matched) {
+                const persona = config.personas[semanticResult.label];
+
+                //  A persona can be deleted while its vectors remain
+                //  cached until the next warm-up prunes them.
+                if (persona) {
+                    intent = {
+                        tier: 3,
+                        route: `semantic:${semanticResult.label}`,
+                        candidates: [persona.default_model],
+                        scores: [],
+                        abstentions: intent.abstentions,
+                    };
+                }
+
+                if (!persona) {
+                    intent.abstentions.push({
+                        tier: 3,
+                        reason:
+                            `matched persona '${semanticResult.label}' ` +
+                            `no longer exists in config`,
+                    });
+                }
+            }
+
+            //  Below threshold. Recorded, not acted on — this is the
+            //  number the threshold gets tuned against.
+            if (!semanticResult.matched) {
+                if (!semanticResult.error) {
+                    intent.abstentions.push({
+                        tier: 3,
+                        reason:
+                            `best match '${semanticResult.label}' scored ` +
+                            `${semanticResult.score.toFixed(3)}, below ` +
+                            `threshold ${semantic.profile.threshold}`,
+                    });
+                }
+            }
+        }
+    }
 
     const selection = selectModel(
         intent,
@@ -285,5 +405,6 @@ export function resolvePipeline(extracted, config) {
         skipped: selection.skipped,
         exhausted: Boolean(selection.exhausted),
         prompt: extracted.cleanPrompt,
+        semantic: semanticResult,
     };
 }

@@ -51,9 +51,6 @@ function buildDownstreamHeaders(upstreamRes) {
 
 /**
  * Asks the upstream to report token usage on a streamed response.
- *
- * Only meaningful when streaming — a non-streaming response carries
- * usage already. Never overrides a client that set it itself.
  */
 function requestUsageReporting(body) {
     if (body.stream !== true) {
@@ -75,6 +72,7 @@ export function registerChatRoutes(app) {
     app.post("/v1/chat/completions", async (c) => {
         const config = c.get("config");
         const log = c.get("log");
+        const semantic = c.get("semantic");
 
         const body = await c.req.json();
         const rawModel = body.model || "";
@@ -107,12 +105,17 @@ export function registerChatRoutes(app) {
             const extracted = extractIntent(body, config);
             tracer.extract(extracted);
 
-            const decision = resolvePipeline(extracted, config);
+            //  Async now: Tier 3 makes one embedding call, but only
+            //  when tiers 1 and 2 both abstained.
+            const decision = await resolvePipeline(
+                extracted,
+                config,
+                semantic,
+            );
+
             tracer.resolve(decision);
             tracer.summary(decision);
 
-            //  A tier that wanted to fire but found no home is a
-            //  CONFIG problem wearing the costume of normal operation.
             if (decision.tier === "fallback") {
                 if (extracted.tags.length > 0) {
                     tracer.warn(
@@ -140,8 +143,6 @@ export function registerChatRoutes(app) {
                 }
             }
 
-            //  Phase 1 of the log. Written before the upstream call so
-            //  a request that never returns still leaves a row.
             logId = log?.record({
                 requestId: tracer.id,
                 receivedAt,
@@ -152,23 +153,30 @@ export function registerChatRoutes(app) {
                 intent: extracted,
                 prompt: extracted.cleanPrompt,
                 promptHash: await hashPrompt(extracted.cleanPrompt),
+
+                //  Written whether or not Tier 3 won. A rejected score
+                //  is what the threshold gets tuned against.
+                semantic: decision.semantic
+                    ? {
+                        confidence: decision.semantic.score,
+                        model: decision.semantic.model,
+                        dim: decision.semantic.dim,
+                    }
+                    : null,
             });
         }
 
-        //  ---- Unmanaged passthrough ---------------------------------
-        if (rawModel !== SHUNTD_MODEL) {
-            if (!rawModel.startsWith(SHUNTD_PREFIX)) {
-                tracer.proxy(`raw ${targetModel}`);
-            }
-        }
-
-        //  Bypass and raw passthrough are not routing decisions, but
-        //  they ARE traffic. Excluding them makes client mix and
-        //  latency stats silently wrong.
+        //  ---- Bypass and raw passthrough ----------------------------
+        //  Not routing decisions, but they ARE traffic. Excluding them
+        //  makes client mix and latency stats silently wrong.
         if (!logId) {
             const passthroughTier = rawModel.startsWith(SHUNTD_PREFIX)
                 ? "bypass"
                 : "raw";
+
+            if (passthroughTier === "raw") {
+                tracer.proxy(`raw ${targetModel}`);
+            }
 
             logId = log?.record({
                 requestId: tracer.id,
@@ -200,15 +208,13 @@ export function registerChatRoutes(app) {
                 },
                 prompt: null,
                 promptHash: await hashPrompt(""),
+                semantic: null,
             });
         }
 
         requestUsageReporting(body);
 
         //  ---- Closing the row ---------------------------------------
-        //  Every exit path below closes it exactly once, with an
-        //  outcome that distinguishes a finished stream from an
-        //  abandoned one. A row left open means shuntd itself died.
 
         function closeRow(outcome) {
             if (!logId) {
@@ -235,9 +241,6 @@ export function registerChatRoutes(app) {
                 method: "POST",
                 headers: buildUpstreamHeaders(c),
                 body: JSON.stringify(body),
-                //  Propagate client disconnects upstream. Without this
-                //  an abandoned background task keeps generating on the
-                //  GPU long after nobody wants it.
                 signal: c.req.raw.signal,
             });
         } catch (err) {
@@ -271,9 +274,6 @@ export function registerChatRoutes(app) {
                 usage = reported;
             },
 
-            //  Fires when the body finishes OR is cancelled, so an
-            //  abandoned stream closes its row rather than hanging
-            //  open forever.
             onEnd: () => {
                 tracer.done(upstreamRes.status);
                 closeRow("completed");

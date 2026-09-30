@@ -152,6 +152,20 @@ export function startTrace(label) {
                     `target=${decision.model}`,
             );
 
+            if (decision.semantic) {
+                const s = decision.semantic;
+
+                emit(
+                    id,
+                    "SEMANTIC",
+                    s.error
+                        ? `unavailable: ${s.error}`
+                        : `${s.label} ${s.score.toFixed(3)} ` +
+                            `(margin ${s.margin?.toFixed(3) ?? "n/a"}, ` +
+                            `vs ${s.runnerUp ?? "none"})`,
+                );
+            }
+
             if (currentLevel < LEVEL_TRACE) {
                 return;
             }

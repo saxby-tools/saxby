@@ -399,5 +399,7 @@ export function openDecisionLog(path, config) {
 
     globalThis.addEventListener("unload", close);
 
-    return { record, complete, flush, close, stats, migration };
+    //  The exemplar vector cache lives in this same file and shares
+    //  this connection rather than opening a second one.
+    return { record, complete, flush, close, stats, migration, db };
 }

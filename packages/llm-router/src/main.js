@@ -5,6 +5,88 @@ import { registerRoutes } from "./routes/index.js";
 import { validateTagContract } from "@shuntd/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
+import { probeProfile } from "./semantic/embed.js";
+import { warmExemplars } from "./semantic/exemplars.js";
+
+/**
+ * Prepares Tier 3: resolves the active profile, confirms the embedder
+ * answers, and warms the exemplar vector cache.
+ *
+ * Returns null on any failure. Tier 3 is an enhancement — a missing
+ * embedder must cost semantic routing, never the router.
+ */
+async function warmSemantic(config, log) {
+    if (!config.semantic) {
+        return null;
+    }
+
+    if (!log) {
+        console.warn(
+            "⚠️  Tier 3 needs the decision log for its vector cache; " +
+                "semantic routing disabled.",
+        );
+
+        return null;
+    }
+
+    const name = config.semantic.active;
+    const profile = config.semantic.profiles?.[name];
+
+    if (!profile) {
+        console.warn(
+            `⚠️  semantic.active is '${name}' but no such profile ` +
+                `exists; semantic routing disabled.`,
+        );
+
+        return null;
+    }
+
+    try {
+        const probe = await probeProfile(profile, config.upstream_url);
+
+        const warmed = await warmExemplars(
+            log.db,
+            config,
+            profile,
+            config.upstream_url,
+        );
+
+        if (warmed.candidates.length === 0) {
+            console.warn(
+                "⚠️  No persona exemplars configured; Tier 3 has " +
+                    "nothing to match against.",
+            );
+
+            return null;
+        }
+
+        console.log(
+            `🧭 Tier 3: ${profile.model} (${probe.dim}d), ` +
+                `${warmed.candidates.length} exemplars, ` +
+                `threshold ${profile.threshold}`,
+        );
+
+        if (warmed.embedded + warmed.pruned > 0 || warmed.reused > 0) {
+            console.log(
+                `   embedded ${warmed.embedded}, reused ${warmed.reused}` +
+                    (warmed.pruned > 0 ? `, pruned ${warmed.pruned}` : ""),
+            );
+        }
+
+        return {
+            profile,
+            candidates: warmed.candidates,
+            upstreamUrl: config.upstream_url,
+        };
+    } catch (error) {
+        console.warn(
+            `⚠️  Tier 3 unavailable, continuing without it: ` +
+                error.message,
+        );
+
+        return null;
+    }
+}
 
 async function main() {
     console.log("🚀 Starting shuntd llm-router...");
@@ -25,9 +107,6 @@ async function main() {
         Deno.exit(1);
     }
 
-    //  A tag nothing claims is a silently degraded router: every
-    //  structural match falls through to the global default and looks
-    //  like normal operation. Always warn, regardless of verbosity.
     const tagWarnings = validateTagContract(config);
 
     for (const warning of tagWarnings) {
@@ -46,14 +125,13 @@ async function main() {
     try {
         log = openDecisionLog(config.log_path, config);
 
-        const applied = log.migration.applied;
-
         console.log(`📓 Decision log: ${config.log_path}`);
 
-        if (applied > 0) {
+        if (log.migration.applied > 0) {
             console.log(
                 `   migrated v${log.migration.from} -> ` +
-                    `v${log.migration.to} (${applied} step(s))`,
+                    `v${log.migration.to} ` +
+                    `(${log.migration.applied} step(s))`,
             );
         }
 
@@ -67,10 +145,10 @@ async function main() {
         );
     }
 
+    const semantic = await warmSemantic(config, log);
+
     const app = new Hono();
 
-    //  Hono's access logger duplicates the tracer when verbose, so it
-    //  is only mounted in quiet mode.
     if (!isVerbose()) {
         app.use("*", logger());
     }
@@ -78,6 +156,7 @@ async function main() {
     app.use("*", async (c, next) => {
         c.set("config", config);
         c.set("log", log);
+        c.set("semantic", semantic);
         await next();
     });
 

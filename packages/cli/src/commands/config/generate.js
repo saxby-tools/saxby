@@ -278,9 +278,11 @@ export const generateCommand = new Command()
                 const defaultDim = semanticModel.includes("nomic")
                     ? "768"
                     : "1024";
+
+                // Both are unvalidated starting points
                 const defaultThreshold = semanticModel.includes("nomic")
-                    ? "0.65"
-                    : "0.72";
+                    ? "0.55"
+                    : "0.60";
 
                 const semanticDimInput = await Input.prompt({
                     message:
