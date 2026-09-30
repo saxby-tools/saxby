@@ -32,6 +32,9 @@ export const PERSONA_TAG_DEFAULTS = {
     reasoner: [TAGS.REASONING, TAGS.MATH],
     data: [TAGS.DATA],
     utility: [TAGS.BACKGROUND],
+    //  Negative class for Tier 3 — no tags on purpose, so it is
+    //  unreachable structurally and can only win semantically.
+    general: [],
 };
 
 /**

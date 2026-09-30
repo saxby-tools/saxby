@@ -1,12 +1,16 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getConfigDir, PERSONA_TAG_DEFAULTS } from "@shuntd/core";
+import { getConfigDir } from "@shuntd/core";
 import { ADAPTERS } from "../../adapters/index.js";
 import {
     isEmbeddingModel,
     suggestCapabilities,
 } from "../../capabilities/index.js";
+import {
+    PERSONA_DEFAULTS,
+    suggestSemanticDefaults,
+} from "../../personas/defaults.js";
 
 const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
@@ -39,7 +43,10 @@ const CONFIG_COMMENTS = {
     personas: [
         "Intent personas.",
         "tags are matched by Tier 2 when no catalog model claims them.",
-        "exemplars train the Tier 3 semantic embedding matcher.",
+        "exemplars train the Tier 3 semantic matcher.",
+        "When a prompt misroutes, add an exemplar matching THAT",
+        "phrasing — do not lower the threshold. A missing exemplar",
+        "looks exactly like a threshold set too high.",
     ],
 };
 
@@ -275,14 +282,17 @@ export const generateCommand = new Command()
                     options: models,
                 });
 
-                const defaultDim = semanticModel.includes("nomic")
-                    ? "768"
-                    : "1024";
+                const semanticDefaults = suggestSemanticDefaults(semanticModel);
 
-                // Both are unvalidated starting points
-                const defaultThreshold = semanticModel.includes("nomic")
-                    ? "0.55"
-                    : "0.60";
+                //  An unrecognised embedder gets no dim default, so
+                //  the prompt's validator forces a real answer rather
+                //  than accepting a plausible guess. A wrong dim makes
+                //  every cached vector incomparable.
+                const defaultDim = semanticDefaults.dim === null
+                    ? ""
+                    : String(semanticDefaults.dim);
+
+                const defaultThreshold = String(semanticDefaults.threshold);
 
                 const semanticDimInput = await Input.prompt({
                     message:
@@ -315,6 +325,26 @@ export const generateCommand = new Command()
                 };
             }
 
+            // 4d-bis. Build personas from curated presets
+            //  general takes the global default: it IS the fallback
+            //  persona, so it needs no prompt of its own.
+            const personaModels = {
+                coder: coderModel,
+                writer: writerModel,
+                general: globalDefault,
+            };
+
+            const personas = {};
+
+            for (const [name, preset] of Object.entries(PERSONA_DEFAULTS)) {
+                personas[name] = {
+                    description: preset.description,
+                    tags: preset.tags,
+                    exemplars: preset.exemplars,
+                    default_model: personaModels[name],
+                };
+            }
+
             // 4e. Construct Final Payload
             configPayload = {
                 // parsedPort is captured from the Input.prompt in step 3.5
@@ -323,24 +353,7 @@ export const generateCommand = new Command()
                 global_default_model: globalDefault,
                 catalog,
                 ...(semanticConfig ? { semantic: semanticConfig } : {}),
-                personas: {
-                    coder: {
-                        description:
-                            "Assists with programming and software architecture.",
-                        tags: PERSONA_TAG_DEFAULTS.coder || [],
-                        exemplars: [
-                            "Refactor this function",
-                            "Write a unit test",
-                        ],
-                        default_model: coderModel,
-                    },
-                    writer: {
-                        description: "Assists with prose and documentation.",
-                        tags: PERSONA_TAG_DEFAULTS.writer || [],
-                        exemplars: ["Summarize this article", "Draft an email"],
-                        default_model: writerModel,
-                    },
-                },
+                personas,
             };
         } catch (err) {
             console.error(`❌ Generator Error: ${err.message}`);
