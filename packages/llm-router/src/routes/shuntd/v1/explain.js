@@ -45,8 +45,10 @@ export function registerExplainRoutes(app) {
             );
         }
 
+        const semantic = c.get("semantic");
+
         const extracted = extractIntent(body, config);
-        const decision = resolvePipeline(extracted, config);
+        const decision = await resolvePipeline(extracted, config, semantic);
 
         return c.json({
             requested_model: body.model || null,
@@ -72,6 +74,7 @@ export function registerExplainRoutes(app) {
             //  Why each tier declined. This is the field that turns a
             //  surprising route into an explainable one.
             abstentions: decision.abstentions,
+            semantic: decision.semantic,
             skipped: decision.skipped,
         });
     });
