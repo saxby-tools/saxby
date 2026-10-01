@@ -69,14 +69,14 @@ const PATTERNS = [
     //  ---- Long context ----------------------------------------------
     {
         match: "mistral-small",
-        tags: [TAGS.DATA, TAGS.LONG_CONTEXT],
+        tags: [TAGS.DATA, TAGS.LONG_CONTEXT, TAGS.VISION],
         why: "large context window, good for bulk data tasks",
     },
 
     //  ---- Generalists -----------------------------------------------
     {
         match: "gemma",
-        tags: [TAGS.WRITER, TAGS.REASONING],
+        tags: [TAGS.WRITER, TAGS.REASONING, TAGS.VISION, TAGS.AUDIO],
         why: "general-purpose generalist",
     },
     {

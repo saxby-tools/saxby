@@ -65,10 +65,36 @@ function scoreCatalogByTags(tags, config) {
     const personaDefaults = collectPersonaDefaults(config.personas);
     const scored = [];
 
+    //  Requirements are filters, not scores. A model missing a
+    //  required capability is removed from the candidate set.
+    const required = [];
+
+    if (tags.includes("TAG_VISION")) {
+        required.push("TAG_VISION");
+    }
+
+    if (tags.includes("TAG_AUDIO")) {
+        required.push("TAG_AUDIO");
+    }
+
     for (const [modelId, model] of Object.entries(config.catalog)) {
         const capabilities = model.capabilities || [];
 
         if (capabilities.length === 0) {
+            continue;
+        }
+
+        let meetsRequirements = true;
+
+        for (const requirement of required) {
+            if (capabilities.includes(requirement)) {
+                continue;
+            }
+
+            meetsRequirements = false;
+        }
+
+        if (!meetsRequirements) {
             continue;
         }
 
@@ -199,8 +225,7 @@ export function resolveIntent(extracted, config) {
 
         abstentions.push({
             tier: 2,
-            reason:
-                `tags [${extracted.tags.join(",")}] matched no catalog ` +
+            reason: `tags [${extracted.tags.join(",")}] matched no catalog ` +
                 `capability and no persona tags — check that catalog ` +
                 `entries have 'capabilities' set`,
         });
@@ -366,8 +391,7 @@ export async function resolvePipeline(extracted, config, semantic = null) {
                 if (!persona) {
                     intent.abstentions.push({
                         tier: 3,
-                        reason:
-                            `matched persona '${semanticResult.label}' ` +
+                        reason: `matched persona '${semanticResult.label}' ` +
                             `no longer exists in config`,
                     });
                 }
@@ -379,8 +403,7 @@ export async function resolvePipeline(extracted, config, semantic = null) {
                 if (!semanticResult.error) {
                     intent.abstentions.push({
                         tier: 3,
-                        reason:
-                            `best match '${semanticResult.label}' scored ` +
+                        reason: `best match '${semanticResult.label}' scored ` +
                             `${semanticResult.score.toFixed(3)}, below ` +
                             `threshold ${semantic.profile.threshold}`,
                     });

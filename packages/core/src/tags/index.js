@@ -20,6 +20,16 @@ export const TAGS = {
     WRITER: "TAG_WRITER",
     LONG_CONTEXT: "TAG_LONG_CONTEXT",
     BACKGROUND: "TAG_BACKGROUND",
+    //  REQUIREMENTS, not preferences. These filter the candidate set
+    //  in resolve.js rather than contributing to a score — a model
+    //  that cannot see is not a worse choice for an image, it is a
+    //  broken one.
+    //
+    //  Split deliberately: gemma4 does vision AND audio,
+    //  mistral-small3.2 does vision only. One combined tag would
+    //  route an audio prompt to a model that cannot hear.
+    VISION: "TAG_VISION",
+    AUDIO: "TAG_AUDIO",
 };
 
 //  Every tag the extractor is capable of emitting.

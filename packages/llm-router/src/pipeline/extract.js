@@ -13,6 +13,43 @@ import { TAGS } from "@shuntd/core";
 //  turn. Open WebUI's title/tag/follow-up generators all sit here.
 const BACKGROUND_MAX_TOKENS = 256;
 
+//  Multimodal messages send `content` as an array of parts rather
+//  than a string. Collapsing that with String() yields
+//  "[object Object]", which then gets feature-extracted, embedded
+//  and logged as if it were the prompt.
+function readMessageContent(content) {
+    if (typeof content === "string") {
+        return { text: content, images: 0, audio: 0 };
+    }
+
+    if (!Array.isArray(content)) {
+        return { text: "", images: 0, audio: 0 };
+    }
+
+    const texts = [];
+
+    let images = 0;
+    let audio = 0;
+
+    for (const part of content) {
+        if (part?.type === "text") {
+            texts.push(part.text ?? "");
+            continue;
+        }
+
+        if (part?.type === "image_url") {
+            images++;
+            continue;
+        }
+
+        if (part?.type === "input_audio") {
+            audio++;
+        }
+    }
+
+    return { text: texts.join("\n"), images, audio };
+}
+
 /**
  * Finds the last user message and its index.
  */
@@ -69,7 +106,19 @@ function looksLikeBackgroundTask(shape) {
 /**
  * Maps structural features and request shape to canonical tags.
  */
-function mapToTags(features, shape, config) {
+function mapToTags(parts, features, shape, config) {
+    const tags = new Set();
+
+    //  Capability requirements, emitted first so nothing can drop
+    //  them.
+    if (parts.images > 0) {
+        tags.add(TAGS.VISION);
+    }
+
+    if (parts.audio > 0) {
+        tags.add(TAGS.AUDIO);
+    }
+
     //  ---- Background tasks short-circuit ----------------------------
     //  A utility prompt is an INSTRUCTION ABOUT a conversation, not a
     //  user request. Its headings, lists and example file paths belong
@@ -80,8 +129,6 @@ function mapToTags(features, shape, config) {
             return [TAGS.BACKGROUND];
         }
     }
-
-    const tags = new Set();
 
     //  ---- Code and engineering --------------------------------------
     if (features.fencedCode) {
@@ -157,6 +204,28 @@ function parseOverride(prompt, config) {
     };
 }
 
+//  Weight is a property of the WHOLE payload, not the current turn.
+//  Intent comes from the last user message; context pressure comes
+//  from everything the upstream will actually have to prefill —
+//  system prompt, injected memory, and every prior turn. An agent
+//  sends 20 messages and a two-line question; estimating from the
+//  question alone was wrong by three orders of magnitude.
+function measurePayload(messages) {
+    let chars = 0;
+    let images = 0;
+    let audio = 0;
+
+    for (const message of messages) {
+        const parts = readMessageContent(message.content);
+
+        chars += parts.text.length;
+        images += parts.images;
+        audio += parts.audio;
+    }
+
+    return { chars, images, audio };
+}
+
 /**
  * Extracts intent from a full OpenAI-shaped request body.
  *
@@ -166,16 +235,30 @@ function parseOverride(prompt, config) {
 export function extractIntent(body, config) {
     const messages = body.messages || [];
     const { message, index } = findLastUserMessage(messages);
-    const rawPrompt = message ? String(message.content ?? "") : "";
+    const parts = message
+        ? readMessageContent(message.content)
+        : { text: "", images: 0, audio: 0 };
 
+    const rawPrompt = parts.text;
     const { override, cleanPrompt } = parseOverride(rawPrompt, config);
 
     //  Features are extracted even when overridden, so the decision
     //  log records what was asked alongside what was routed.
     const { features, metrics, histogram } = extractFeatures(cleanPrompt);
 
+    const payload = measurePayload(messages);
+
+    //  Features and histogram stay scoped to the current turn.
+    //  Metrics are rescaled to the full conversation.
+    const payloadMetrics = {
+        ...metrics,
+        chars: payload.chars,
+        estimatedTokens: Math.ceil(payload.chars / 4) +
+            metrics.estimatedTokens,
+    };
+
     const shape = readRequestShape(body);
-    const tags = mapToTags(features, shape, config);
+    const tags = mapToTags(parts, features, shape, config);
 
     return {
         override,
@@ -183,7 +266,7 @@ export function extractIntent(body, config) {
         cleanPrompt,
         promptIndex: index,
         features,
-        metrics,
+        metrics: payloadMetrics,
         histogram,
         shape,
     };
