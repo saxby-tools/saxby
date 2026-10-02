@@ -16,6 +16,10 @@ export const ModelSchema = v.strictObject({
         v.minValue(1, "max_context must be greater than 0"),
     ),
     capabilities: v.optional(v.array(TagSchema), []),
+    //  Injected as a system message for this model only. Fixes
+    //  model-specific behaviour at the cause (decoding) rather than
+    //  rewriting the response after the fact.
+    system_prefix: v.optional(v.string()),
 });
 
 export const PersonaSchema = v.strictObject({

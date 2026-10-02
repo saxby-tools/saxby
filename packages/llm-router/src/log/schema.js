@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -161,6 +161,14 @@ export const MIGRATIONS = [
     ) STRICT;
 
     CREATE INDEX idx_exemplar_model ON exemplar_vectors (embedding_model);
+    `,
+    //  ---- v3 --------------------------------------------------------
+    //  A silently injected prompt shapes the response, so the archive
+    //  has to show it. Without this column a future reader cannot
+    //  tell whether a row predates a prefix, postdates it, or was
+    //  shaped by one since removed.
+    `
+    ALTER TABLE decision_log ADD COLUMN system_prefix TEXT;
     `,
 ];
 

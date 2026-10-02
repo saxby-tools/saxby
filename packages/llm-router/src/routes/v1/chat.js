@@ -64,6 +64,38 @@ function requestUsageReporting(body) {
     body.stream_options = { include_usage: true };
 }
 
+/**
+ * Injects a model's system_prefix, if it declares one.
+ *
+ * Merges into an existing system message rather than adding a second
+ * one, because several local models honour only the first. Returns
+ * the text applied so it can be traced and logged — an injected
+ * prompt that nothing records is a response shaped by something
+ * invisible.
+ */
+function applySystemPrefix(body, targetModel, config) {
+    const prefix = config.catalog[targetModel]?.system_prefix;
+
+    if (!prefix) {
+        return null;
+    }
+
+    const messages = body.messages || [];
+    const first = messages[0];
+
+    if (first?.role === "system") {
+        if (typeof first.content === "string") {
+            first.content = `${prefix}\n\n${first.content}`;
+            return prefix;
+        }
+    }
+
+    messages.unshift({ role: "system", content: prefix });
+    body.messages = messages;
+
+    return prefix;
+}
+
 //  ---------------------------------------------------------------------
 //  Route
 //  ---------------------------------------------------------------------
@@ -92,6 +124,7 @@ export function registerChatRoutes(app) {
         let logId = null;
         let ttfbMs = null;
         let usage = { promptTokens: null, completionTokens: null };
+        let systemPrefix = null;
 
         //  ---- Direct hardware bypass: shuntd/<model> ----------------
         if (rawModel.startsWith(SHUNTD_PREFIX)) {
@@ -143,6 +176,8 @@ export function registerChatRoutes(app) {
                 }
             }
 
+            systemPrefix = applySystemPrefix(body, targetModel, config);
+
             logId = log?.record({
                 requestId: tracer.id,
                 receivedAt,
@@ -163,6 +198,7 @@ export function registerChatRoutes(app) {
                         dim: decision.semantic.dim,
                     }
                     : null,
+                systemPrefix,
             });
         }
 
@@ -170,6 +206,8 @@ export function registerChatRoutes(app) {
         //  Not routing decisions, but they ARE traffic. Excluding them
         //  makes client mix and latency stats silently wrong.
         if (!logId) {
+            systemPrefix = applySystemPrefix(body, targetModel, config);
+
             const passthroughTier = rawModel.startsWith(SHUNTD_PREFIX)
                 ? "bypass"
                 : "raw";
@@ -209,6 +247,7 @@ export function registerChatRoutes(app) {
                 prompt: null,
                 promptHash: await hashPrompt(""),
                 semantic: null,
+                systemPrefix,
             });
         }
 

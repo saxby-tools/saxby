@@ -152,6 +152,10 @@ export function startTrace(label) {
                     `target=${decision.model}`,
             );
 
+            if (decision.systemPrefix) {
+                emit(id, "PREFIX", `"${decision.systemPrefix}"`);
+            }
+
             if (decision.semantic) {
                 const s = decision.semantic;
 

@@ -70,6 +70,7 @@ const INSERT_COLUMNS = [
     "embedding_dim",
     "prompt_sha256",
     "prompt",
+    "system_prefix",
 ];
 
 const INSERT_SQL = `
@@ -332,6 +333,8 @@ export function openDecisionLog(path, config) {
 
             prompt_sha256: entry.promptHash,
             prompt: config.log_prompts ? entry.prompt : null,
+
+            system_prefix: entry.systemPrefix ?? null,
         };
 
         enqueue({
