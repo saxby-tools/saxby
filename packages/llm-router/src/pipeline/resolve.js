@@ -274,11 +274,14 @@ async function resolveSemantic(extracted, semantic) {
     if (prompt.length === 0) {
         return { ...empty, error: "empty prompt" };
     }
+    //  Injectable so Tier 3 can be unit-tested without a network
+    //  call or a running embedder. main.js never sets it.
+    const embed = semantic.embed || embedOne;
 
     let raw;
 
     try {
-        raw = await embedOne(prompt, profile, upstreamUrl);
+        raw = await embed(prompt, profile, upstreamUrl);
     } catch (err) {
         return { ...empty, error: err.message };
     }
