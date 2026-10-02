@@ -1,11 +1,17 @@
 #  shuntd
 
 A local-first LLM routing daemon in a Deno/JSR monorepo. It sits in
-front of an OpenAI-compatible backend, listens on `:11435`, and routes
-each request to the right local model. The goal is closing the gap to
+front of an OpenAI-compatible backend, listens on `:11435` by default, and 
+routes each request to the right local model. The goal is closing the gap to
 a frontier-model experience on owned hardware, with a transparent
 archive of every routing decision so the system gets tuned against
 evidence rather than intuition.
+
+> **How to read this file.** Everything above "Reference environment"
+> is true for any checkout. That last section describes ONE working
+> setup — specific models, a specific host OS, a specific UI. None of
+> it is required, and none of it should be treated as a constraint on
+> a contribution.
 
 ##  Packages
 
@@ -15,6 +21,9 @@ packages/cli             `shunt` — config generation, vram-mac-guard
 packages/llm-router      `shuntd` — the daemon
 packages/vram-mac-guard  Apple Silicon VRAM ceiling LaunchDaemon
 ```
+
+`vram-mac-guard` is platform-specific on purpose and names it. The
+router is platform-agnostic and must stay that way.
 
 ##  Routing tiers
 
@@ -30,11 +39,30 @@ Tiers 1 and 2 are synchronous. Tier 3 makes one embedding call and
 runs **only** when 1 and 2 both abstain, so the fast path never
 awaits. `resolveIntent` stays sync; `resolvePipeline` is async.
 
-Every tier that declines records a REASON. A silent fallback made a
-config bug look like correct behaviour once already — see the
-capabilities story below.
+Every tier that declines records a REASON. A silent fallback once made
+a config bug look like correct behaviour for an entire milestone.
 
-##  Commands
+##  Working in this repo
+
+Read the file before answering anything about it. Do not reconstruct
+contents from an earlier turn — open it. If a fact can be checked with
+a tool, check it. Most bugs in this project's history came from
+confident assertion against a stale mental model: claiming a module
+did not export something it did, leaving a renamed column in a view,
+changing a function's signature without checking its other callers.
+
+Never propose a commit for code that does not exist yet, and never
+propose one that leaves the tree broken — files that cannot work
+independently go in the same commit.
+
+###  Code style
+
+Hard 80-column limit. Generous vertical whitespace. One condition per
+line. Modular if-guards rather than else chains. Constants at the top
+of the file. Functions ordered by call order, never called before they
+are defined. Filenames use dots, never underscores (`detect.test.js`).
+
+###  Commands
 
 ```bash
 deno task test                                    # unit tests
@@ -43,12 +71,15 @@ deno run -A packages/cli/src/main.js config generate
 deno check packages/cli/src/main.js
 ```
 
-`POST /shuntd/v1/explain` returns the full routing decision as JSON
-with **no upstream call** — no tokens, no model load. Use it to verify
-routing instead of generating completions.
+`POST /shuntd/v1/explain` takes a `/v1/chat/completions` body and
+returns the full routing decision as JSON with **no upstream call** —
+no tokens, no model load. Use it to verify routing rather than
+generating completions.
 
-Local smoke scripts live in `.scratch/` (not committed):
-`audit-routing.js`, `probe-semantic.js`.
+Tests are colocated (`*.test.js`), use fixture catalogs, and need no
+daemon and no user config. Assertions naming real model ids belong in
+a personal smoke script, not the suite — one machine's catalog is not
+a project invariant.
 
 ##  Milestones
 
@@ -59,12 +90,13 @@ decision log, M5 Tier 3 semantic — **all complete**.
 `--include` for the vram script; packaging *scaffolding* only (nfpm,
 PKGBUILD, Homebrew formula templates — no maintained repos); a
 `ServiceAdapter` registry (`LaunchdAdapter`, `SystemdAdapter`) behind
-`shunt service install|uninstall|status`, which also persists the
-Ollama env vars; a `docs/` directory; and pointing OpenClaw at shuntd.
-Also queued: `packages/dashboard` (read-only over the log) and
-`shunt audit` / `shunt clients`.
+`shunt service install|uninstall|status`, which also persists backend
+environment variables; a `docs/` directory; and a README rewrite.
 
-##  Settled decisions — do not relitigate
+##  Decisions already made
+
+These are settled with reasoning attached. Changing one is fine — but
+bring evidence against the reasoning, not a preference.
 
 **Markdown parsing is `@lezer/markdown`**, not micromark. Chosen on
 dependency weight: 3 transitive packages against 62. No math
@@ -83,64 +115,93 @@ keyword triggers are user config, and multilingual intent falls out of
 Tier 3 embeddings for free.
 
 **Tags are routing preferences, not capability claims.** If two models
-claim the same tag it stops differentiating. `qwen3-coder`
-deliberately does NOT claim `TAG_MULTI_FILE` so devstral wins
-multi-file prompts.
+claim the same tag it stops differentiating, so a model that is
+*capable* of something should not claim the tag unless it is the one
+that work should reach.
+
+**`TAG_VISION` and `TAG_AUDIO` are REQUIREMENTS, not preferences.**
+They filter the candidate set rather than contributing to a score — a
+model that cannot see is not a worse choice for an image prompt, it is
+a broken one. They are separate tags because a model may do one and
+not the other. This is the second concept in the tag vocabulary and
+the one most likely to be mistaken for the first.
 
 **Tag vocabulary lives in `packages/core/src/tags/index.js`** and is
 validated in both directions at boot. It is the contract between the
 extractor that emits tags and the catalog that claims them.
 
+**Multimodal `content` arrives as an ARRAY of parts**, not a string.
+It must be normalised before anything reads it — collapsing it with
+`String()` yields `"[object Object]"`, which then gets
+feature-extracted, embedded and logged as if it were the prompt.
+
+**Intent comes from the last user message; weight comes from the whole
+payload.** Two different jobs, conflated once already. An agent sends
+twenty messages and a two-line question — estimating from the question
+alone was wrong by three orders of magnitude and silently disabled the
+context-fit check.
+
 **Tier 2 ties break by** overlap score, then persona-default
 preference, then name. Catalog key order must never affect routing.
 
-**The embedder is bge-m3, selectable not pinned.** Named profiles
-under `semantic.profiles`; threshold lives INSIDE each profile since
-cosine calibration is model-specific. Vectors cached in SQLite keyed
-by embedding model, so an A/B is a config line. `embedding_model` and
-`embedding_dim` are stamped on every log row.
+**The embedder is selectable, not pinned.** Named profiles under
+`semantic.profiles`; threshold lives INSIDE each profile since cosine
+calibration is model-specific. Vectors are cached in SQLite keyed by
+embedding model, so an A/B is a config line rather than a re-embed.
+`embedding_model` and `embedding_dim` are stamped on every log row.
 
-**A negative-class persona beats threshold tuning.** bge-m3 ranks well
-and calibrates poorly, so absolute cosine scores are not comparable
-across prompts. The `general` persona (no tags, unreachable from
-Tier 2) gives off-topic prompts somewhere to land. **When a prompt
-misroutes, add an exemplar matching that phrasing — do not lower the
-threshold.** A missing exemplar looks exactly like a threshold set too
-high. Validated: a CI prompt went 0.481 → 0.802 from one added
-exemplar, threshold untouched.
+**The embedder is injectable** on the semantic context, so Tier 3 is
+unit-testable without a network call.
+
+**An embedding model must never be in the routing catalog.** A
+catalogued model is selectable as a chat target, and an embedder
+cannot serve a completion.
+
+**A negative-class persona beats threshold tuning.** Retrieval
+embedders rank well and calibrate poorly, so absolute cosine scores
+are not comparable across prompts. A `general` persona (no tags, so
+unreachable from Tier 2) gives off-topic prompts somewhere to land.
+**When a prompt misroutes, add an exemplar matching that phrasing — do
+not lower the threshold.** A missing exemplar looks exactly like a
+threshold set too high, and lowering it widens every persona at once.
 
 **Exemplars differ by vocabulary, not adjective.** For short prompts
 sentence SHAPE outweighs subject matter, so each persona needs nouns
 the others never use. Cover both requests ("refactor this") and
 symptoms ("the loop runs one too many times") — they occupy different
-regions.
+regions of the vector space.
 
 **Clients are identified by `User-Agent`, never by API key.**
-Overloading a credential field with identity is an antipattern. App
-headers win when present (`X-OpenWebUI-User-*`). Three columns stored
-(`client_id`, `client_signature`, `user_agent`) so a mapping added
-later applies retroactively.
+Overloading a credential field with identity is an antipattern.
+App-specific headers win when present. Three columns are stored
+(`client_id`, `client_signature`, `user_agent`) so a name mapping
+added later applies retroactively.
 
 **Everything is logged**, including bypass and raw passthrough, tiered
 as `bypass` / `raw`. Excluding them made client mix and latency stats
-silently wrong.
+silently wrong while looking complete.
 
-**Rejected and why:** Monk-Router-phi4mini (opaque hardware-aware
-dispatcher — shuntd's own job); Jev / TypeSafe AI (hosted, unpublished
-architecture, breaks local-first); `lil-marky` (8 months old, one
+**Observability is never load-bearing.** A failed log write, a missing
+embedder, or an unreachable decision log degrades the feature and
+leaves routing working.
+
+**Rejected and why:** a hosted router model (opaque dispatcher —
+shuntd's own job); a hosted typed-classification API (unpublished
+architecture, breaks local-first); `lil-marky` (young, single
 maintainer, no GFM tables, no position offsets); port-per-client
-identification (too messy); FFI for NLP (build matrix).
+identification (multiplies config); FFI for NLP (per-platform build
+matrix, against the portability story).
 
-##  Environment facts
+##  Ecosystem facts
 
-Deno 2.9.6 stable on macOS and Arch.
+True regardless of whose machine this runs on.
 
-Root `deno.json` has `"unstable": ["no-legacy-abort"]`. Without it
+Deno 2.9+. `node:sqlite` is built in since 2.2. `DatabaseSync` is
+synchronous, which is why log writes are batched off the request path.
+
+Root `deno.json` sets `"unstable": ["no-legacy-abort"]`. Without it
 `Deno.serve` fires `request.signal` on *successful* responses, which
 breaks abort propagation in `chat.js`.
-
-`node:sqlite` is built in since Deno 2.2. `DatabaseSync` is
-synchronous, which is why log writes are batched off the request path.
 
 Ollama honours `stream_options: {include_usage: true}` on its
 OpenAI-compatible endpoint, so token counts come free.
@@ -149,19 +210,11 @@ Ollama's `/v1/*` endpoints IGNORE per-request `options` (`num_ctx`)
 and `keep_alive`; only `/api/*` accepts them. Per-persona context
 sizing would need an optional Ollama capability layer. Deferred.
 
-`launchctl setenv` does not survive a reboot — Ollama env vars have
-been wiped twice by macOS updates. A LaunchAgent is the fix, and it is
-M6 work.
+`OLLAMA_MAX_LOADED_MODELS` is a ceiling, not a reservation — models
+load concurrently only if they also fit in available memory.
 
-Installed models: `gemma4:31b` (global default), `qwen3-coder-next`,
-`devstral-small-2:24b`, `mistral-small3.2:24b`, `phi4-mini:latest`
-(background tasks), `bge-m3:latest` (embedder — deliberately NOT in
-the routing catalog, since a catalogued model is selectable as a chat
-target and an embedder cannot serve a completion).
-
-Open WebUI runs in OrbStack from `~/Docker/open-webui/compose.yml`,
-version-pinned, with `ENABLE_OLLAMA_API=false` so all traffic goes
-through shuntd, and Task Model set to `shuntd`.
+On macOS, `launchctl setenv` does not survive a reboot. Persisting
+backend environment variables needs a LaunchAgent, which is M6 work.
 
 ##  Open questions — revisit with data, not intuition
 
@@ -175,3 +228,65 @@ confidence that does not exist yet.
 
 Threshold calibration from logged `confidence` values, bucketed by
 whether the route was later overridden. That is why the column exists.
+
+Override capture — nothing currently records "the router chose X and
+the user forced Y." It is the highest-value missing signal, because it
+is the only ground truth the system can collect about itself.
+
+##  Post-v1 backlog
+
+Not scheduled. Grouped by what unlocks what.
+
+**Blocked on logged traffic:** threshold calibration; the Tier 3
+margin gate; Tier 2 confidence; override capture.
+
+**Routing:** image and audio token weight in `est_tokens` (counted,
+not charged); cache-aware routing, since alternating models discards a
+warm prefix cache; tool-call request shape detection; `//CLOUD`
+fallback with credential substitution; per-model `system_prefix`.
+
+**Infrastructure:** `packages/dashboard` (read-only, Evidence.dev);
+first-class `/v1/embeddings` route so embedding traffic is logged;
+semantic search over the prompt archive (prompts are already
+embedded); hot reload of `$XDG_CONFIG_HOME/shuntd`; middleware hooks
+for response transforms; per-persona `num_ctx` via the Ollama-native
+capability layer; a multilingual extractor, which the canonical tag
+vocabulary was designed to accept as a drop-in.
+
+**Discovery and UX:** user-defined custom tags, so specialised fields
+can adapt personas without forking; model capability auto-discovery
+for *measurable* facts only (context, params, quant) with capability
+tags staying curated; optional-dependency presets for third-party
+SQLite viewers, delegating rather than vendoring; a hardware analyser
+and recommender; leaderboard ingestion at design time only, never in
+the hot path.
+
+---
+
+##  Reference environment
+
+**This section describes the maintainer's setup. It is not a
+requirement and not a constraint on contributions.** It is here
+because several decisions above were validated against it, and
+knowing the shape of that validation is useful context.
+
+Apple Silicon, 128 GB unified memory, with the VRAM ceiling raised to
+roughly 112 GB by `vram-mac-guard`. A second machine runs Arch Linux.
+
+Backend is Ollama. Catalog: a 31B multimodal generalist as the global
+default, a long-context coder, a multi-file coding specialist, a
+24B multimodal generalist, a 3.8B model for background tasks, and
+`bge-m3` as the embedder — deliberately outside the routing catalog.
+
+Open WebUI runs in a container with `ENABLE_OLLAMA_API=false`, so all
+of its traffic goes through shuntd, and its Task Model is set to
+`shuntd` so background generation is routed and logged rather than
+bypassing. OpenClaw is configured as an OpenAI-compatible provider
+pointed at `:11435`.
+
+Numbers quoted in the decisions above come from this setup. The
+exemplar-versus-threshold finding, for instance, is one prompt moving
+from 0.481 to 0.802 after a single added exemplar with the threshold
+untouched — real evidence, but from one catalog with one embedder.
+Expect different absolute numbers elsewhere; the reasoning should
+still hold.
