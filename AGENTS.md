@@ -86,12 +86,16 @@ a project invariant.
 M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
-**M6 (next): MVP / v1 release.** Cross-compile for four targets with
-`--include` for the vram script; packaging *scaffolding* only (nfpm,
-PKGBUILD, Homebrew formula templates — no maintained repos); a
-`ServiceAdapter` registry (`LaunchdAdapter`, `SystemdAdapter`) behind
-`shunt service install|uninstall|status`, which also persists backend
-environment variables; a `docs/` directory; and a README rewrite.
+**M6 (next): MVP / v1 release.** Phased, in order. Instances first
+(`getInstanceDir`, `--instance`, `shunt instance list`, the dev/prod
+split, `shunt audit`), because everything after it assumes them.
+Then cross-compilation for four targets with `--include` for the vram
+script. Then a `ServiceAdapter` registry (`LaunchdAdapter`,
+`SystemdAdapter`) behind `shunt service install|uninstall|status`,
+which also persists backend environment variables. Then release
+automation and packaging *scaffolding* (nfpm, PKGBUILD, Homebrew
+templates — no maintained repos). Documentation last, since it
+describes a surface that moves until the service work lands.
 
 ##  Decisions already made
 
@@ -184,6 +188,22 @@ silently wrong while looking complete.
 **Observability is never load-bearing.** A failed log write, a missing
 embedder, or an unreachable decision log degrades the feature and
 leaves routing working.
+
+**Instances isolate config, archive and vectors together.** A named
+instance resolves to `instances/<name>/` under the config root; no
+name resolves to the root itself, so existing installs need no
+migration. Isolation is total rather than partial because the
+decision log is the point: dev traffic landing beside production rows
+would quietly corrupt the data that threshold calibration and
+exemplar tuning depend on. The useful consequence is that an A/B
+between embedders becomes two files to compare rather than one file
+to filter.
+
+**Development runs on a non-default port, production keeps `:11435`.**
+Clients point at a port and stay pointed there, so the stable thing
+gets the stable address. Moving production would mean either dev gets
+no client traffic — testing nothing the split was meant to help with
+— or repointing clients on every run.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
 shuntd's own job); a hosted typed-classification API (unpublished

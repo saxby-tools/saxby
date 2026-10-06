@@ -88,24 +88,80 @@ in the suite — one machine's catalog is not a project invariant.
   - [x] Write Cosine Similarity math to compare incoming prompt vectors against cached persona exemplars.
   - [x] Key the exemplar vector cache by embedding model so profiles can be A/B compared.
 - [ ] **Milestone 6: MVP / v1 Release**
-  - [ ] **Build & release**
-    - [ ] `deno task build` cross-compiling `shuntd` and `shunt` for darwin-arm64, darwin-x64, linux-x64, linux-arm64.
-    - [ ] `--include` the `vram-mac-guard.sh` asset so the compiled binary is self-contained.
+  - [ ] **Phase 0 — Instances** *(everything else assumes this)*
+    - [ ] `getInstanceDir(name)` in `@shuntd/core`, replacing the
+          current `join(getConfigDir(), "shuntd")`. No name resolves
+          to the config root; a name resolves to
+          `instances/<name>/`. Existing installs keep working with
+          no migration.
+    - [ ] Global `--instance` / `-i` flag on `shunt`, plus a
+          `SHUNTD_INSTANCE` environment variable so tasks set it
+          once.
+    - [ ] Per-instance isolation of config, decision log and
+          exemplar vectors. The vectors live inside the log, so that
+          falls out for free — note that switching instances
+          re-embeds exemplars on first boot.
+    - [ ] `shunt instance list` — names, ports, whether a service is
+          installed, whether it is currently running.
+    - [ ] Friendly `EADDRINUSE` on boot, naming the instance already
+          holding the port rather than surfacing a raw bind error.
+    - [ ] `deno task dev` — `--watch` against a `dev` instance on a
+          non-default port, so the service keeps running and the
+          production archive stays clean.
+    - [ ] `deno task dev:init` — wraps
+          `shunt -i dev config generate` so the dev catalog is one
+          command rather than a hand-maintained second file.
+    - [ ] `shunt audit` — productize `.scratch/audit-routing.js` as
+          a CLI command, instance-aware. Lands here so every later
+          phase can be verified with one command.
+  - [ ] **Phase 1 — Build**
+    - [ ] `deno task build` cross-compiling `shuntd` and `shunt` for
+          darwin-arm64, darwin-x64, linux-x64, linux-arm64.
+    - [ ] `--include` the `vram-mac-guard.sh` asset so the compiled
+          binary is self-contained.
     - [ ] Emit tarballs plus SHA256 checksums into `dist/`.
-    - [ ] CI release workflow that attaches artifacts to a tagged GitHub release.
-    - [ ] Packaging *scaffolding* only, not maintained repos: `packaging/nfpm.yaml` (deb/rpm), `packaging/PKGBUILD` template, `packaging/shuntd.rb` Homebrew formula template.
-  - [ ] **Service management**
-    - [ ] `ServiceAdapter` registry mirroring the backend adapter pattern: `LaunchdAdapter` (macOS) and `SystemdAdapter` (Linux).
-    - [ ] `shunt service install | uninstall | status`, generating a user-level LaunchAgent or a `systemd --user` unit.
-    - [ ] Persist Ollama environment (`OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`) via the same adapter, since `launchctl setenv` does not survive a reboot.
-    - [ ] Implement the dev/prod split: `deno task dev` (`--watch`, no service) vs. compiled binary under a supervisor.
-    - [ ] shunt audit — productize the live routing smoke test as a CLI command alongside shunt status.
-  - [ ] **Documentation**
-    - [ ] Create `docs/` — `getting-started.md`, `configuration.md`, `routing.md`, `services.md`, `clients.md`, `troubleshooting.md`, `architecture.md`.
-    - [ ] Rewrite the README as a landing page that links into `docs/`.
-  - [ ] **Client integration**
-    - [ ] Document how to point OpenClaw at shuntd
-    - [ ] Document Open WebUI setup, including the Task Model setting for background generation.
+    - [ ] `docs/releasing.md` — the checklist. Four targets, four
+          checksums, a tag, and packaging templates that each need a
+          version bumped. This works by hand the first time and
+          drifts silently by the third.
+  - [ ] **Phase 2 — Service management**
+    - [ ] `ServiceAdapter` registry mirroring the backend adapter
+          pattern: `LaunchdAdapter` (macOS), `SystemdAdapter`
+          (Linux). Instance-aware from the start — a label cannot be
+          `com.shuntd.router` for two instances.
+    - [ ] `shunt service install | uninstall | status`, generating a
+          user-level LaunchAgent or a `systemd --user` unit.
+    - [ ] Persist backend environment variables
+          (`OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`,
+          `OLLAMA_KEEP_ALIVE`) through the same adapter, since
+          `launchctl setenv` does not survive a reboot.
+    - [ ] Document the dev/prod split: `deno task dev` against the
+          `dev` instance versus a compiled binary under a
+          supervisor, plus the explicit third mode — stop the
+          service and run dev against the default instance when you
+          want real client traffic through a dev build.
+  - [ ] **Phase 3 — Release automation**
+    - [ ] CI release workflow that attaches artifacts to a tagged
+          GitHub release.
+    - [ ] Packaging *scaffolding* only, not maintained repos:
+          `packaging/nfpm.yaml` (deb/rpm), `packaging/PKGBUILD`
+          template, `packaging/shuntd.rb` Homebrew formula template.
+  - [ ] **Phase 4 — Documentation** *(last: it documents a surface
+        that is still moving until Phase 2 lands)*
+    - [ ] JSDoc sweep, consistent across the repo. Mechanical and
+          verifiable with `deno check` — safe to start any time, and
+          independent of the phases above.
+    - [ ] Create `docs/` — `getting-started.md`, `configuration.md`,
+          `instances.md`, `routing.md`, `services.md`, `clients.md`,
+          `releasing.md`, `troubleshooting.md`, `architecture.md`.
+    - [ ] Rewrite the README as a landing page that links into
+          `docs/`.
+    - [ ] `docs/clients.md`: how to point OpenClaw at shuntd, and
+          Open WebUI setup including the Task Model setting for
+          background generation. Cover the layer-ownership rule —
+          when a UI sits in front of an agent, every capability the
+          UI also provides is a second opinion about something
+          already decided downstream.
 
 ## Development
 
