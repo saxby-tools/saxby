@@ -88,7 +88,7 @@ decision log, M5 Tier 3 semantic — **all complete**.
 
 **M6 (next): MVP / v1 release.** Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `shunt instance list`, the dev/prod
-split, `shunt audit`), because everything after it assumes them.
+split, `shunt probe`), because everything after it assumes them.
 Then cross-compilation for four targets with `--include` for the vram
 script. Then a `ServiceAdapter` registry (`LaunchdAdapter`,
 `SystemdAdapter`) behind `shunt service install|uninstall|status`,
