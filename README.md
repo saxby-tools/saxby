@@ -29,7 +29,7 @@ abstention reason for every tier that declined. It **never contacts the
 upstream**: no tokens generated, no models loaded, no VRAM moved.
 
 ```bash
-curl http://127.0.0.1:11435/shuntd/explain \
+curl http://127.0.0.1:11435/shuntd/v1/explain \
   -H "Content-Type: application/json" \
   -d '{
     "model": "shuntd",
@@ -49,7 +49,7 @@ deno task test
 
 Unit tests are colocated with the code (`*.test.js`) and use fixture catalogs,
 so they need no running daemon and no user config. Assertions that name real
-models belong in a personal smoke script against `/shuntd/explain` rather than
+models belong in a personal smoke script against `/shuntd/v1/explain` rather than
 in the suite — one machine's catalog is not a project invariant.
 
 ## Development Roadmap
@@ -68,7 +68,7 @@ in the suite — one machine's catalog is not a project invariant.
   - [x] Implement Tier 2 (Owned Extractor): Build lightweight lexical parser to detect code fences, formatting, and keywords to emit canonical capability tags.
   - [x] Build the `selectModel` gauntlet: Intersect emitted tags with the model catalog and pick the victor.
   - [x] Enforce the tag contract at boot; seed catalog capabilities from curated defaults.
-  - [x] Add request tracing (`--verbose` / `--trace`) and the `/shuntd/explain` audit endpoint.
+  - [x] Add request tracing (`--verbose` / `--trace`) and the `/shuntd/v1/explain` audit endpoint.
 - [x] **Milestone 4: The SQLite Decision Logger**
   - [x] Wire up the Deno standard SQLite module.
   - [x] Create the schema for the transparent `decision_log` table.
@@ -86,7 +86,9 @@ in the suite — one machine's catalog is not a project invariant.
           current `join(getConfigDir(), "shuntd")`. No name resolves
           to the config root; a name resolves to
           `instances/<name>/`. Existing installs keep working with
-          no migration.
+          no migration. Names are limited to lowercase letters,
+          digits and hyphens, since one name becomes a folder, a
+          launchd label and a systemd unit.
     - [ ] Global `--instance` / `-i` flag on `shunt`, plus a
           `SHUNTD_INSTANCE` environment variable so tasks set it
           once.
@@ -101,12 +103,11 @@ in the suite — one machine's catalog is not a project invariant.
     - [ ] `deno task dev` — `--watch` against a `dev` instance on a
           non-default port, so the service keeps running and the
           production archive stays clean.
-    - [ ] `deno task dev:init` — wraps
-          `shunt -i dev config generate` so the dev catalog is one
-          command rather than a hand-maintained second file.
-    - [ ] `shunt audit` — productize `.scratch/audit-routing.js` as
-          a CLI command, instance-aware. Lands here so every later
-          phase can be verified with one command.
+    - [ ] `shunt probe` — productize `.scratch/probe-semantic.js`
+          as a CLI command, instance-aware. It reports scores and
+          margins rather than asserting expected models, so it
+          carries no one machine's catalog. Lands here so every
+          later phase can be verified with one command.
   - [ ] **Phase 1 — Build**
     - [ ] `deno task build` cross-compiling `shuntd` and `shunt` for
           darwin-arm64, darwin-x64, linux-x64, linux-arm64.
