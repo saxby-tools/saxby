@@ -2,7 +2,6 @@ import { Command } from "@cliffy/command";
 import {
     executeAsRootMac as executeAsRoot,
     generatePlist,
-    IS_DEV,
 } from "@shuntd/core";
 import { join } from "@std/path";
 
@@ -12,7 +11,11 @@ const DAEMON_SCRIPT_DESTINATION = `${DAEMON_DIR}/vram-mac-guard.sh`;
 
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
-    .action(async () => {
+    .option(
+        "-v, --verbose",
+        "Log raw `ollama ps` output on the daemon's first poll.",
+    )
+    .action(async (options) => {
         if (Deno.build.os !== "darwin") {
             console.error("❌ Error: vram-guard is only supported on macOS.");
             Deno.exit(1);
@@ -27,6 +30,14 @@ export const installCommand = new Command()
         );
         const scriptContent = await Deno.readTextFile(localScriptPath);
 
+        //  Same convention as SHUNTD_VERBOSE on the router: any non-empty
+        //  value turns it on, so the variable is set only when asked for.
+        const environment = {};
+
+        if (options.verbose) {
+            environment.VRAM_GUARD_VERBOSE = "1";
+        }
+
         // 2. Generate the Plist targeting the physical libexec destination
         const plistContent = generatePlist({
             Label: "com.shuntd.vram-guard",
@@ -35,9 +46,7 @@ export const installCommand = new Command()
                 "bash",
                 DAEMON_SCRIPT_DESTINATION,
             ],
-            EnvironmentVariables: {
-                DEV_MODE: IS_DEV ? "true" : "false", // Inject dev mode for the .sh script
-            },
+            EnvironmentVariables: environment,
             StandardErrorPath: "/var/log/com.shuntd.vram-guard.error.log",
             StandardOutPath: "/var/log/com.shuntd.vram-guard.out.log",
         });

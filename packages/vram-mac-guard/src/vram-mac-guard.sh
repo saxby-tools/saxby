@@ -62,7 +62,7 @@ while true; do
     LINE_COUNT=$(echo "$RAW_OLLAMA_OUTPUT" | grep -v "^$" | wc -l)
 
     if [ "$FIRST_RUN_LOGGED" -eq 0 ]; then
-        if [ "$DEV_MODE" = "true" ]; then
+        if [ -n "$VRAM_GUARD_VERBOSE" ]; then
             echo "--- OLLAMA RAW OUTPUT ---" >>"$LOG_FILE"
             echo "$RAW_OLLAMA_OUTPUT" >>"$LOG_FILE"
             echo "LINE COUNT: $LINE_COUNT" >>"$LOG_FILE"
