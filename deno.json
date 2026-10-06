@@ -20,7 +20,7 @@
     },
     "tasks": {
         "test": "deno test packages/"
-    }
+    },
     "fmt": {
         "useTabs": false,
         "indentWidth": 4,
