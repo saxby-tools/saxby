@@ -1,6 +1,3 @@
-// A simple, universal dev mode flag
-export const IS_DEV = !Deno.build.standalone;
-
 /**
  * Gets the user's home directory cross-platform.
  * @returns {string | null}
