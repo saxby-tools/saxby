@@ -7,14 +7,7 @@ A local-first, config-driven AI routing suite.
 - `@shuntd/llm-router`: The Unix-agnostic background daemon (`shuntd`) that intercepts and routes OpenAI-compatible traffic.
 - `@shuntd/cli`: The user-facing orchestrator (`shunt`).
 - `@shuntd/core`: Shared contracts — the canonical tag vocabulary, plist generation, privileged execution, env utilities.
-- `mac-vram-guard`: An isolated, Apple Silicon-specific LaunchDaemon to dynamically manage macOS Unified Memory based on LLM load.
-
-## Lifecycle Semantics (V1)
-
-- `shunt up`: Spawns the `shuntd` router as a detached background process and writes a PID file.
-- `shunt down`: Reads the PID file, gracefully kills the router, and cleans up.
-- `shunt status`: Verifies the port is alive and checks `mac-vram-guard` limits.
-- **Note:** `mac-vram-guard` runs independently via macOS `launchd`. The CLI checks it, but does not own its lifecycle.
+- `vram-mac-guard`: An isolated, Apple Silicon-specific LaunchDaemon to dynamically manage macOS Unified Memory based on LLM load.
 
 ## Routing Tiers
 
@@ -30,7 +23,7 @@ Ties in Tier 2a break by: overlap score, then persona-default preference, then n
 
 ## Auditing Routes
 
-`POST /shuntd/explain` takes a `/v1/chat/completions` body and returns the full
+`POST /shuntd/v1/explain` takes a `/v1/chat/completions` body and returns the full
 routing decision as JSON — tier, tags, candidate scores, selected model, and an
 abstention reason for every tier that declined. It **never contacts the
 upstream**: no tokens generated, no models loaded, no VRAM moved.
