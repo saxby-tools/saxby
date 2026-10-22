@@ -1,26 +1,27 @@
 import { join } from "@std/path";
 import { parse as parseJsonc } from "@std/jsonc";
-import { getConfigDir } from "../utils/env.js";
+import { getInstanceDir } from "./instance.js";
 import { validateConfig } from "./schema.js";
 
-const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_JSONC = "config.jsonc";
 const CONFIG_FILE_JSON = "config.json";
 
-export async function loadConfig() {
-    const configDir = join(getConfigDir(), SHUNTD_DIR_NAME);
+/**
+ * Loads and validates an instance's config.
+ *
+ * Never creates the instance directory. Only `config generate` makes
+ * one, so a mistyped `-i` name fails loudly instead of leaving an
+ * empty instance behind for `instance list` to report.
+ * @param {string | null} instance - A name from resolveInstanceName.
+ */
+export async function loadConfig(instance = null) {
+    const configDir = getInstanceDir(instance);
     const pathJsonc = join(configDir, CONFIG_FILE_JSONC);
     const pathJson = join(configDir, CONFIG_FILE_JSON);
 
-    try {
-        await Deno.mkdir(configDir, { recursive: true });
-    } catch (err) {
-        if (!(err instanceof Deno.errors.AlreadyExists)) {
-            throw new Error(
-                `Failed to create config directory at ${configDir}: ${err.message}`,
-            );
-        }
-    }
+    const generateHint = instance
+        ? `shunt -i ${instance} config generate`
+        : "shunt config generate";
 
     // Try reading config.jsonc first, fall back to config.json
     let rawContent;
@@ -49,8 +50,9 @@ export async function loadConfig() {
             } catch (innerErr) {
                 if (innerErr instanceof Deno.errors.NotFound) {
                     throw new Error(
-                        "❌ No config found!\n" +
-                            "Please run 'shunt config generate' to launch the interactive setup guide.",
+                        `❌ No config found in ${configDir}\n` +
+                            `Please run '${generateHint}' to launch ` +
+                            "the interactive setup guide.",
                     );
                 }
                 throw innerErr;
