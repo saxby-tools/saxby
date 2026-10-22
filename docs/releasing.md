@@ -67,14 +67,25 @@ curl -s http://127.0.0.1:11436/shuntd/v1/status
 ##  Promote a local build
 
 Production binaries live in `~/.local/bin`, which is user-owned and on
-`PATH` on both macOS and Arch. Promoting a build is a copy:
+`PATH` on both macOS and Arch. Promote with `install`, never `cp`:
 
 ```bash
-cp dist/shuntd-<version>-darwin-arm64/{shuntd,shunt} ~/.local/bin/
+install -m 755 dist/shuntd-<version>-darwin-arm64/{shuntd,shunt} ~/.local/bin/
 ```
 
-Restart the production service afterward so it picks up the new
-binary. Until then the old process keeps running the old build.
+`install` removes the old file and writes a new one, so the running
+process keeps the old binary until it restarts. `cp` overwrites the
+file the process is running from, which on macOS can get it killed
+once its code signature no longer matches the pages on disk.
+
+Then restart the service so it runs the new build:
+
+```bash
+shunt service restart
+```
+
+`shunt instance list` shows the version each running instance
+reports, so a stale production binary is visible at a glance.
 
 ##  Tag
 
