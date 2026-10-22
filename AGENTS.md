@@ -91,8 +91,8 @@ decision log, M5 Tier 3 semantic — **all complete**.
 split, `shunt probe`), because everything after it assumes them.
 Then cross-compilation for four targets with `--include` for the vram
 script. Then a `ServiceAdapter` registry (`LaunchdAdapter`,
-`SystemdAdapter`) behind `shunt service install|uninstall|status`,
-which also persists backend environment variables. Then release
+`SystemdAdapter`) behind `shunt service
+install|uninstall|status|restart`. Then release
 automation and packaging *scaffolding* (nfpm, PKGBUILD, Homebrew
 templates — no maintained repos). Documentation last, since it
 describes a surface that moves until the service work lands.
@@ -230,6 +230,13 @@ the wrong way.
 plain GPL never triggers for software that is only run, not
 distributed.
 
+**shuntd does not manage the backend's environment.** Ollama runs
+under its own supervisor — `brew services`, Ollama.app, or a system
+unit on Linux that a `systemd --user` service cannot reach. Whatever
+starts the backend owns its environment; shuntd setting it would be a
+second opinion that sometimes loses a race. `docs/` carries a recipe
+per platform instead.
+
 **One version for every package**, bumped together in the release
 commit. The first tag is `v1.0.0`.
 
@@ -266,8 +273,10 @@ sizing would need an optional Ollama capability layer. Deferred.
 `OLLAMA_MAX_LOADED_MODELS` is a ceiling, not a reservation — models
 load concurrently only if they also fit in available memory.
 
-On macOS, `launchctl setenv` does not survive a reboot. Persisting
-backend environment variables needs a LaunchAgent, which is M6 work.
+On macOS, `launchctl setenv` does not survive a reboot, and a
+LaunchAgent that re-runs it at login races the backend's own agent —
+login items start in no fixed order. The reliable place for a
+backend's environment is the supervisor that starts it.
 
 ##  Open questions — revisit with data, not intuition
 
