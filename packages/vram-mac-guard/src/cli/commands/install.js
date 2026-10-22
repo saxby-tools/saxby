@@ -4,10 +4,14 @@ import {
     generatePlist,
 } from "@shuntd/core";
 import { join } from "@std/path";
-
-const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
-const DAEMON_DIR = "/usr/local/libexec/shuntd";
-const DAEMON_SCRIPT_DESTINATION = `${DAEMON_DIR}/vram-mac-guard.sh`;
+import {
+    DAEMON_DIR,
+    DAEMON_SCRIPT_DESTINATION,
+    LABEL,
+    LOG_ERROR,
+    LOG_OUT,
+    PLIST_DESTINATION,
+} from "../../constants.js";
 
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
@@ -40,15 +44,15 @@ export const installCommand = new Command()
 
         // 2. Generate the Plist targeting the physical libexec destination
         const plistContent = generatePlist({
-            Label: "com.shuntd.vram-guard",
+            Label: LABEL,
             ProgramArguments: [
                 "/usr/bin/env",
                 "bash",
                 DAEMON_SCRIPT_DESTINATION,
             ],
             EnvironmentVariables: environment,
-            StandardErrorPath: "/var/log/com.shuntd.vram-guard.error.log",
-            StandardOutPath: "/var/log/com.shuntd.vram-guard.out.log",
+            StandardErrorPath: LOG_ERROR,
+            StandardOutPath: LOG_OUT,
         });
 
         // 3. Write BOTH payloads to unprivileged temp files first

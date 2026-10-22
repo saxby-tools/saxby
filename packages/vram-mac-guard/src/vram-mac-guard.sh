@@ -3,7 +3,8 @@
 # Explicitly set PATH for the launchd root environment
 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
-LOG_FILE="/var/log/com.shuntd.vram-guard.out.log"
+# Must match LOG_OUT in src/constants.js
+LOG_FILE="/var/log/org.shuntd.vram-mac-guard.out.log"
 
 # ---------------------------------------------------------
 # 1. ARCHITECTURE GUARDRAIL
@@ -35,11 +36,34 @@ CALC_HEAVY_MB=$((TOTAL_RAM_MB * 86 / 100))
 # ---------------------------------------------------------
 # 3. ENVIRONMENT OVERRIDES
 # ---------------------------------------------------------
-CONFIG_FILE="/etc/vram-mac-guard.env"
-if [ -f "$CONFIG_FILE" ]; then
+CONFIG_FILE="/usr/local/etc/shuntd/vram-mac-guard.env"
+
+# The override file is sourced AS ROOT, so it is trusted only when
+# root owns it and nobody else can write to it. /usr/local is
+# user-writable on some Homebrew setups. stat does not follow
+# symlinks, so a link planted by a user fails the owner check too.
+load_overrides() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        return
+    fi
+
+    if [ "$(stat -f '%u' "$CONFIG_FILE")" != "0" ]; then
+        echo "$(date) - WARNING: $CONFIG_FILE is not owned by root." \
+            "Ignoring it." >>"$LOG_FILE"
+        return
+    fi
+
+    if [ -n "$(find "$CONFIG_FILE" -perm +022)" ]; then
+        echo "$(date) - WARNING: $CONFIG_FILE is writable by" \
+            "non-root users. Ignoring it." >>"$LOG_FILE"
+        return
+    fi
+
     # shellcheck source=/dev/null
     source "$CONFIG_FILE"
-fi
+}
+
+load_overrides
 
 SAFE_MB=${VRAM_GUARD_SAFE_MB:-$CALC_SAFE_MB}
 HEAVY_MB=${VRAM_GUARD_HEAVY_MB:-$CALC_HEAVY_MB}
