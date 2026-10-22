@@ -109,28 +109,30 @@ in the suite — one machine's catalog is not a project invariant.
           margins rather than asserting expected models, so it
           carries no one machine's catalog. Lands here so every
           later phase can be verified with one command.
-  - [ ] **Phase 1 — Build**
-    - [ ] `deno task build` cross-compiling `shuntd` and `shunt` for
+  - [x] **Phase 1 — Build**
+    - [x] `deno task build` cross-compiling `shuntd` and `shunt` for
           darwin-arm64, darwin-x64, linux-x64, linux-arm64.
-    - [ ] `--include` the `vram-mac-guard.sh` asset so the compiled
+    - [x] `--include` the `vram-mac-guard.sh` asset so the compiled
           binary is self-contained.
-    - [ ] Emit tarballs plus SHA256 checksums into `dist/`.
-    - [ ] `docs/releasing.md` — the checklist. Four targets, four
-          checksums, a tag, and packaging templates that each need a
-          version bumped. This works by hand the first time and
+    - [x] Emit tarballs plus SHA256 checksums into `dist/`.
+    - [x] `docs/releasing.md` — the checklist. Four targets, four
+          checksums, a tag, and local promotion. Packaging templates
+          join it in Phase 3. This works by hand the first time and
           drifts silently by the third.
   - [ ] **Phase 2 — Service management**
     - [ ] `ServiceAdapter` registry mirroring the backend adapter
           pattern: `LaunchdAdapter` (macOS), `SystemdAdapter`
           (Linux). Instance-aware from the start — a label cannot be
           `org.shuntd.router` for two instances.
-    - [ ] `shunt service install | uninstall | status`, generating a
-          user-level LaunchAgent or a `systemd --user` unit.
+    - [ ] `shunt service install | uninstall | status | restart`,
+          generating a user-level LaunchAgent or a `systemd --user`
+          unit. `restart` is the second half of promoting a build.
     - [ ] "Service installed" column in `shunt instance list`.
-    - [ ] Persist backend environment variables
-          (`OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`,
-          `OLLAMA_KEEP_ALIVE`) through the same adapter, since
-          `launchctl setenv` does not survive a reboot.
+    - [ ] A per-platform recipe in `docs/` for persisting backend
+          environment variables (`OLLAMA_MAX_LOADED_MODELS`,
+          `OLLAMA_KEEP_ALIVE`, ...). shuntd does not set them: the
+          backend runs under its own supervisor, which owns its
+          environment.
     - [ ] Document the dev/prod split: `deno task dev` against the
           `dev` instance versus a compiled binary under a
           supervisor, plus the explicit third mode — stop the
