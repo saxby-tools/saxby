@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getConfigDir } from "@shuntd/core";
+import { getInstanceDir, resolveInstanceName } from "@shuntd/core";
 import { ADAPTERS } from "../../adapters/index.js";
 import {
     isEmbeddingModel,
@@ -12,7 +12,6 @@ import {
     suggestSemanticDefaults,
 } from "../../personas/defaults.js";
 
-const SHUNTD_DIR_NAME = "shuntd";
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
 const INDENT = 4;
 
@@ -101,7 +100,16 @@ export const generateCommand = new Command()
         "Override the backend host URL to target.",
     )
     .action(async (options) => {
-        const configDir = join(getConfigDir(), SHUNTD_DIR_NAME);
+        let instance;
+
+        try {
+            instance = resolveInstanceName(options.instance);
+        } catch (err) {
+            console.error(`❌ ${err.message}`);
+            Deno.exit(1);
+        }
+
+        const configDir = getInstanceDir(instance);
         const targetPath = options.out || join(configDir, CONFIG_FILE_NAME);
 
         // 1. Overwrite Protection
