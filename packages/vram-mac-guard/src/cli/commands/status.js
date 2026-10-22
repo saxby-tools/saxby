@@ -1,4 +1,5 @@
 import { Command } from "@cliffy/command";
+import { LABEL } from "../../constants.js";
 
 export const statusCommand = new Command()
     .description("Check the current memory limits and daemon status.")
@@ -7,7 +8,7 @@ export const statusCommand = new Command()
 
         // 1. Query the SYSTEM domain explicitly (does not require sudo to read)
         const launchctlCmd = new Deno.Command("launchctl", {
-            args: ["print", "system/com.shuntd.vram-guard"],
+            args: ["print", `system/${LABEL}`],
             stdout: "piped",
             stderr: "piped",
         });
