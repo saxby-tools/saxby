@@ -1,4 +1,5 @@
 import { Command } from "@cliffy/command";
+import { findServiceAdapter } from "../../services/index.js";
 import {
     fetchShuntdStatus,
     getHomeDir,
@@ -7,7 +8,15 @@ import {
     loadConfig,
 } from "@shuntd/core";
 
-const COLUMNS = ["NAME", "PORT", "STATE", "PID", "VERSION", "DIRECTORY"];
+const COLUMNS = [
+    "NAME",
+    "PORT",
+    "STATE",
+    "PID",
+    "VERSION",
+    "SERVICE",
+    "DIRECTORY",
+];
 const GAP = 2;
 
 //  Shortens paths for display only; never feed the result back in.
@@ -25,6 +34,20 @@ function tildify(path) {
     return `~${path.slice(home.length)}`;
 }
 
+//  "installed" means the service file exists; STATE already says
+//  whether something is answering.
+async function describeService(name) {
+    const adapter = findServiceAdapter();
+
+    if (!adapter) {
+        return "-";
+    }
+
+    const service = await adapter.status(name);
+
+    return service.installed ? "installed" : "-";
+}
+
 /**
  * One row per instance. "running" means the shuntd on the configured
  * port says it IS this instance. A port held by another instance is
@@ -37,6 +60,7 @@ async function describeInstance(name) {
         state: "error",
         pid: "-",
         version: "-",
+        service: await describeService(name),
         directory: tildify(getInstanceDir(name)),
         error: null,
     };
@@ -81,6 +105,7 @@ function printTable(rows) {
         row.state,
         row.pid,
         row.version,
+        row.service,
         row.directory,
     ]);
 
