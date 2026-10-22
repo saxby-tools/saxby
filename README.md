@@ -81,29 +81,30 @@ in the suite — one machine's catalog is not a project invariant.
   - [x] Write Cosine Similarity math to compare incoming prompt vectors against cached persona exemplars.
   - [x] Key the exemplar vector cache by embedding model so profiles can be A/B compared.
 - [ ] **Milestone 6: MVP / v1 Release**
-  - [ ] **Phase 0 — Instances** *(everything else assumes this)*
-    - [ ] `getInstanceDir(name)` in `@shuntd/core`, replacing the
+  - [x] **Phase 0 — Instances** *(everything else assumes this)*
+    - [x] `getInstanceDir(name)` in `@shuntd/core`, replacing the
           current `join(getConfigDir(), "shuntd")`. No name resolves
           to the config root; a name resolves to
           `instances/<name>/`. Existing installs keep working with
           no migration. Names are limited to lowercase letters,
           digits and hyphens, since one name becomes a folder, a
           launchd label and a systemd unit.
-    - [ ] Global `--instance` / `-i` flag on `shunt`, plus a
+    - [x] Global `--instance` / `-i` flag on `shunt`, plus a
           `SHUNTD_INSTANCE` environment variable so tasks set it
           once.
-    - [ ] Per-instance isolation of config, decision log and
+    - [x] Per-instance isolation of config, decision log and
           exemplar vectors. The vectors live inside the log, so that
           falls out for free — note that switching instances
           re-embeds exemplars on first boot.
-    - [ ] `shunt instance list` — names, ports, whether a service is
-          installed, whether it is currently running.
-    - [ ] Friendly `EADDRINUSE` on boot, naming the instance already
+    - [x] `shunt instance list` — names, ports, whether each is
+          running, and its pid, read from `/shuntd/v1/status`. The
+          "service installed" column lands with Phase 2.
+    - [x] Friendly `EADDRINUSE` on boot, naming the instance already
           holding the port rather than surfacing a raw bind error.
-    - [ ] `deno task dev` — `--watch` against a `dev` instance on a
+    - [x] `deno task dev` — `--watch` against a `dev` instance on a
           non-default port, so the service keeps running and the
           production archive stays clean.
-    - [ ] `shunt probe` — productize `.scratch/probe-semantic.js`
+    - [x] `shunt probe` — productize `.scratch/probe-semantic.js`
           as a CLI command, instance-aware. It reports scores and
           margins rather than asserting expected models, so it
           carries no one machine's catalog. Lands here so every
@@ -122,9 +123,10 @@ in the suite — one machine's catalog is not a project invariant.
     - [ ] `ServiceAdapter` registry mirroring the backend adapter
           pattern: `LaunchdAdapter` (macOS), `SystemdAdapter`
           (Linux). Instance-aware from the start — a label cannot be
-          `com.shuntd.router` for two instances.
+          `org.shuntd.router` for two instances.
     - [ ] `shunt service install | uninstall | status`, generating a
           user-level LaunchAgent or a `systemd --user` unit.
+    - [ ] "Service installed" column in `shunt instance list`.
     - [ ] Persist backend environment variables
           (`OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`,
           `OLLAMA_KEEP_ALIVE`) through the same adapter, since
