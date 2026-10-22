@@ -7,7 +7,12 @@
 //  port-clash message at boot, and `shunt probe`.
 //
 //  Answered from memory alone: no upstream call, no config read.
-//  `instance` is null for the default instance.
+//  `instance` is null for the default instance. `version` answers
+//  "which build is production running" once it runs a compiled
+//  binary; packages are versioned in lockstep, so this one speaks for
+//  the release.
+
+import packageConfig from "../../../../deno.json" with { type: "json" };
 
 export function registerStatusRoutes(app) {
     app.get("/shuntd/v1/status", (c) => {
@@ -17,6 +22,7 @@ export function registerStatusRoutes(app) {
             instance: c.get("instance"),
             port: config.listen_port,
             pid: Deno.pid,
+            version: packageConfig.version,
         });
     });
 }
