@@ -1,8 +1,7 @@
-import { loadConfig } from "./config/loader.js";
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
-import { validateTagContract } from "@shuntd/core";
+import { loadConfig, validateTagContract } from "@shuntd/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
 import { probeProfile } from "./semantic/embed.js";

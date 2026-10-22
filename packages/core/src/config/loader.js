@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { parse as parseJsonc } from "@std/jsonc";
-import { getConfigDir } from "@shuntd/core";
+import { getConfigDir } from "../utils/env.js";
 import { validateConfig } from "./schema.js";
 
 const SHUNTD_DIR_NAME = "shuntd";

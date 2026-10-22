@@ -1,5 +1,7 @@
 export * from "./utils/env.js";
 export * from "./utils/plist.js";
 export * from "./utils/root.js";
+export * from "./config/schema.js";
+export * from "./config/loader.js";
 export * from "./service/index.js";
 export * from "./tags/index.js";
