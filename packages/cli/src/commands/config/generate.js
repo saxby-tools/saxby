@@ -208,23 +208,28 @@ export const generateCommand = new Command()
             );
             const { targetUrl, models } = backendData;
 
+            //  An embedder cannot serve a completion, and any model
+            //  picked below lands in the routing catalog, where it
+            //  becomes a chat target. Keep embedders out of all three.
+            const chatModels = models.filter((m) => !isEmbeddingModel(m));
+
             // 4b. Universal Prompts
             const globalDefault = await Select.prompt({
                 message: "Global Fallback model (used when routing fails):",
-                options: models,
+                options: chatModels,
             });
 
             // 4b. Universal Persona Prompts
             const coderModel = await Select.prompt({
                 message:
                     "'Coder' persona model (optimized for code and refactoring):",
-                options: models,
+                options: chatModels,
             });
 
             const writerModel = await Select.prompt({
                 message:
                     "'Writer' persona model (optimized for prose and reasoning):",
-                options: models,
+                options: chatModels,
             });
 
             // 4c. Catalog Catch-all
@@ -233,8 +238,8 @@ export const generateCommand = new Command()
                 coderModel,
                 writerModel,
             ]);
-            const remainingModels = models.filter((m) =>
-                !baselineModels.has(m) && !isEmbeddingModel(m)
+            const remainingModels = chatModels.filter((m) =>
+                !baselineModels.has(m)
             );
 
             let additionalModels = [];
