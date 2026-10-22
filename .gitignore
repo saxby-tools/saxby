@@ -12,3 +12,6 @@ coverage/
 
 # Common
 .DS_Store
+
+# Build output
+dist/
