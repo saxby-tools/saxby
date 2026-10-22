@@ -2,6 +2,7 @@ import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
 import {
+    fetchShuntdStatus,
     getInstanceDir,
     loadConfig,
     resolveInstanceName,
@@ -127,15 +128,46 @@ async function warmSemantic(config, log) {
     }
 }
 
+/**
+ * Turns a raw EADDRINUSE into which instance holds the port, and
+ * which process to stop.
+ *
+ * Under launchd KeepAlive this message repeats every respawn, which
+ * is the loudness a second supervisor deserves.
+ */
+async function describePortClash(port, instance) {
+    const header = `❌ Port ${port} is already in use.`;
+    const holder = await fetchShuntdStatus(port);
+
+    if (!holder) {
+        return `${header}\n` +
+            `   The process holding it is not shuntd. Change ` +
+            `listen_port in ${getInstanceDir(instance)}.`;
+    }
+
+    if (holder.instance !== instance) {
+        return `${header}\n` +
+            `   It is held by shuntd instance ` +
+            `'${holder.instance ?? "default"}' (pid ${holder.pid}).`;
+    }
+
+    return `${header}\n` +
+        `   Another shuntd is already serving this instance ` +
+        `('${instance ?? "default"}', pid ${holder.pid}).\n` +
+        `   Usual cause: a second supervisor — brew services, ` +
+        `shunt service, or a dev run left open.`;
+}
+
 async function main() {
     console.log("🚀 Starting shuntd llm-router...");
 
     const level = initTracing(Deno.args);
 
     let config;
+    let instance;
 
     try {
-        const instance = resolveInstanceName(readInstanceFlag(Deno.args));
+        instance = resolveInstanceName(readInstanceFlag(Deno.args));
 
         console.log(
             `📂 Instance: ${instance ?? "default"} ` +
@@ -201,6 +233,7 @@ async function main() {
 
     app.use("*", async (c, next) => {
         c.set("config", config);
+        c.set("instance", instance);
         c.set("log", log);
         c.set("semantic", semantic);
         await next();
@@ -244,7 +277,16 @@ async function main() {
         });
     });
 
-    Deno.serve({ port: config.listen_port }, app.fetch);
+    try {
+        Deno.serve({ port: config.listen_port }, app.fetch);
+    } catch (error) {
+        if (!(error instanceof Deno.errors.AddrInUse)) {
+            throw error;
+        }
+
+        console.error(await describePortClash(config.listen_port, instance));
+        Deno.exit(1);
+    }
 }
 
 if (import.meta.main) {
