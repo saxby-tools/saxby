@@ -2,6 +2,8 @@ import { Command } from "@cliffy/command";
 import { CompletionsCommand } from "@cliffy/command/completions";
 import { vramMacGuardCommand } from "@shuntd/vram-mac-guard";
 import { configCommand } from "./commands/config/index.js";
+import { instanceCommand } from "./commands/instance/index.js";
+import { probeCommand } from "./commands/probe.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
 //  Global so `shunt -i dev config generate` and
@@ -17,6 +19,8 @@ await new Command()
         "Target a named instance instead of the default.",
     )
     .command("config", configCommand)
+    .command("instance", instanceCommand)
+    .command("probe", probeCommand)
     .command("vram-mac-guard", vramMacGuardCommand)
     .command("completions", new CompletionsCommand())
     .parse(Deno.args);
