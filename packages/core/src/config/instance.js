@@ -84,3 +84,50 @@ export function getInstanceDir(name = null) {
 
     return join(root, INSTANCES_DIR_NAME, validateInstanceName(name));
 }
+
+function isValidInstanceName(name) {
+    if (!NAME_PATTERN.test(name)) {
+        return false;
+    }
+
+    if (RESERVED_NAMES.has(name)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Every instance: the default (null) first, then named instances that
+ * have a directory, sorted. Folders with invalid names are skipped,
+ * since shunt could not have created them.
+ * @returns {Promise<(string | null)[]>}
+ */
+export async function listInstances() {
+    const instancesDir = join(getInstanceDir(null), INSTANCES_DIR_NAME);
+    const named = [];
+
+    let entries = [];
+
+    try {
+        entries = await Array.fromAsync(Deno.readDir(instancesDir));
+    } catch (err) {
+        if (!(err instanceof Deno.errors.NotFound)) {
+            throw err;
+        }
+    }
+
+    for (const entry of entries) {
+        if (!entry.isDirectory) {
+            continue;
+        }
+
+        if (!isValidInstanceName(entry.name)) {
+            continue;
+        }
+
+        named.push(entry.name);
+    }
+
+    return [null, ...named.sort()];
+}
