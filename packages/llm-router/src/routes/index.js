@@ -1,6 +1,7 @@
 import { registerModelsRoutes } from "./v1/models.js";
 import { registerChatRoutes } from "./v1/chat.js";
 import { registerExplainRoutes } from "./shuntd/v1/explain.js";
+import { registerStatusRoutes } from "./shuntd/v1/status.js";
 
 /**
  * Master route registry.
@@ -11,4 +12,5 @@ export function registerRoutes(app) {
     registerModelsRoutes(app);
     registerChatRoutes(app);
     registerExplainRoutes(app);
+    registerStatusRoutes(app);
 }
