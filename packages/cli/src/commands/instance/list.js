@@ -7,7 +7,7 @@ import {
     loadConfig,
 } from "@shuntd/core";
 
-const COLUMNS = ["NAME", "PORT", "STATE", "PID", "DIRECTORY"];
+const COLUMNS = ["NAME", "PORT", "STATE", "PID", "VERSION", "DIRECTORY"];
 const GAP = 2;
 
 //  Shortens paths for display only; never feed the result back in.
@@ -36,6 +36,7 @@ async function describeInstance(name) {
         port: "-",
         state: "error",
         pid: "-",
+        version: "-",
         directory: tildify(getInstanceDir(name)),
         error: null,
     };
@@ -68,6 +69,7 @@ async function describeInstance(name) {
     }
 
     row.state = "running";
+    row.version = holder.version ?? "-";
 
     return row;
 }
@@ -78,6 +80,7 @@ function printTable(rows) {
         row.port,
         row.state,
         row.pid,
+        row.version,
         row.directory,
     ]);
 
