@@ -14,7 +14,8 @@
 //  Permissions are baked in explicitly rather than -A. The daemon
 //  faces the network and never starts a process, so it gets no
 //  --allow-run: a bug in request handling cannot launch a program.
-//  The CLI runs osascript, launchctl and sysctl, so it does.
+//  The CLI runs osascript, launchctl, systemctl and sysctl, so it
+//  does, and reads the uid to address the user's launchd domain.
 //
 //  `deno compile` IGNORES the "unstable" list in deno.json, and an
 //  explicit --unstable-no-legacy-abort is accepted but has no effect
@@ -63,6 +64,7 @@ const BINARIES = [
             "--allow-read",
             "--allow-write",
             "--allow-run",
+            "--allow-sys=uid",
         ],
         include: ["packages/vram-mac-guard/src/vram-mac-guard.sh"],
     },
