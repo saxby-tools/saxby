@@ -34,8 +34,8 @@ function isStatusShape(body) {
  * Asks whatever holds a local port whether it is shuntd.
  * @param {number} port
  * @returns {Promise<{instance: string | null, port: number,
- *     pid: number} | null>} null when nothing answers or the answer
- *     is not from shuntd.
+ *     pid: number, version?: string} | null>} null when nothing
+ *     answers or the answer is not from shuntd.
  */
 export async function fetchShuntdStatus(port) {
     let response;
