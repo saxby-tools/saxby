@@ -16,7 +16,7 @@ evidence rather than intuition.
 ##  Packages
 
 ```
-packages/core            shared contracts: tag vocabulary, plist, root
+packages/core            shared contracts: tags, config, plist, root
 packages/cli             `shunt` — config generation, vram-mac-guard
 packages/llm-router      `shuntd` — the daemon
 packages/vram-mac-guard  Apple Silicon VRAM ceiling LaunchDaemon
@@ -204,6 +204,34 @@ Clients point at a port and stay pointed there, so the stable thing
 gets the stable address. Moving production would mean either dev gets
 no client traffic — testing nothing the split was meant to help with
 — or repointing clients on every run.
+
+**Service labels use the `org.shuntd` prefix**, from the project's
+domain. Default instance bare, named instances suffixed:
+`org.shuntd.router`, `org.shuntd.router.dev`; on Linux
+`shuntd.service`, `shuntd-dev.service`. The VRAM guard is
+`org.shuntd.vram-mac-guard`, one name for package, command, script and
+label. The prefix is one constant in `@shuntd/core`.
+
+**Installed files live under `/usr/local`, not `/etc`.** The guard's
+script goes to `/usr/local/libexec/shuntd/` and its optional override
+file to `/usr/local/etc/shuntd/vram-mac-guard.env` — the FHS split
+between program and config, with `/etc` left to the OS. The script
+sources that file AS ROOT, so it refuses a file that root does not own
+or that anyone else can write; `/usr/local` is user-writable on some
+Homebrew setups. Uninstall leaves the config, as pacman does.
+
+**The config schema and loader live in `@shuntd/core`.** The config
+file is a contract between packages: `shunt config generate` writes
+it, the daemon reads it, `shunt probe` and `shunt instance list` read
+it. A CLI importing the daemon's internals would point the dependency
+the wrong way.
+
+**License is AGPL-3.0-or-later.** shuntd is a network service, and
+plain GPL never triggers for software that is only run, not
+distributed.
+
+**One version for every package**, bumped together in the release
+commit. The first tag is `v1.0.0`.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
 shuntd's own job); a hosted typed-classification API (unpublished
