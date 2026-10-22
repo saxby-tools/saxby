@@ -6,7 +6,7 @@ A local-first, config-driven AI routing suite.
 
 - `@shuntd/llm-router`: The Unix-agnostic background daemon (`shuntd`) that intercepts and routes OpenAI-compatible traffic.
 - `@shuntd/cli`: The user-facing orchestrator (`shunt`).
-- `@shuntd/core`: Shared contracts — the canonical tag vocabulary, plist generation, privileged execution, env utilities.
+- `@shuntd/core`: Shared contracts — the canonical tag vocabulary, the config schema and loader, service naming, plist generation, privileged execution, env utilities.
 - `vram-mac-guard`: An isolated, Apple Silicon-specific LaunchDaemon to dynamically manage macOS Unified Memory based on LLM load.
 
 ## Routing Tiers
@@ -166,3 +166,7 @@ deno task test
 #  Regenerate config from live backend inventory
 deno run -A packages/cli/src/main.js config generate
 ```
+
+## License
+
+AGPL-3.0-or-later. See [LICENSE](LICENSE).
