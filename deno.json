@@ -19,7 +19,8 @@
         "valibot": "npm:valibot@^0.36.0"
     },
     "tasks": {
-        "test": "deno test packages/"
+        "test": "deno test packages/",
+        "dev": "deno run -A --watch packages/llm-router/src/main.js --instance dev"
     },
     "fmt": {
         "useTabs": false,
