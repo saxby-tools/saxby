@@ -4,6 +4,7 @@ import { vramMacGuardCommand } from "@shuntd/vram-mac-guard";
 import { configCommand } from "./commands/config/index.js";
 import { instanceCommand } from "./commands/instance/index.js";
 import { probeCommand } from "./commands/probe.js";
+import { serviceCommand } from "./commands/service/index.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
 //  Global so `shunt -i dev config generate` and
@@ -21,6 +22,7 @@ await new Command()
     .command("config", configCommand)
     .command("instance", instanceCommand)
     .command("probe", probeCommand)
+    .command("service", serviceCommand)
     .command("vram-mac-guard", vramMacGuardCommand)
     .command("completions", new CompletionsCommand())
     .parse(Deno.args);
