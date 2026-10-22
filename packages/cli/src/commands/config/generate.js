@@ -15,6 +15,12 @@ import {
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
 const INDENT = 4;
 
+//  Production keeps the port clients already point at. A named
+//  instance is suggested the next one so a dev config made by
+//  pressing Enter does not collide with the running service.
+const DEFAULT_PORT = 11435;
+const DEFAULT_INSTANCE_PORT = 11436;
+
 // Comments injected above each top-level config key in the generated file.
 // Keys absent here still render (see renderJsoncConfig) — they just render
 // without a comment, so this map never causes fields to be dropped.
@@ -178,9 +184,11 @@ export const generateCommand = new Command()
         }
 
         // 3.5 Prompt for the listen_port
+        const defaultPort = instance ? DEFAULT_INSTANCE_PORT : DEFAULT_PORT;
+
         const listenPortInput = await Input.prompt({
             message: "What port should the shuntd proxy listen on?",
-            default: "11435",
+            default: String(defaultPort),
             validate: (value) => {
                 const port = parseInt(value, 10);
                 if (isNaN(port) || port < 1024 || port > 65535) {
@@ -356,7 +364,7 @@ export const generateCommand = new Command()
             // 4e. Construct Final Payload
             configPayload = {
                 // parsedPort is captured from the Input.prompt in step 3.5
-                listen_port: isNaN(parsedPort) ? 11435 : parsedPort,
+                listen_port: isNaN(parsedPort) ? defaultPort : parsedPort,
                 upstream_url: targetUrl,
                 global_default_model: globalDefault,
                 catalog,
