@@ -1,8 +1,6 @@
 import { Command } from "@cliffy/command";
 import { executeAsRootMac as executeAsRoot } from "@shuntd/core";
-
-const PLIST_DESTINATION = "/Library/LaunchDaemons/com.shuntd.vram-guard.plist";
-const DAEMON_DIR = "/usr/local/libexec/shuntd";
+import { DAEMON_DIR, PLIST_DESTINATION } from "../../constants.js";
 
 export const uninstallCommand = new Command()
     .description("Unload and remove the macOS LaunchDaemon.")
