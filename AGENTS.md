@@ -247,9 +247,14 @@ True regardless of whose machine this runs on.
 Deno 2.9+. `node:sqlite` is built in since 2.2. `DatabaseSync` is
 synchronous, which is why log writes are batched off the request path.
 
-Root `deno.json` sets `"unstable": ["no-legacy-abort"]`. Without it
-`Deno.serve` fires `request.signal` on *successful* responses, which
-breaks abort propagation in `chat.js`.
+Root `deno.json` sets `"unstable": ["no-legacy-abort"]` so that
+`request.signal` fires only on a real client disconnect. Without it
+the signal ALSO fires after a response is fully delivered. `deno
+compile` ignores the setting, and the explicit flag too, so compiled
+binaries run legacy semantics. In `chat.js` the late abort lands after
+the upstream stream has ended and changes nothing — checked end to end
+on Deno 2.9.6, see `docs/releasing.md`. Code that reads the signal
+must stay correct under both semantics.
 
 Ollama honours `stream_options: {include_usage: true}` on its
 OpenAI-compatible endpoint, so token counts come free.
