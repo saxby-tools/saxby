@@ -98,3 +98,108 @@ deno run -A packages/llm-router/src/main.js --trace
 That run writes to the production decision log, which is why it
 stays a manual step. When done, stop it and bring the service back
 with `shunt service install`.
+
+##  Backend environment
+
+shuntd does not set the backend's environment. Ollama runs under its
+own supervisor, and whatever starts a process owns its environment.
+Variables such as `OLLAMA_MAX_LOADED_MODELS` and `OLLAMA_KEEP_ALIVE`
+belong there.
+
+###  macOS with Homebrew
+
+Editing Homebrew's plist does not stick. `brew services start`
+regenerates `~/Library/LaunchAgents/sh.brew.ollama.plist` (or the
+legacy `homebrew.mxcl.ollama.plist`) from the formula every time,
+and `restart` and upgrades do the same. A login agent that runs `launchctl setenv`
+does not fix it either: it and Ollama's agent start in no fixed
+order, so after a reboot the variables may or may not arrive.
+
+The reliable fix is to let your own LaunchAgent start Ollama. Stop
+the Homebrew service first:
+
+```bash
+brew services stop ollama
+```
+
+Save this as `~/Library/LaunchAgents/local.ollama.plist`, with your
+own variables. Homebrew's formula sets `OLLAMA_FLASH_ATTENTION` and
+`OLLAMA_KV_CACHE_TYPE`; carry them over if you want to keep them.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.ollama</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/opt/ollama/bin/ollama</string>
+        <string>serve</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OLLAMA_FLASH_ATTENTION</key>
+        <string>1</string>
+        <key>OLLAMA_KV_CACHE_TYPE</key>
+        <string>q8_0</string>
+        <key>OLLAMA_MAX_LOADED_MODELS</key>
+        <string>3</string>
+        <key>OLLAMA_KEEP_ALIVE</key>
+        <string>-1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/opt/homebrew/var/log/ollama.log</string>
+    <key>StandardErrorPath</key>
+    <string>/opt/homebrew/var/log/ollama.log</string>
+</dict>
+</plist>
+```
+
+Load it:
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.ollama.plist
+```
+
+The `opt` path survives `brew upgrade`, but Homebrew no longer
+restarts Ollama for you. After an upgrade, restart it yourself:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/local.ollama
+```
+
+###  macOS with Ollama.app
+
+`launchctl setenv` followed by restarting the app works until the
+next reboot, then the variables are gone. For settings that must
+survive a reboot, use the LaunchAgent above instead of the app.
+
+###  Linux
+
+Ollama's installer sets it up as a system unit, which a
+`systemd --user` service cannot reach. Add a drop-in instead:
+
+```bash
+sudo systemctl edit ollama.service
+```
+
+Put the variables under a `[Service]` header:
+
+```ini
+[Service]
+Environment="OLLAMA_MAX_LOADED_MODELS=3"
+Environment="OLLAMA_KEEP_ALIVE=-1"
+```
+
+Then restart Ollama. The drop-in survives package upgrades.
+
+```bash
+sudo systemctl restart ollama
+```
