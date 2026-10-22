@@ -1,11 +1,51 @@
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
-import { loadConfig, validateTagContract } from "@shuntd/core";
+import {
+    getInstanceDir,
+    loadConfig,
+    resolveInstanceName,
+    validateTagContract,
+} from "@shuntd/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
+
+const INSTANCE_FLAGS = ["--instance", "-i"];
+
+/**
+ * Reads `--instance <name>`, `--instance=<name>` or `-i <name>`.
+ *
+ * Hand-rolled like initTracing rather than a parser dependency: the
+ * daemon takes four flags. A service file passes the name as an
+ * argument so `ps` shows which instance a process serves.
+ * @param {string[]} args
+ * @returns {string | undefined}
+ */
+function readInstanceFlag(args) {
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+
+        if (arg.startsWith("--instance=")) {
+            return arg.slice("--instance=".length);
+        }
+
+        if (!INSTANCE_FLAGS.includes(arg)) {
+            continue;
+        }
+
+        const value = args[i + 1];
+
+        if (value === undefined || value.startsWith("-")) {
+            throw new Error(`${arg} needs an instance name.`);
+        }
+
+        return value;
+    }
+
+    return undefined;
+}
 
 /**
  * Prepares Tier 3: resolves the active profile, confirms the embedder
@@ -95,7 +135,14 @@ async function main() {
     let config;
 
     try {
-        config = await loadConfig();
+        const instance = resolveInstanceName(readInstanceFlag(Deno.args));
+
+        console.log(
+            `📂 Instance: ${instance ?? "default"} ` +
+                `(${getInstanceDir(instance)})`,
+        );
+
+        config = await loadConfig(instance);
         console.log("✅ Configuration loaded and validated!");
         console.log(`🔗 Upstream target: ${config.upstream_url}`);
         console.log(
