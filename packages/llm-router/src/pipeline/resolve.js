@@ -23,6 +23,12 @@ import { embedOne } from "../semantic/embed.js";
 //  not a worse choice for an image, it is a broken one.
 const REQUIREMENT_TAGS = ["TAG_VISION", "TAG_AUDIO"];
 
+//  What a requirement is about, for the refusal a client reads.
+const REQUIREMENT_NOUNS = {
+    TAG_VISION: "images",
+    TAG_AUDIO: "audio",
+};
+
 /**
  * Every model named as a persona's default. Used to break scoring
  * ties toward the model the user explicitly chose for that role.
@@ -382,9 +388,69 @@ export function selectModel(intent, estimatedTokens, config) {
  * @param {Object|null} semantic - {profile, candidates, upstreamUrl},
  *   or null when Tier 3 is unconfigured or failed to warm.
  */
+/**
+ * Required tags that no catalog model claims. When this is not empty,
+ * nothing in the catalog can serve the request.
+ */
+function unmetRequirements(tags, config) {
+    const models = Object.values(config.catalog);
+
+    return requiredTags(tags).filter((tag) =>
+        !models.some((model) => (model.capabilities || []).includes(tag))
+    );
+}
+
+function describeRefusal(unmet) {
+    const nouns = unmet.map((tag) => REQUIREMENT_NOUNS[tag]).join(" or ");
+    const tags = unmet.join(" or ");
+
+    return `No model in this shuntd catalog claims ${tags}, so nothing ` +
+        `here can handle ${nouns}. Add ${unmet.join(" and ")} to the ` +
+        `capabilities of a model that can.`;
+}
+
+/**
+ * The decision when nothing can serve a requirement. Tier 3 and the
+ * global default are skipped: any model chosen from here would be a
+ * broken one, and a silent fallback hides the config gap that caused
+ * it.
+ */
+function refuse(intent, extracted, unmet) {
+    return {
+        tier: "refused",
+        route: `unmet:[${unmet.join(",")}]`,
+        model: null,
+        candidates: [],
+        scores: [],
+        abstentions: [
+            ...intent.abstentions,
+            {
+                tier: 3,
+                reason: "skipped — no catalog model can serve a " +
+                    "required capability",
+            },
+        ],
+        skipped: [],
+        exhausted: false,
+        prompt: extracted.cleanPrompt,
+        semantic: null,
+        refusal: describeRefusal(unmet),
+    };
+}
+
 export async function resolvePipeline(extracted, config, semantic = null) {
     let intent = resolveIntent(extracted, config);
     let semanticResult = null;
+
+    //  Only when the cheap tiers found nothing: an explicit Tier 1
+    //  choice is the user's and stands.
+    if (intent.tier === "fallback") {
+        const unmet = unmetRequirements(extracted.tags, config);
+
+        if (unmet.length > 0) {
+            return refuse(intent, extracted, unmet);
+        }
+    }
 
     //  Tier 3 runs ONLY when the cheap tiers found nothing. A prompt
     //  Tier 2 could read does not need an embedding.
@@ -464,5 +530,6 @@ export async function resolvePipeline(extracted, config, semantic = null) {
         exhausted: Boolean(selection.exhausted),
         prompt: extracted.cleanPrompt,
         semantic: semanticResult,
+        refusal: null,
     };
 }
