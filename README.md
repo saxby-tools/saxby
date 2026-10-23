@@ -116,7 +116,7 @@ in the suite — one machine's catalog is not a project invariant.
           binary is self-contained.
     - [x] Emit tarballs plus SHA256 checksums into `dist/`.
     - [x] `docs/releasing.md` — the checklist. Four targets, four
-          checksums, a tag, and local promotion. Packaging templates
+          checksums, a tag, and a local deploy. Packaging templates
           join it in Phase 3. This works by hand the first time and
           drifts silently by the third.
   - [x] **Phase 2 — Service management**
@@ -126,7 +126,7 @@ in the suite — one machine's catalog is not a project invariant.
           `org.shuntd.router` for two instances.
     - [x] `shunt service install | uninstall | status | restart`,
           generating a user-level LaunchAgent or a `systemd --user`
-          unit. `restart` is the second half of promoting a build.
+          unit. `restart` is the second half of deploying a build.
     - [x] "Service installed" column in `shunt instance list`.
     - [x] A per-platform recipe in `docs/` for persisting backend
           environment variables (`OLLAMA_MAX_LOADED_MODELS`,
