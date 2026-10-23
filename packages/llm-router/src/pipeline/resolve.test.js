@@ -263,6 +263,21 @@ Deno.test("requirements — no capable model falls through loudly", () => {
     assertEquals(intent.tier, "fallback");
 });
 
+//  Regression: Tier 2b ignored requirements, so an audio prompt that
+//  also carried TAG_CODER reached the coder persona's deaf model.
+Deno.test("requirements — persona tags cannot bypass them", () => {
+    const config = makeConfig();
+    const extracted = makeExtracted(["TAG_AUDIO", "TAG_CODER"]);
+
+    const intent = resolveIntent(extracted, config);
+
+    assertEquals(intent.tier, "fallback");
+
+    const tier2 = intent.abstentions.find((a) => a.tier === 2);
+
+    assert(tier2.reason.includes("required [TAG_AUDIO]"));
+});
+
 //  ---------------------------------------------------------------------
 //  Tier 2b — persona tags as the safety net
 //  ---------------------------------------------------------------------
