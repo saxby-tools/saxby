@@ -36,8 +36,9 @@ export async function loadConfig(instance = null) {
         try {
             await Deno.stat(pathJson);
             console.warn(
-                `⚠️  Both config.jsonc and config.json exist in ${configDir}; ` +
-                    `loading config.jsonc and ignoring config.json.`,
+                `⚠️  Both config.jsonc and config.json exist in ` +
+                    `${configDir}; loading config.jsonc and ignoring ` +
+                    `config.json.`,
             );
         } catch (_) {
             // config.json absent — nothing to warn about.
@@ -67,11 +68,19 @@ export async function loadConfig(instance = null) {
         parsedData = parseJsonc(rawContent);
     } catch (err) {
         throw new Error(
-            `FATAL: Config file at ${loadedPath} contains invalid JSON/JSONC.\n${err.message}`,
+            `❌ ${loadedPath} is not valid JSON or JSONC:\n${err.message}`,
         );
     }
 
-    const config = validateConfig(parsedData);
+    let config;
+
+    try {
+        config = validateConfig(parsedData);
+    } catch (err) {
+        throw new Error(
+            `❌ Invalid config in ${loadedPath}:\n${err.message}`,
+        );
+    }
 
     //  Resolved here so every consumer — daemon, dashboard, CLI — finds
     //  the same file without repeating the XDG logic.
