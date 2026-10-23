@@ -9,6 +9,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { extractIntent } from "./extract.js";
+import { EMITTABLE_TAGS } from "@shuntd/core";
 
 const CONFIG = {
     personas: {
@@ -76,4 +77,44 @@ Deno.test("override — a slash command is stripped from the prompt", () => {
 
     assertEquals(result.override, "coder");
     assertEquals(result.cleanPrompt, "write a parser");
+});
+
+//  ---------------------------------------------------------------------
+//  Tag contract
+//  ---------------------------------------------------------------------
+//  EMITTABLE_TAGS in core is a hand-written list of what this file
+//  emits. The boot-time contract check trusts it, so if the two drift
+//  a config can claim a tag that never fires, with no warning. One
+//  request per tag; the union must equal the list exactly.
+
+Deno.test("contract — EMITTABLE_TAGS is exactly what extract emits", () => {
+    const traceback = [
+        "Traceback (most recent call last):",
+        '  File "app.py", line 3, in <module>',
+        "    main()",
+        "ValueError: bad input",
+    ].join("\n");
+
+    const results = [
+        ask("```js\nconst x = 1;\n```"),
+        ask("move the parser out of app/alpha.js into app/beta.js"),
+        ask(traceback),
+        ask('{"name": "shuntd", "tags": [1, 2, 3]}'),
+        ask("$$x^2 + y^2 = z^2$$"),
+        ask("Generate a title", { stream: false }),
+        extractIntent({
+            model: "shuntd",
+            messages: [{
+                role: "user",
+                content: [
+                    { type: "image_url", image_url: { url: "data:," } },
+                    { type: "input_audio", input_audio: { data: "" } },
+                ],
+            }],
+        }, CONFIG),
+    ];
+
+    const emitted = new Set(results.flatMap((result) => result.tags));
+
+    assertEquals([...emitted].sort(), [...EMITTABLE_TAGS].sort());
 });
