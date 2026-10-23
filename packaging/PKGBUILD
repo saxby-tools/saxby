@@ -1,0 +1,47 @@
+# Maintainer: Niko Lowry <niko@neeks.me>
+#
+# Template. The release workflow fills in @VERSION@ and the
+# @SHA256_*@ checksums and attaches the result to the release, so
+# this file is never edited by hand per release.
+#
+# Prebuilt binaries, hence the AUR -bin naming convention.
+
+pkgname=shuntd-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Local-first LLM routing daemon"
+arch=('x86_64' 'aarch64')
+url="https://github.com/shuntd-dev/shuntd"
+license=('AGPL-3.0-or-later')
+depends=('glibc')
+provides=('shuntd')
+conflicts=('shuntd')
+
+# Deno appends the program to the runtime inside each binary.
+# Stripping it removes the program, so never strip.
+options=('!strip')
+
+_base="https://github.com/shuntd-dev/shuntd/releases/download"
+_stage="shuntd-${pkgver}"
+
+source_x86_64=("${_base}/v${pkgver}/${_stage}-linux-x64.tar.gz")
+source_aarch64=("${_base}/v${pkgver}/${_stage}-linux-arm64.tar.gz")
+
+sha256sums_x86_64=('@SHA256_LINUX_X64@')
+sha256sums_aarch64=('@SHA256_LINUX_ARM64@')
+
+package() {
+    local target
+
+    case "${CARCH}" in
+        x86_64) target="linux-x64" ;;
+        aarch64) target="linux-arm64" ;;
+    esac
+
+    local dir="${srcdir}/${_stage}-${target}"
+
+    install -Dm755 "${dir}/shuntd" "${pkgdir}/usr/bin/shuntd"
+    install -Dm755 "${dir}/shunt" "${pkgdir}/usr/bin/shunt"
+    install -Dm644 "${dir}/LICENSE" \
+        "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
