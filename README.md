@@ -28,6 +28,22 @@ serve a request, shuntd says so instead of guessing.
 without generating a token. shuntd never touches the filesystem: file
 paths in prompts are matched by shape only, never opened.
 
+##  Why shuntd
+
+shuntd is one daemon binary, with no router model to run and no GPU
+to need. Reading a prompt and choosing a model takes well under a
+millisecond for everyday prompts, and about 13 ms for a
+150,000-character payload; the meaning-based fallback costs one call
+to a local embedding model. Image and audio requirements are hard
+filters, the whole conversation is checked against each model's
+context window, and a request nothing can serve is refused rather
+than guessed. Every decision and its reasons are logged, and
+`explain` shows any of them. A separate dev instance and launchd or
+systemd services are built in.
+
+We haven't found another router that combines all of that at homelab
+scale.
+
 ##  Quick start
 
 ```bash
