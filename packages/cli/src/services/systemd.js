@@ -12,6 +12,11 @@
 //  user (`loginctl enable-linger`). On a desktop that is usually what
 //  you want; on a headless box it is not. shuntd does not change it.
 //
+//  No After=network-online.target: that target lives in the system
+//  manager, so a user unit cannot see it and the line would be dead.
+//  shuntd binds a local port at boot and copes with an unreachable
+//  upstream on its own.
+//
 //  Logs go to the journal: `journalctl --user -u shuntd`.
 
 import { join } from "@std/path";
@@ -97,7 +102,6 @@ export class SystemdAdapter {
         const lines = [
             "[Unit]",
             `Description=shuntd LLM router (${instance ?? "default"})`,
-            "After=network-online.target",
             "",
             "[Service]",
             `ExecStart=${args.map(quote).join(" ")}`,
