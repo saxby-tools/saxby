@@ -124,9 +124,13 @@ function mapToTags(parts, features, shape, config) {
     //  user request. Its headings, lists and example file paths belong
     //  to the template, so reading intent from them sent a title
     //  generator to a 51GB coding model. Structure is noise here.
+    //
+    //  The requirements gathered above survive the short-circuit: a
+    //  non-streaming request with an image still needs a model that
+    //  can see it. Returning BACKGROUND alone once dropped them.
     if (config.route_background_tasks !== false) {
         if (looksLikeBackgroundTask(shape)) {
-            return [TAGS.BACKGROUND];
+            return [...tags, TAGS.BACKGROUND];
         }
     }
 
