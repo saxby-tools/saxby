@@ -3,7 +3,7 @@
 //  =====================================================================
 //  Takes the WHOLE request body, not just the prompt text, because
 //  some of the strongest signals live in the request shape rather
-//  than the prose (a non-streaming request asking for JSON is a
+//  than the prose (an explicitly non-streaming request is a
 //  background utility task, in any language, from any client).
 
 import { extractFeatures } from "./detect.js";
@@ -253,11 +253,16 @@ export function extractIntent(body, config) {
     const payload = measurePayload(messages);
 
     //  Features and histogram stay scoped to the current turn.
-    //  Metrics are rescaled to the full conversation.
+    //  Metrics are rescaled to the full conversation: every OTHER
+    //  message at the prose rate, plus the current turn's own
+    //  code-aware estimate. Adding that estimate to a count that
+    //  already included the turn once charged it twice.
+    const priorChars = payload.chars - rawPrompt.length;
+
     const payloadMetrics = {
         ...metrics,
         chars: payload.chars,
-        estimatedTokens: Math.ceil(payload.chars / 4) +
+        estimatedTokens: Math.ceil(priorChars / 4) +
             metrics.estimatedTokens,
     };
 
