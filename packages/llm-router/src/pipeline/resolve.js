@@ -350,7 +350,67 @@ async function resolveSemantic(extracted, semantic) {
 /**
  * Phase 2 — which concrete model fits this prompt's weight?
  */
-export function selectModel(intent, estimatedTokens, config) {
+/**
+ * True when a model can take the request at all: it fits the payload
+ * and meets every requirement.
+ */
+function canServe(model, estimatedTokens, required) {
+    if (model.max_context < estimatedTokens) {
+        return false;
+    }
+
+    return meetsRequirements(model.capabilities || [], required);
+}
+
+/**
+ * The model to use once every candidate was skipped, or null.
+ *
+ * The global default if it can serve the request; otherwise the
+ * capable model with the largest context window, for the most
+ * headroom. Before this, exhaustion returned the global default
+ * unconditionally — even when it had just been skipped as too small,
+ * or could not see the image the request carried.
+ */
+function lastResort(estimatedTokens, required, config) {
+    const preferred = config.catalog[config.global_default_model];
+
+    if (preferred && canServe(preferred, estimatedTokens, required)) {
+        return config.global_default_model;
+    }
+
+    const usable = Object.entries(config.catalog)
+        .filter(([, model]) => canServe(model, estimatedTokens, required))
+        .sort(([aId, a], [bId, b]) =>
+            b.max_context - a.max_context || aId.localeCompare(bId)
+        );
+
+    if (usable.length === 0) {
+        return null;
+    }
+
+    return usable[0][0];
+}
+
+function describeNoFit(estimatedTokens, required, config) {
+    const largest = Math.max(
+        ...Object.values(config.catalog).map((model) => model.max_context),
+    );
+
+    const needs = required.length > 0
+        ? ` and claims ${required.join(" and ")}`
+        : "";
+
+    return `No model in this shuntd catalog fits a request of about ` +
+        `${estimatedTokens} tokens${needs}. The largest context ` +
+        `window in the catalog is ${largest}.`;
+}
+
+/**
+ * Picks the first candidate that fits, falling back to a last resort
+ * that can still serve the request, or refusing when none can.
+ * @param {string[]} required - Requirement tags the model must meet.
+ */
+export function selectModel(intent, estimatedTokens, config, required = []) {
     const skipped = [];
 
     for (const modelId of intent.candidates) {
@@ -373,10 +433,17 @@ export function selectModel(intent, estimatedTokens, config) {
         return { model: modelId, skipped };
     }
 
+    const fallback = lastResort(estimatedTokens, required, config);
+
+    if (fallback) {
+        return { model: fallback, skipped, exhausted: true };
+    }
+
     return {
-        model: config.global_default_model,
+        model: null,
         skipped,
         exhausted: true,
+        refusal: describeNoFit(estimatedTokens, required, config),
     };
 }
 
@@ -415,26 +482,24 @@ function describeRefusal(unmet) {
  * broken one, and a silent fallback hides the config gap that caused
  * it.
  */
-function refuse(intent, extracted, unmet) {
+/**
+ * A refused decision. `skipped` lists the candidates that were tried
+ * and rejected; a refusal before any were tried lists none, so the
+ * decision never names a model that was not considered.
+ */
+function refuse(intent, extracted, route, refusal, skipped = []) {
     return {
         tier: "refused",
-        route: `unmet:[${unmet.join(",")}]`,
+        route,
         model: null,
-        candidates: [],
+        candidates: skipped.map((entry) => entry.modelId),
         scores: [],
-        abstentions: [
-            ...intent.abstentions,
-            {
-                tier: 3,
-                reason: "skipped — no catalog model can serve a " +
-                    "required capability",
-            },
-        ],
-        skipped: [],
-        exhausted: false,
+        abstentions: intent.abstentions,
+        skipped,
+        exhausted: skipped.length > 0,
         prompt: extracted.cleanPrompt,
         semantic: null,
-        refusal: describeRefusal(unmet),
+        refusal,
     };
 }
 
@@ -448,7 +513,18 @@ export async function resolvePipeline(extracted, config, semantic = null) {
         const unmet = unmetRequirements(extracted.tags, config);
 
         if (unmet.length > 0) {
-            return refuse(intent, extracted, unmet);
+            intent.abstentions.push({
+                tier: 3,
+                reason: "skipped — no catalog model can serve a " +
+                    "required capability",
+            });
+
+            return refuse(
+                intent,
+                extracted,
+                `unmet:[${unmet.join(",")}]`,
+                describeRefusal(unmet),
+            );
         }
     }
 
@@ -517,7 +593,18 @@ export async function resolvePipeline(extracted, config, semantic = null) {
         intent,
         extracted.metrics.estimatedTokens,
         config,
+        requiredTags(extracted.tags),
     );
+
+    if (selection.refusal) {
+        return refuse(
+            intent,
+            extracted,
+            "unmet:context",
+            selection.refusal,
+            selection.skipped,
+        );
+    }
 
     return {
         tier: intent.tier,
