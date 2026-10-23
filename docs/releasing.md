@@ -22,13 +22,24 @@ cannot ship. The running daemon reports its version at
 
 ##  Build
 
+With no argument, this builds `shuntd` and `shunt` for the machine
+you are on. That is all a local promotion needs, and it takes a few
+seconds:
+
 ```bash
 deno task build
 ```
 
-This compiles `shuntd` and `shunt` for four targets — darwin-arm64,
-darwin-x64, linux-x64 and linux-arm64 — and writes each into
-`dist/`:
+For a release, build all four targets — darwin-arm64, darwin-x64,
+linux-x64 and linux-arm64. CI always does this:
+
+```bash
+deno task build all
+```
+
+You can also name targets, as in `deno task build linux-x64
+linux-arm64`. Each build clears `dist/` first, so name every target
+you need in one command. Each target lands in `dist/`:
 
 ```
 dist/shuntd-<version>-<target>/                  staged binaries
@@ -36,12 +47,9 @@ dist/shuntd-<version>-<target>.tar.gz            LICENSE and README too
 dist/shuntd-<version>-<target>.tar.gz.sha256
 ```
 
-Name targets to build only those. One native build is all a local
-promotion needs, and it takes a few seconds:
-
-```bash
-deno task build darwin-arm64
-```
+The first build for a target other than your own machine downloads
+that target's Deno runtime, about 40 MB, and prints nothing while it
+does. It is not stuck.
 
 ##  Verify
 
@@ -121,9 +129,12 @@ repositories. None of them is edited by hand per release.
 
 `PKGBUILD` (AUR `shuntd-bin`) and `shuntd.rb` (Homebrew) carry
 `@VERSION@` and `@SHA256_<TARGET>@` tokens. `deno task package` fills
-them from `dist/` after a full build, and refuses to write a file
-with a token left in it. The workflow attaches the results to the
-draft release.
+them from the checksums in `dist/` and never writes a file with a
+token left in it. The `PKGBUILD` needs both Linux builds; the formula
+needs all four. With a partial build, it renders what it can and
+names what it skipped. `deno task package all` fails instead, which
+is what the workflow runs before attaching the results to the draft
+release.
 
 `nfpm.yaml` builds `.deb` and `.rpm` packages and reads its version,
 architecture and staged directory from the environment. Its header
