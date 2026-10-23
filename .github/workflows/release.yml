@@ -19,82 +19,82 @@
 name: release
 
 on:
-  push:
-    tags: ["v*"]
-  workflow_dispatch:
+    push:
+        tags: ["v*"]
+    workflow_dispatch:
 
 permissions:
-  contents: write
+    contents: write
 
 jobs:
-  release:
-    runs-on: macos-latest
+    release:
+        runs-on: macos-latest
 
-    steps:
-      #  actions/checkout v7.0.1
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        steps:
+            #  actions/checkout v7.0.1
+            - name: Check out
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      #  denoland/setup-deno v2.0.5
-      - name: Set up Deno
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
-        with:
-          deno-version: 2.9.6
+            #  denoland/setup-deno v2.0.5
+            - name: Set up Deno
+              uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+              with:
+                  deno-version: 2.9.6
 
-      - name: Test
-        run: deno task test
+            - name: Test
+              run: deno task test
 
-      - name: Type-check
-        run: >-
-          deno check
-          packages/cli/src/main.js
-          packages/llm-router/src/main.js
-          scripts/build.js
-          scripts/package.js
-          scripts/version.js
+            - name: Type-check
+              run: >-
+                  deno check
+                  packages/cli/src/main.js
+                  packages/llm-router/src/main.js
+                  scripts/build.js
+                  scripts/package.js
+                  scripts/version.js
 
-      - name: Tag matches package version
-        if: github.event_name == 'push'
-        run: >-
-          deno run --allow-read scripts/version.js
-          --expect "${GITHUB_REF_NAME#v}"
+            - name: Tag matches package version
+              if: github.event_name == 'push'
+              run: >-
+                  deno run --allow-read scripts/version.js
+                  --expect "${GITHUB_REF_NAME#v}"
 
-      - name: Build
-        run: deno task build all
+            - name: Build
+              run: deno task build all
 
-      - name: Verify checksums
-        working-directory: dist
-        run: shasum -a 256 -c *.sha256
+            - name: Verify checksums
+              working-directory: dist
+              run: shasum -a 256 -c *.sha256
 
-      - name: Smoke-test the native binary
-        run: ./dist/shuntd-*-darwin-arm64/shunt --version
+            - name: Smoke-test the native binary
+              run: ./dist/shuntd-*-darwin-arm64/shunt --version
 
-      - name: Render packaging
-        run: deno task package all
+            - name: Render packaging
+              run: deno task package all
 
-      #  actions/upload-artifact v7.0.2
-      - name: Upload (dry run)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: shuntd-dry-run
-          path: |
-            dist/*.tar.gz
-            dist/*.sha256
-            dist/packaging/
-          if-no-files-found: error
+            #  actions/upload-artifact v7.0.2
+            - name: Upload (dry run)
+              if: github.event_name == 'workflow_dispatch'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+              with:
+                  name: shuntd-dry-run
+                  path: |
+                      dist/*.tar.gz
+                      dist/*.sha256
+                      dist/packaging/
+                  if-no-files-found: error
 
-      - name: Draft release
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          --draft
-          --verify-tag
-          --title "shuntd $GITHUB_REF_NAME"
-          --generate-notes
-          dist/*.tar.gz
-          dist/*.sha256
-          dist/packaging/PKGBUILD
-          dist/packaging/shuntd.rb
+            - name: Draft release
+              if: github.event_name == 'push'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: >-
+                  gh release create "$GITHUB_REF_NAME"
+                  --draft
+                  --verify-tag
+                  --title "shuntd $GITHUB_REF_NAME"
+                  --generate-notes
+                  dist/*.tar.gz
+                  dist/*.sha256
+                  dist/packaging/PKGBUILD
+                  dist/packaging/shuntd.rb
