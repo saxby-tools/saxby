@@ -585,3 +585,76 @@ Deno.test("refusal — an explicit /command is honoured", async () => {
     assertEquals(decision.tier, 1);
     assertEquals(decision.model, "generalist-coder");
 });
+
+//  ---------------------------------------------------------------------
+//  Exhaustion — every candidate too small
+//  ---------------------------------------------------------------------
+//  Exhaustion used to return the global default unconditionally, even
+//  when it had just been skipped as too small, or could not see the
+//  image the request carried.
+
+function smallCatalog() {
+    return makeConfig({
+        global_default_model: "small-blind",
+        catalog: {
+            "small-blind": {
+                name: "small-blind",
+                max_context: 100,
+                capabilities: ["TAG_CODER"],
+            },
+            "small-seeing": {
+                name: "small-seeing",
+                max_context: 100,
+                capabilities: ["TAG_VISION"],
+            },
+            "big-seeing": {
+                name: "big-seeing",
+                max_context: BIG_CONTEXT,
+                capabilities: ["TAG_VISION"],
+            },
+        },
+        personas: {},
+    });
+}
+
+Deno.test("exhaustion — falls back to a model that can serve it", () => {
+    const config = smallCatalog();
+    const intent = { candidates: ["small-blind"] };
+
+    const result = selectModel(intent, 5000, config);
+
+    assertEquals(result.model, "big-seeing");
+    assertEquals(result.exhausted, true);
+});
+
+Deno.test("exhaustion — the fallback must meet requirements too", () => {
+    const config = smallCatalog();
+    delete config.catalog["big-seeing"];
+    config.catalog["big-blind"] = {
+        name: "big-blind",
+        max_context: BIG_CONTEXT,
+        capabilities: ["TAG_CODER"],
+    };
+
+    const intent = { candidates: ["small-seeing"] };
+    const result = selectModel(intent, 5000, config, ["TAG_VISION"]);
+
+    assertEquals(result.model, null);
+    assert(result.refusal.includes("TAG_VISION"));
+});
+
+Deno.test("exhaustion — nothing fits, so the pipeline refuses", async () => {
+    const config = smallCatalog();
+    delete config.catalog["big-seeing"];
+
+    const decision = await resolvePipeline(
+        makeExtracted(["TAG_CODER"], { tokens: 5000 }),
+        config,
+    );
+
+    assertEquals(decision.tier, "refused");
+    assertEquals(decision.route, "unmet:context");
+    assertEquals(decision.model, null);
+    assertEquals(decision.candidates, ["small-blind"]);
+    assert(decision.refusal.includes("largest context window"));
+});
