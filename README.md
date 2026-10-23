@@ -119,7 +119,7 @@ in the suite — one machine's catalog is not a project invariant.
           checksums, a tag, and local promotion. Packaging templates
           join it in Phase 3. This works by hand the first time and
           drifts silently by the third.
-  - [ ] **Phase 2 — Service management**
+  - [x] **Phase 2 — Service management**
     - [x] `ServiceAdapter` registry mirroring the backend adapter
           pattern: `LaunchdAdapter` (macOS), `SystemdAdapter`
           (Linux). Instance-aware from the start — a label cannot be
@@ -138,8 +138,9 @@ in the suite — one machine's catalog is not a project invariant.
           supervisor, plus the explicit third mode — stop the
           service and run dev against the default instance when you
           want real client traffic through a dev build.
-    - [ ] Verify `SystemdAdapter` on a real systemd host. Written
-          and rendered on macOS, never run against `systemctl`.
+    - [x] Verify `SystemdAdapter` on a real systemd host. Run end
+          to end on Arch from a makepkg-installed `shuntd-bin`:
+          install, status, restart, and uninstall.
   - [x] **Phase 3 — Release automation**
     - [x] CI release workflow that attaches artifacts to a tagged
           GitHub release.
