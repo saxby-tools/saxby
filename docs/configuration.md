@@ -189,7 +189,9 @@ working software, so read them.
 
 With `route_background_tasks` on, which is the default, any request
 that sets `stream: false` is tagged `TAG_BACKGROUND` and skips the
-structural scan. Chat UIs generate titles, tags and follow-up
+structural scan. Image and audio requirements are kept: a
+non-streaming request with an image still only goes to a model that
+claims `TAG_VISION`. Chat UIs generate titles, tags and follow-up
 questions this way, and those prompts are full of headings, lists and
 example file paths that belong to the template, not the user. Reading
 intent from them once sent a title generator to a 51 GB coding model.
