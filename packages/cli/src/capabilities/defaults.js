@@ -12,6 +12,11 @@
 //  want multi-file prompts to reach. If two models claim the same
 //  tag, the tag stops differentiating and the tiebreak decides —
 //  which defeats the point of having the tag at all.
+//
+//  Only tags the extractor emits are suggested. TAG_WRITER and
+//  TAG_LONG_CONTEXT are reserved — nothing emits them yet — and
+//  seeding them wrote routing rules into every generated config that
+//  could never fire.
 
 import { TAGS } from "@shuntd/core";
 
@@ -25,7 +30,7 @@ const PATTERNS = [
     {
         //  Deliberately NOT TAG_MULTI_FILE — see framing note above.
         match: "qwen3-coder",
-        tags: [TAGS.CODER, TAGS.DEBUG, TAGS.LONG_CONTEXT],
+        tags: [TAGS.CODER, TAGS.DEBUG],
         why: "general code specialist with a long context window",
     },
     {
@@ -66,27 +71,27 @@ const PATTERNS = [
         why: "mathematics specialist",
     },
 
-    //  ---- Long context ----------------------------------------------
+    //  ---- Data -------------------------------------------------------
     {
         match: "mistral-small",
-        tags: [TAGS.DATA, TAGS.LONG_CONTEXT, TAGS.VISION],
+        tags: [TAGS.DATA, TAGS.VISION],
         why: "large context window, good for bulk data tasks",
     },
 
     //  ---- Generalists -----------------------------------------------
     {
         match: "gemma",
-        tags: [TAGS.WRITER, TAGS.REASONING, TAGS.VISION, TAGS.AUDIO],
+        tags: [TAGS.REASONING, TAGS.VISION, TAGS.AUDIO],
         why: "general-purpose generalist",
     },
     {
         match: "llama",
-        tags: [TAGS.WRITER, TAGS.REASONING],
+        tags: [TAGS.REASONING],
         why: "general-purpose generalist",
     },
     {
         match: "mistral",
-        tags: [TAGS.WRITER, TAGS.REASONING],
+        tags: [TAGS.REASONING],
         why: "general-purpose generalist",
     },
     {
