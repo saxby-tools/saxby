@@ -87,7 +87,8 @@ function validateReferentialIntegrity(config) {
     // 1. Check global_default_model
     if (!catalogKeys.has(config.global_default_model)) {
         throw new Error(
-            `Referential Integrity Error: global_default_model '${config.global_default_model}' is not defined in catalog.`,
+            `global_default_model '${config.global_default_model}' ` +
+                `is not in the catalog`,
         );
     }
 
@@ -95,7 +96,8 @@ function validateReferentialIntegrity(config) {
     for (const [personaName, persona] of Object.entries(config.personas)) {
         if (!catalogKeys.has(persona.default_model)) {
             throw new Error(
-                `Referential Integrity Error: Persona '${personaName}' references default_model '${persona.default_model}', which is not in catalog.`,
+                `personas.${personaName}.default_model ` +
+                    `'${persona.default_model}' is not in the catalog`,
             );
         }
     }
@@ -104,27 +106,51 @@ function validateReferentialIntegrity(config) {
     if (config.semantic && config.semantic.active) {
         if (!config.semantic.profiles[config.semantic.active]) {
             throw new Error(
-                `Referential Integrity Error: Semantic active profile '${config.semantic.active}' is not defined in semantic.profiles.`,
+                `semantic.active '${config.semantic.active}' is not ` +
+                    `one of semantic.profiles`,
             );
         }
     }
 }
 
 /**
+ * One readable line per valibot issue. The raw issue objects name an
+ * unknown field "Expected never but received 1" and bury the field
+ * name in a nested path dump.
+ */
+function describeIssue(issue) {
+    const path = (issue.path || []).map((item) => item.key).join(".");
+
+    if (issue.type === "strict_object") {
+        return `unknown field '${path}' — check the spelling`;
+    }
+
+    if (!path) {
+        return issue.message;
+    }
+
+    return `${path}: ${issue.message}`;
+}
+
+/**
  * Validates a raw config object against schema and integrity rules.
+ * Prints nothing; throws one Error listing every problem, one per
+ * line, for the loader to attach the file path to.
  */
 export function validateConfig(rawConfig) {
-    try {
-        const parsed = v.parse(ShuntdConfigSchema, rawConfig);
-        validateReferentialIntegrity(parsed);
-        return parsed;
-    } catch (err) {
-        console.error("❌ Config Validation Failed:");
-        if (err.issues) {
-            console.error(err.issues);
-        } else {
-            console.error(`- ${err.message}`);
-        }
-        throw new Error("Invalid shuntd configuration.");
+    const result = v.safeParse(ShuntdConfigSchema, rawConfig);
+
+    if (!result.success) {
+        const lines = result.issues.map((issue) => `- ${describeIssue(issue)}`);
+
+        throw new Error(lines.join("\n"));
     }
+
+    try {
+        validateReferentialIntegrity(result.output);
+    } catch (err) {
+        throw new Error(`- ${err.message}`);
+    }
+
+    return result.output;
 }
