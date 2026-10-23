@@ -73,17 +73,9 @@ async function warmSemantic(config, log) {
         return null;
     }
 
-    const name = config.semantic.active;
-    const profile = config.semantic.profiles?.[name];
-
-    if (!profile) {
-        console.warn(
-            `⚠️  semantic.active is '${name}' but no such profile ` +
-                `exists; semantic routing disabled.`,
-        );
-
-        return null;
-    }
+    //  validateConfig guarantees semantic.active names a profile, so
+    //  a missing one stops the boot before this runs.
+    const profile = config.semantic.profiles[config.semantic.active];
 
     try {
         const probe = await probeProfile(profile, config.upstream_url);
