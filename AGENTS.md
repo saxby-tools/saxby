@@ -280,6 +280,13 @@ backend's environment is the supervisor that starts it.
 
 ##  Open questions — revisit with data, not intuition
 
+Each question below is also a public Discussion, where the human
+side of the conversation happens: margin gate #14, Tier 2 confidence
+#15, threshold calibration #16, override capture #17. Known gaps —
+untested paths, hotfixes that left something behind — are issues
+labelled `known-gap`. Every gap found during work gets one; nothing
+stays as an undocumented TODO.
+
 A margin gate for Tier 3 (rejecting matches where the top two
 personas are within a hair) is designed but not built. Wait until
 logged traffic shows whether tight margins actually correlate with
@@ -297,7 +304,8 @@ is the only ground truth the system can collect about itself.
 
 ##  Post-v1 backlog
 
-Not scheduled. Grouped by what unlocks what.
+Not scheduled. Grouped by what unlocks what. Discussed publicly as
+routing #18, infrastructure #19, and discovery and UX #20.
 
 **Blocked on logged traffic:** threshold calibration; the Tier 3
 margin gate; Tier 2 confidence; override capture.
@@ -305,7 +313,7 @@ margin gate; Tier 2 confidence; override capture.
 **Routing:** image and audio token weight in `est_tokens` (counted,
 not charged); cache-aware routing, since alternating models discards a
 warm prefix cache; tool-call request shape detection; `//CLOUD`
-fallback with credential substitution; per-model `system_prefix`.
+fallback with credential substitution.
 
 **Infrastructure:** `packages/dashboard` (read-only, Evidence.dev);
 first-class `/v1/embeddings` route so embedding traffic is logged;
