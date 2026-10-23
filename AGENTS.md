@@ -86,7 +86,9 @@ a project invariant.
 M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
-**M6 (next): MVP / v1 release.** Phased, in order. Instances first
+**M6: MVP / v1 release** — Phases 0–3 and the Phase 4 docs are done;
+the JSDoc sweep and the v1.0.0 tag remain (`docs/roadmap.md`).
+Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `shunt instance list`, the dev/prod
 split, `shunt probe`), because everything after it assumes them.
 Then cross-compilation for four targets with `--include` for the vram
