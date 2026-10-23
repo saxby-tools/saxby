@@ -8,7 +8,7 @@ and needs no root.
 
 The service runs a compiled `shuntd`, never a source checkout. A
 service that ran `deno run` from the repository would pick up any
-half-finished edit on its next restart. Promote a build first (see
+half-finished edit on its next restart. Deploy a build first (see
 `docs/releasing.md`), then:
 
 ```bash
@@ -63,7 +63,7 @@ its pid and version, and whether a service is installed for it.
 Three ways to run shuntd, each with its own job.
 
 **Production** is the default instance on `:11435`, run by the
-service from a promoted binary. Every client points here and stays
+service from a deployed binary. Every client points here and stays
 pointed here.
 
 **Development** is `deno task dev`. It runs the source tree under
