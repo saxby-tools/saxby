@@ -59,6 +59,9 @@ export function registerExplainRoutes(app) {
                 candidates: decision.candidates,
                 scores: decision.scores,
                 exhausted: decision.exhausted,
+                //  Set only when tier is "refused": the message the
+                //  client would get in a 400.
+                refusal: decision.refusal,
             },
             intent: {
                 override: extracted.override,
