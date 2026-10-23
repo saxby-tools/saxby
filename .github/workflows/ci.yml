@@ -1,0 +1,61 @@
+#  =====================================================================
+#  CI
+#  =====================================================================
+#  Every push to main and every pull request: tests, lint, type checks,
+#  and a native build that must start. This is the workflow the README
+#  badge reports.
+#
+#  Linux on purpose. The release workflow builds every target on
+#  macOS; this one proves the build and the binaries on the other
+#  platform, every time, for a fraction of the runner cost.
+#
+#  Actions are pinned to full commit SHAs, Deno to the version the
+#  release workflow uses.
+
+name: ci
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+
+        steps:
+            #  actions/checkout v7.0.1
+            - name: Check out
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+            #  denoland/setup-deno v2.0.5
+            - name: Set up Deno
+              uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+              with:
+                  deno-version: 2.9.6
+
+            - name: Test
+              run: deno task test
+
+            - name: Lint
+              run: deno lint
+
+            - name: Type-check
+              run: >-
+                  deno check
+                  packages/cli/src/main.js
+                  packages/llm-router/src/main.js
+                  scripts/build.js
+                  scripts/package.js
+                  scripts/version.js
+
+            - name: Build for this runner
+              run: deno task build
+
+            - name: Smoke-test the binaries
+              run: >-
+                  ./dist/shuntd-*-linux-x64/shunt --version &&
+                  ./dist/shuntd-*-linux-x64/shunt instance list
