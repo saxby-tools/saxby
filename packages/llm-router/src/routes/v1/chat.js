@@ -200,6 +200,32 @@ export function registerChatRoutes(app) {
                     : null,
                 systemPrefix,
             });
+
+            //  Nothing in the catalog can serve a requirement. The row
+            //  is closed at once so refusals stay countable, and the
+            //  client gets the reason instead of a model that would
+            //  fail on its input.
+            if (decision.tier === "refused") {
+                tracer.warn(decision.refusal);
+
+                if (logId) {
+                    log.complete(logId, {
+                        outcome: "refused",
+                        ttfbMs: null,
+                        durationMs: Math.round(performance.now() - startedAt),
+                        promptTokens: null,
+                        completionTokens: null,
+                    });
+                }
+
+                return c.json({
+                    error: {
+                        message: decision.refusal,
+                        type: "invalid_request_error",
+                        code: "unmet_requirement",
+                    },
+                }, 400);
+            }
         }
 
         //  ---- Bypass and raw passthrough ----------------------------
