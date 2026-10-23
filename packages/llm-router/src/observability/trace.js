@@ -239,7 +239,7 @@ export function startTrace(label) {
 
             console.log(
                 `[${id}] tier=${decision.tier} route=${decision.route} ` +
-                    `-> ${decision.model}`,
+                    `-> ${decision.model ?? "refused"}`,
             );
         },
     };
