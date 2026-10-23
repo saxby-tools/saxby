@@ -159,7 +159,7 @@ const CHARS_PER_TOKEN_CODE = 3;
 //    deferred: example.com — rejected by the code filter below
 const RE_PATH_CANDIDATE = regex("gm")`
     (?<! [\w\/.@\-] )               # left boundary
-    (?= \S* [\/.] )                 # must contain a slash or a dot
+    (?= [\w.@~\/\-]* [\/.] )        # must contain a slash or a dot
     (?<path>
       (?: \.{1,2}\/ | ~\/ | \/ )?   # optional ./  ../  ~/  /
       (?: \g<seg> \/ )*             # zero or more dir segments
@@ -218,11 +218,17 @@ const RE_MATH = regex("")`
 //  cover other languages.
 //    matches:  "System: you are"  "### Instructions:"
 //    rejects:  "Note: whatever"
+//
+//  Horizontal whitespace only, and possessive. This once used \s*,
+//  which also matches newlines: a masked code block is hundreds of
+//  lines of spaces, and two adjacent \s* runs tried every way to split
+//  them at every line start. A 10k-character prompt took 2.7 seconds,
+//  blocking every other request. A header never spans lines anyway.
 const RE_SECTION_HEADER = regex("im")`
-    ^ \s* \#{0,4} \s*
+    ^ [\x20\t]*+ \#{0,4}+ [\x20\t]*+
     (?: System | Task | Context | Instructions? | Role | Goal
       | Constraints? | Examples? | Output )
-    \s* :
+    [\x20\t]*+ :
 `;
 
 //  Tag name out of an already-isolated Lezer HTMLTag node.
