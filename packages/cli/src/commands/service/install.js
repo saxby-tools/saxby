@@ -69,7 +69,7 @@ async function resolveBinary(flag) {
 
     if (!found) {
         fail(
-            `No '${BINARY_NAME}' on PATH. Promote a build first ` +
+            `No '${BINARY_NAME}' on PATH. Deploy a build first ` +
                 `(docs/releasing.md) or pass --bin <path>.`,
         );
     }
