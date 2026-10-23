@@ -11,7 +11,7 @@
 //
 //  Run:  deno test packages/llm-router/src/router/pipeline/
 
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { extractFeatures } from "./detect.js";
 
 //  ---------------------------------------------------------------------
@@ -238,7 +238,42 @@ runTable("sectionHeaders", [
     { yes: true, why: "system header", text: "System: you are helpful" },
     { yes: true, why: "markdown heading form", text: "### Instructions:" },
     { yes: false, why: "unrelated label", text: "Note: whatever" },
+    { yes: false, why: "word and colon on separate lines", text: "Task\n:" },
 ]);
+
+//  Regression: the section-header pattern backtracked catastrophically
+//  across a masked code block, taking 2.7 seconds on a 10k-character
+//  prompt and blocking every other request. Now ~3 ms; the bound is
+//  generous so a slow CI runner cannot flake it.
+const LARGE_CODE_PROMPT = "Here is some context. ".repeat(200) +
+    "\n```py\n" + "def f(x):\n    return x * 2\n".repeat(200) + "```\n";
+
+Deno.test("performance — a large code prompt extracts quickly", () => {
+    const started = performance.now();
+
+    extractFeatures(LARGE_CODE_PROMPT);
+
+    const elapsed = performance.now() - started;
+
+    assert(elapsed < 250, `took ${elapsed.toFixed(0)} ms`);
+});
+
+//  Regression: the file-path lookahead scanned to the next whitespace
+//  from every candidate start, and minified JSON has none — quadratic,
+//  834 ms for 37k characters. Now well under 1 ms.
+const LARGE_JSON_PROMPT = JSON.stringify({
+    rows: Array.from({ length: 2000 }, (_, i) => ({ i, s: "x" })),
+});
+
+Deno.test("performance — a large JSON payload extracts quickly", () => {
+    const started = performance.now();
+
+    extractFeatures(LARGE_JSON_PROMPT);
+
+    const elapsed = performance.now() - started;
+
+    assert(elapsed < 250, `took ${elapsed.toFixed(0)} ms`);
+});
 
 //  ---------------------------------------------------------------------
 //  Broad extraction — markdown structure captured but not yet routed
