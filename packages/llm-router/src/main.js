@@ -15,6 +15,10 @@ import { warmExemplars } from "./semantic/exemplars.js";
 
 const INSTANCE_FLAGS = ["--instance", "-i"];
 
+//  Polled by `shunt` — every half second while a service starts — so
+//  logging them buries the lines that matter.
+const QUIET_PATHS = new Set(["/shuntd/v1/status"]);
+
 /**
  * Reads `--instance <name>`, `--instance=<name>` or `-i <name>`.
  *
@@ -228,7 +232,15 @@ async function main() {
     const app = new Hono();
 
     if (!isVerbose()) {
-        app.use("*", logger());
+        const requestLogger = logger();
+
+        app.use("*", (c, next) => {
+            if (QUIET_PATHS.has(c.req.path)) {
+                return next();
+            }
+
+            return requestLogger(c, next);
+        });
     }
 
     app.use("*", async (c, next) => {
