@@ -21,7 +21,7 @@
 
 import { join } from "@std/path";
 import { getConfigDir } from "@shuntd/core";
-import { runCommand, runOrThrow } from "./run.js";
+import { COMMAND_NOT_FOUND, runCommand, runOrThrow } from "./run.js";
 
 const UNIT_BASE = "shuntd";
 const UNIT_DIR = "systemd/user";
@@ -53,14 +53,12 @@ export class SystemdAdapter {
      * minimal installs run without one.
      */
     static async preflight() {
-        let result;
+        const result = await runCommand("systemctl", [
+            "--user",
+            "show-environment",
+        ]);
 
-        try {
-            result = await runCommand("systemctl", [
-                "--user",
-                "show-environment",
-            ]);
-        } catch {
+        if (result.code === COMMAND_NOT_FOUND) {
             throw new Error("systemctl was not found. Is this a systemd host?");
         }
 
