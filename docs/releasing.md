@@ -87,13 +87,47 @@ shunt service restart
 `shunt instance list` shows the version each running instance
 reports, so a stale production binary is visible at a glance.
 
-##  Tag
+##  Release
 
-Tag the release commit once the checks pass, and push the tag:
+Releases are built by `.github/workflows/release.yml` on a macOS
+runner, never from a laptop, so every artifact comes from a clean
+checkout of a tagged commit.
+
+**Dry run first.** Push the release commit, then open the repository's
+Actions tab, pick "release", and click "Run workflow". It runs the
+tests, builds all four targets, verifies the checksums, renders the
+packaging files, and uploads everything as a workflow artifact named
+`shuntd-dry-run`. No tag, no release.
+
+**Then tag.** The tag must match the package version, or the workflow
+stops before building:
 
 ```bash
 git tag -a v<version> -m "shuntd v<version>"
 ```
+
+```bash
+git push origin v<version>
+```
+
+The workflow opens a **draft** release with the four tarballs, their
+`.sha256` files, and the rendered `PKGBUILD` and `shuntd.rb`. Read it
+over, then click Publish. Nothing is public until then.
+
+##  Packaging
+
+The templates in `packaging/` are scaffolding, not maintained
+repositories. None of them is edited by hand per release.
+
+`PKGBUILD` (AUR `shuntd-bin`) and `shuntd.rb` (Homebrew) carry
+`@VERSION@` and `@SHA256_<TARGET>@` tokens. `deno task package` fills
+them from `dist/` after a full build, and refuses to write a file
+with a token left in it. The workflow attaches the results to the
+draft release.
+
+`nfpm.yaml` builds `.deb` and `.rpm` packages and reads its version,
+architecture and staged directory from the environment. Its header
+shows the command. It is not run in CI.
 
 ##  Known caveats
 
