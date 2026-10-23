@@ -21,7 +21,8 @@
     "tasks": {
         "test": "deno test packages/",
         "dev": "deno run -A --watch packages/llm-router/src/main.js --instance dev",
-        "build": "deno run --allow-read --allow-write --allow-run=deno,tar scripts/build.js"
+        "build": "deno run --allow-read --allow-write --allow-run=deno,tar scripts/build.js",
+        "package": "deno run --allow-read --allow-write scripts/package.js"
     },
     "fmt": {
         "useTabs": false,
