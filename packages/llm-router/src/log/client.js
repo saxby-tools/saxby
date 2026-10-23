@@ -133,9 +133,9 @@ export function identifyClient(getHeader, config) {
 /**
  * Lists signatures seen in the log that have no friendly name yet.
  *
- * Powers `shunt clients` — the user runs it, sees what has actually
- * been hitting the router, and names anything worth naming. No
- * guessing at client identities up front.
+ * Written for a `shunt clients` command that does not exist yet: the
+ * user would run it, see what has actually been hitting the router,
+ * and name anything worth naming. Nothing calls this today.
  */
 export function unmappedSignatures(rows, config) {
     const names = config.client_names || {};
