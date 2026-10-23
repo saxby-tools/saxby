@@ -23,18 +23,10 @@
 //  legacy request.signal semantics. See docs/releasing.md.
 
 import { basename, join } from "@std/path";
+import { readLockstepVersion } from "./version.js";
 
 const DIST_DIR = "dist";
 const ARCHIVE_PREFIX = "shuntd";
-
-//  Packages are versioned in lockstep; the build refuses to run if
-//  they disagree, so a release can never ship mixed versions.
-const PACKAGE_MANIFESTS = [
-    "packages/cli/deno.json",
-    "packages/core/deno.json",
-    "packages/llm-router/deno.json",
-    "packages/vram-mac-guard/deno.json",
-];
 
 const TARGETS = [
     { name: "darwin-arm64", triple: "aarch64-apple-darwin" },
@@ -71,27 +63,6 @@ const BINARIES = [
 ];
 
 const EXTRA_FILES = ["LICENSE", "README.md"];
-
-async function readLockstepVersion() {
-    const versions = new Map();
-
-    for (const path of PACKAGE_MANIFESTS) {
-        const manifest = JSON.parse(await Deno.readTextFile(path));
-        versions.set(path, manifest.version);
-    }
-
-    const distinct = new Set(versions.values());
-
-    if (distinct.size !== 1) {
-        const listing = [...versions]
-            .map(([path, version]) => `  ${path}: ${version}`)
-            .join("\n");
-
-        throw new Error(`Package versions disagree:\n${listing}`);
-    }
-
-    return [...distinct][0];
-}
 
 function selectTargets(names) {
     if (names.length === 0) {
@@ -210,6 +181,13 @@ async function main() {
     }
 }
 
+//  Script errors are user errors here — a missing build, mismatched
+//  versions — so print the message, not a stack trace.
 if (import.meta.main) {
-    await main();
+    try {
+        await main();
+    } catch (err) {
+        console.error(`❌ ${err.message}`);
+        Deno.exit(1);
+    }
 }
