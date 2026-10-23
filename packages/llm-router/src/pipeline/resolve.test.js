@@ -529,3 +529,59 @@ Deno.test("pipeline — carries reasoning alongside the answer", async () => {
     assert(Array.isArray(decision.scores));
     assertEquals(decision.exhausted, false);
 });
+
+//  ---------------------------------------------------------------------
+//  Refusal — nothing in the catalog can serve a requirement
+//  ---------------------------------------------------------------------
+//  makeConfig has no model claiming TAG_AUDIO. Before refusal, an
+//  audio prompt fell through to Tier 3 or the global default, both of
+//  which hand it to a model that cannot hear.
+
+Deno.test("refusal — an unmet requirement is refused", async () => {
+    const config = makeConfig();
+
+    let embedCalls = 0;
+
+    const semantic = makeSemantic(CODER_VECTOR);
+
+    semantic.embed = () => {
+        embedCalls++;
+        return Promise.resolve(CODER_VECTOR);
+    };
+
+    const decision = await resolvePipeline(
+        makeExtracted(["TAG_AUDIO"]),
+        config,
+        semantic,
+    );
+
+    assertEquals(decision.tier, "refused");
+    assertEquals(decision.model, null);
+    assertEquals(embedCalls, 0);
+    assert(decision.refusal.includes("TAG_AUDIO"));
+});
+
+Deno.test("refusal — a met requirement still routes", async () => {
+    const config = makeConfig();
+
+    const decision = await resolvePipeline(
+        makeExtracted(["TAG_VISION"]),
+        config,
+    );
+
+    assertEquals(decision.tier, 2);
+    assertEquals(decision.model, "seeing-model");
+    assertEquals(decision.refusal, null);
+});
+
+Deno.test("refusal — an explicit /command is honoured", async () => {
+    const config = makeConfig();
+
+    const decision = await resolvePipeline(
+        makeExtracted(["TAG_AUDIO"], { override: "coder" }),
+        config,
+    );
+
+    assertEquals(decision.tier, 1);
+    assertEquals(decision.model, "generalist-coder");
+});
