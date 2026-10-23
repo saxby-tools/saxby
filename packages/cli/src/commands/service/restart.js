@@ -1,10 +1,10 @@
 import { Command } from "@cliffy/command";
 import { fail, prepare, reportAnswer, waitForAnswer } from "./shared.js";
 
-//  The second half of promoting a build: the binary on disk changes,
+//  The second half of deploying a build: the binary on disk changes,
 //  the running process does not until it restarts.
 export const restartCommand = new Command()
-    .description("Restart the shuntd service, e.g. after a promotion.")
+    .description("Restart the shuntd service, e.g. after a deploy.")
     .action(async (options) => {
         const { instance, adapter, config } = await prepare(options.instance);
         const before = await adapter.status(instance);
