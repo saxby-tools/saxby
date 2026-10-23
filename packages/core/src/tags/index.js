@@ -32,13 +32,34 @@ export const TAGS = {
     AUDIO: "TAG_AUDIO",
 };
 
-//  Every tag the extractor is capable of emitting.
-export const EMITTABLE_TAGS = new Set(Object.values(TAGS));
+//  Every tag the extractor actually emits — listed by hand, not
+//  derived from TAGS. TAG_WRITER and TAG_LONG_CONTEXT are in the
+//  vocabulary but nothing emits them yet, and deriving this set from
+//  TAGS let configs claim them with no warning: a routing rule that
+//  looked real and never fired. Add a tag here in the same change
+//  that makes extract.js emit it.
+export const EMITTABLE_TAGS = new Set([
+    TAGS.CODER,
+    TAGS.MULTI_FILE,
+    TAGS.DEBUG,
+    TAGS.DATA,
+    TAGS.MATH,
+    TAGS.REASONING,
+    TAGS.BACKGROUND,
+    TAGS.VISION,
+    TAGS.AUDIO,
+]);
+
+//  In the vocabulary, not yet emitted. Claiming one is not a typo, so
+//  it gets its own warning.
+const KNOWN_TAGS = new Set(Object.values(TAGS));
 
 //  Default tag sets for the personas the generator scaffolds.
 export const PERSONA_TAG_DEFAULTS = {
     coder: [TAGS.CODER, TAGS.MULTI_FILE, TAGS.DEBUG],
-    writer: [TAGS.WRITER],
+    //  Empty until something emits TAG_WRITER: writer is reached
+    //  through Tier 3 exemplars.
+    writer: [],
     reasoner: [TAGS.REASONING, TAGS.MATH],
     data: [TAGS.DATA],
     utility: [TAGS.BACKGROUND],
@@ -81,10 +102,18 @@ export function validateTagContract(config) {
     const warnings = [];
     const claimed = collectClaimedTags(config);
 
-    //  Direction 1: a claimed tag the extractor can never emit is a
-    //  typo. It will never match anything.
+    //  Direction 1: a claimed tag the extractor never emits will never
+    //  match anything — reserved, or a typo.
     for (const tag of claimed) {
         if (EMITTABLE_TAGS.has(tag)) {
+            continue;
+        }
+
+        if (KNOWN_TAGS.has(tag)) {
+            warnings.push(
+                `Tag '${tag}' is reserved: nothing emits it yet, so ` +
+                    `claiming it never matches. Remove the claim.`,
+            );
             continue;
         }
 
@@ -94,9 +123,12 @@ export function validateTagContract(config) {
         );
     }
 
-    //  Direction 2: nothing claims ANY tag. Tier 2 is dead weight and
-    //  every structural match silently falls through.
-    if (claimed.size === 0) {
+    //  Direction 2: nothing claims ANY tag that can match. Tier 2 is
+    //  dead weight and every structural match silently falls through.
+    //  Reserved claims do not count: they can never match either.
+    const live = [...claimed].filter((tag) => EMITTABLE_TAGS.has(tag));
+
+    if (live.length === 0) {
         warnings.push(
             "No model or persona claims any capability tag. Tier 2 " +
                 "routing is disabled — every request will fall through " +
