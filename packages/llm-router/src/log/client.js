@@ -35,9 +35,15 @@
 //  library's User-Agent does. Presence alone is the signal — the
 //  values are not read, because they identify a PERSON rather than an
 //  application and the archive does not need them.
+//
+//  Open WebUI sends either the separate user headers or, when
+//  FORWARD_USER_INFO_HEADER_JWT_SECRET is set, one signed JWT in
+//  their place (utils/headers.py, v0.12). Both default names are
+//  listed; renamed headers cannot be recognized.
 const APP_HEADERS = [
     { header: "x-openwebui-user-id", signature: "open-webui" },
     { header: "x-openwebui-user-name", signature: "open-webui" },
+    { header: "x-openwebui-user-jwt", signature: "open-webui" },
 ];
 
 //  Product token, i.e. everything before the first slash or space.
