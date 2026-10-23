@@ -223,6 +223,17 @@ Deno.test("requirements — vision removes models that cannot see", () => {
     assertEquals(intent.candidates, ["seeing-model"]);
 });
 
+//  A non-streaming image request carries both tags. `tiny-model`
+//  claims TAG_BACKGROUND but cannot see, so it must not be chosen.
+Deno.test("requirements — background never outranks vision", () => {
+    const config = makeConfig();
+    const extracted = makeExtracted(["TAG_VISION", "TAG_BACKGROUND"]);
+
+    const intent = resolveIntent(extracted, config);
+
+    assertEquals(intent.candidates, ["seeing-model"]);
+});
+
 //  The case the filter exists for: a high-scoring text model must NOT
 //  win an image prompt just because it matched more tags.
 Deno.test("requirements — a stronger text match cannot beat vision", () => {
