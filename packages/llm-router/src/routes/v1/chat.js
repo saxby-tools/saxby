@@ -316,13 +316,17 @@ export function registerChatRoutes(app) {
                 return c.body(null, 499);
             }
 
-            tracer.warn(`upstream error: ${err.message}`);
+            tracer.warn(`upstream ${config.upstream_url}: ${err.message}`);
             closeRow("upstream_error");
 
-            return c.json(
-                { error: { message: `Upstream unreachable: ${err.message}` } },
-                502,
-            );
+            //  Name the URL: "fetch failed" alone does not say which
+            //  backend was down, or that shuntd itself is fine.
+            return c.json({
+                error: {
+                    message: `shuntd could not reach its upstream at ` +
+                        `${config.upstream_url}: ${err.message}`,
+                },
+            }, 502);
         }
 
         if (!upstreamRes.ok) {
