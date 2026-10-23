@@ -309,7 +309,11 @@ export function openDecisionLog(path, config) {
 
             tier: String(entry.decision.tier),
             route: entry.decision.route,
-            selected_model: entry.decision.model,
+            //  Empty, not NULL, for a refused request: the column is
+            //  NOT NULL, and no model was used. Its outcome is
+            //  'refused', alongside completed | aborted | upstream_error
+            //  | router_error.
+            selected_model: entry.decision.model ?? "",
             override_persona: entry.intent.override,
 
             tags: toJson(entry.intent.tags),
