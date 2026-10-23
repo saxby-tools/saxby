@@ -62,6 +62,36 @@ Deno.test("background — an omitted stream field is not background", () => {
     assert(!result.tags.includes("TAG_BACKGROUND"));
 });
 
+//  Regression: the short-circuit used to return BACKGROUND alone,
+//  dropping requirements that were already gathered.
+function askWithParts(parts, extra = {}) {
+    return extractIntent(
+        {
+            model: "shuntd",
+            messages: [{
+                role: "user",
+                content: [{ type: "text", text: "describe this" }, ...parts],
+            }],
+            ...extra,
+        },
+        CONFIG,
+    );
+}
+
+Deno.test("background — an image keeps its vision requirement", () => {
+    const image = { type: "image_url", image_url: { url: "data:," } };
+    const result = askWithParts([image], { stream: false });
+
+    assertEquals(result.tags, ["TAG_VISION", "TAG_BACKGROUND"]);
+});
+
+Deno.test("background — audio keeps its audio requirement", () => {
+    const audio = { type: "input_audio", input_audio: { data: "" } };
+    const result = askWithParts([audio], { stream: false });
+
+    assertEquals(result.tags, ["TAG_AUDIO", "TAG_BACKGROUND"]);
+});
+
 //  ---------------------------------------------------------------------
 //  Normal extraction still works
 //  ---------------------------------------------------------------------
