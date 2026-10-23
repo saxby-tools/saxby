@@ -120,24 +120,26 @@ in the suite — one machine's catalog is not a project invariant.
           join it in Phase 3. This works by hand the first time and
           drifts silently by the third.
   - [ ] **Phase 2 — Service management**
-    - [ ] `ServiceAdapter` registry mirroring the backend adapter
+    - [x] `ServiceAdapter` registry mirroring the backend adapter
           pattern: `LaunchdAdapter` (macOS), `SystemdAdapter`
           (Linux). Instance-aware from the start — a label cannot be
           `org.shuntd.router` for two instances.
-    - [ ] `shunt service install | uninstall | status | restart`,
+    - [x] `shunt service install | uninstall | status | restart`,
           generating a user-level LaunchAgent or a `systemd --user`
           unit. `restart` is the second half of promoting a build.
-    - [ ] "Service installed" column in `shunt instance list`.
-    - [ ] A per-platform recipe in `docs/` for persisting backend
+    - [x] "Service installed" column in `shunt instance list`.
+    - [x] A per-platform recipe in `docs/` for persisting backend
           environment variables (`OLLAMA_MAX_LOADED_MODELS`,
           `OLLAMA_KEEP_ALIVE`, ...). shuntd does not set them: the
           backend runs under its own supervisor, which owns its
           environment.
-    - [ ] Document the dev/prod split: `deno task dev` against the
+    - [x] Document the dev/prod split: `deno task dev` against the
           `dev` instance versus a compiled binary under a
           supervisor, plus the explicit third mode — stop the
           service and run dev against the default instance when you
           want real client traffic through a dev build.
+    - [ ] Verify `SystemdAdapter` on a real systemd host. Written
+          and rendered on macOS, never run against `systemctl`.
   - [ ] **Phase 3 — Release automation**
     - [ ] CI release workflow that attaches artifacts to a tagged
           GitHub release.
