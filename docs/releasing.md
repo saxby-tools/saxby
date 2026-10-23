@@ -1,6 +1,6 @@
 #  Releasing
 
-The checklist for cutting a release and for promoting a local build
+The checklist for cutting a release and for deploying a local build
 to production. It works by hand the first time and drifts silently by
 the third, which is why it is written down.
 
@@ -23,7 +23,7 @@ cannot ship. The running daemon reports its version at
 ##  Build
 
 With no argument, this builds `shuntd` and `shunt` for the machine
-you are on. That is all a local promotion needs, and it takes a few
+you are on. That is all a local deploy needs, and it takes a few
 seconds:
 
 ```bash
@@ -72,10 +72,10 @@ expect. Run it against a dev instance, never production:
 curl -s http://127.0.0.1:11436/shuntd/v1/status
 ```
 
-##  Promote a local build
+##  Deploy to this machine
 
 Production binaries live in `~/.local/bin`, which is user-owned and on
-`PATH` on both macOS and Arch. Promote with `install`, never `cp`:
+`PATH` on both macOS and Arch. Deploy with `install`, never `cp`:
 
 ```bash
 install -m 755 dist/shuntd-<version>-darwin-arm64/{shuntd,shunt} ~/.local/bin/
