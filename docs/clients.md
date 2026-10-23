@@ -73,8 +73,12 @@ ENABLE_FORWARD_USER_INFO_HEADERS=true
 ```
 
 That makes Open WebUI send each user's name, id, email and role as
-headers. shuntd only checks that the headers are present. It never
-stores their values, and it does not pass them on to the backend.
+headers. shuntd only checks that the headers are present and never
+stores their values. On chat requests it does not pass them on to the
+backend. Requests shuntd does not route itself — embeddings, for
+example — are passed through with their headers intact, so if Open
+WebUI embeds through shuntd, the backend sees them. Issue #22 tracks
+whether shuntd should strip them.
 Whether that is worth it is your call; without it, everything still
 works and the client is simply logged as `python`.
 
