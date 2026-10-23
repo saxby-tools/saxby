@@ -4,7 +4,7 @@
 //  Cross-compiles shuntd and shunt, then packs one tarball per target
 //  with a .sha256 beside it:
 //
-//    dist/shuntd-<version>-<target>/          staged, ready to promote
+//    dist/shuntd-<version>-<target>/          staged, ready to deploy
 //    dist/shuntd-<version>-<target>.tar.gz
 //    dist/shuntd-<version>-<target>.tar.gz.sha256
 //
@@ -15,7 +15,7 @@
 //    deno task build all               all four, for a release
 //
 //  No argument means the host, since one native build is what a local
-//  promotion needs. CI always says `all`, so a release never depends
+//  deploy needs. CI always says `all`, so a release never depends
 //  on what the runner happens to be.
 //
 //  Permissions are baked in explicitly rather than -A. The daemon
