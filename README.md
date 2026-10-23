@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/shuntd-dev/shuntd/actions/workflows/ci.yml/badge.svg)](https://github.com/shuntd-dev/shuntd/actions/workflows/ci.yml)
 [![Release build](https://github.com/shuntd-dev/shuntd/actions/workflows/release.yml/badge.svg)](https://github.com/shuntd-dev/shuntd/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/shuntd-dev/shuntd)](https://github.com/shuntd-dev/shuntd/releases)
+[![Latest release](https://img.shields.io/github/v/release/shuntd-dev/shuntd?include_prereleases)](https://github.com/shuntd-dev/shuntd/releases)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
 A local-first router for your own models. shuntd sits in front of an
