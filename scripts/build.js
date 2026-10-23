@@ -8,8 +8,15 @@
 //    dist/shuntd-<version>-<target>.tar.gz
 //    dist/shuntd-<version>-<target>.tar.gz.sha256
 //
-//  Pass target names to build only those (`deno task build
-//  darwin-arm64`) — one native build is what a local promotion needs.
+//  Which targets:
+//
+//    deno task build                   this machine only
+//    deno task build linux-x64 ...     the named targets
+//    deno task build all               all four, for a release
+//
+//  No argument means the host, since one native build is what a local
+//  promotion needs. CI always says `all`, so a release never depends
+//  on what the runner happens to be.
 //
 //  Permissions are baked in explicitly rather than -A. The daemon
 //  faces the network and never starts a process, so it gets no
@@ -28,11 +35,34 @@ import { readLockstepVersion } from "./version.js";
 const DIST_DIR = "dist";
 const ARCHIVE_PREFIX = "shuntd";
 
+const ALL_KEYWORD = "all";
+
+//  os and arch use Deno.build's names, so the host can be matched.
 const TARGETS = [
-    { name: "darwin-arm64", triple: "aarch64-apple-darwin" },
-    { name: "darwin-x64", triple: "x86_64-apple-darwin" },
-    { name: "linux-x64", triple: "x86_64-unknown-linux-gnu" },
-    { name: "linux-arm64", triple: "aarch64-unknown-linux-gnu" },
+    {
+        name: "darwin-arm64",
+        triple: "aarch64-apple-darwin",
+        os: "darwin",
+        arch: "aarch64",
+    },
+    {
+        name: "darwin-x64",
+        triple: "x86_64-apple-darwin",
+        os: "darwin",
+        arch: "x86_64",
+    },
+    {
+        name: "linux-x64",
+        triple: "x86_64-unknown-linux-gnu",
+        os: "linux",
+        arch: "x86_64",
+    },
+    {
+        name: "linux-arm64",
+        triple: "aarch64-unknown-linux-gnu",
+        os: "linux",
+        arch: "aarch64",
+    },
 ];
 
 const BINARIES = [
@@ -64,22 +94,53 @@ const BINARIES = [
 
 const EXTRA_FILES = ["LICENSE", "README.md"];
 
-function selectTargets(names) {
-    if (names.length === 0) {
-        return TARGETS;
+function knownNames() {
+    return TARGETS.map((target) => target.name).join(", ");
+}
+
+function hostTarget() {
+    const host = TARGETS.find((target) =>
+        target.os === Deno.build.os && target.arch === Deno.build.arch
+    );
+
+    if (!host) {
+        throw new Error(
+            `No target for this machine (${Deno.build.os} ` +
+                `${Deno.build.arch}). Name one: ${knownNames()}`,
+        );
     }
 
+    return host;
+}
+
+function selectNamed(names) {
     const known = new Set(TARGETS.map((target) => target.name));
 
     for (const name of names) {
         if (!known.has(name)) {
             throw new Error(
-                `Unknown target '${name}'. Known: ${[...known].join(", ")}`,
+                `Unknown target '${name}'. Known: ${knownNames()}`,
             );
         }
     }
 
     return TARGETS.filter((target) => names.includes(target.name));
+}
+
+function selectTargets(names) {
+    if (names.length === 0) {
+        return [hostTarget()];
+    }
+
+    if (!names.includes(ALL_KEYWORD)) {
+        return selectNamed(names);
+    }
+
+    if (names.length > 1) {
+        throw new Error(`'${ALL_KEYWORD}' cannot be combined with targets.`);
+    }
+
+    return TARGETS;
 }
 
 async function run(command, args, env = {}) {

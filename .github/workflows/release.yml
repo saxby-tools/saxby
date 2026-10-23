@@ -60,7 +60,7 @@ jobs:
           --expect "${GITHUB_REF_NAME#v}"
 
       - name: Build
-        run: deno task build
+        run: deno task build all
 
       - name: Verify checksums
         working-directory: dist
@@ -70,7 +70,7 @@ jobs:
         run: ./dist/shuntd-*-darwin-arm64/shunt --version
 
       - name: Render packaging
-        run: deno task package
+        run: deno task package all
 
       #  actions/upload-artifact v7.0.2
       - name: Upload (dry run)
