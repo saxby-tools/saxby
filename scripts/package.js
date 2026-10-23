@@ -4,32 +4,63 @@
 //  Fills the packaging templates with this release's version and
 //  checksums, read from the .sha256 files `deno task build` wrote:
 //
-//    packaging/PKGBUILD   ->  dist/packaging/PKGBUILD
-//    packaging/shuntd.rb  ->  dist/packaging/shuntd.rb
+//    packaging/PKGBUILD   ->  dist/packaging/PKGBUILD    (both linux)
+//    packaging/shuntd.rb  ->  dist/packaging/shuntd.rb   (all four)
 //
 //  Every template carries a version and checksums. Bumped by hand,
 //  they drift by the third release; rendered from dist/ they cannot.
-//  Needs a full four-target build, and refuses to write a file with
-//  any @TOKEN@ left in it.
+//
+//    deno task package       render what this build can fill, and
+//                            name every template it had to skip
+//    deno task package all   every template or fail — what CI runs,
+//                            so a release cannot quietly lack one
+//
+//  Never writes a file with any @TOKEN@ left in it.
 
 import { join } from "@std/path";
 import { readLockstepVersion } from "./version.js";
 
 const DIST_DIR = "dist";
 const OUT_DIR = join(DIST_DIR, "packaging");
-const TEMPLATES = ["packaging/PKGBUILD", "packaging/shuntd.rb"];
-const TARGETS = ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"];
+const ALL_KEYWORD = "all";
 const LEFTOVER_TOKEN = /@[A-Z0-9_]+@/;
 
-async function readChecksum(version, target) {
-    const path = join(DIST_DIR, `shuntd-${version}-${target}.tar.gz.sha256`);
+//  One PKGBUILD serves both Linux arches, so it needs both builds.
+const TEMPLATES = [
+    {
+        path: "packaging/PKGBUILD",
+        targets: ["linux-x64", "linux-arm64"],
+    },
+    {
+        path: "packaging/shuntd.rb",
+        targets: ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"],
+    },
+];
 
+function readMode(args) {
+    if (args.length === 0) {
+        return { strict: false };
+    }
+
+    if (args.length === 1 && args[0] === ALL_KEYWORD) {
+        return { strict: true };
+    }
+
+    throw new Error(`Expected no argument or '${ALL_KEYWORD}'.`);
+}
+
+function checksumPath(version, target) {
+    return join(DIST_DIR, `shuntd-${version}-${target}.tar.gz.sha256`);
+}
+
+//  null when that target was not built.
+async function readChecksum(version, target) {
     let line;
 
     try {
-        line = await Deno.readTextFile(path);
+        line = await Deno.readTextFile(checksumPath(version, target));
     } catch {
-        throw new Error(`${path} is missing. Run 'deno task build' first.`);
+        return null;
     }
 
     return line.split(/\s+/)[0];
@@ -40,14 +71,19 @@ function tokenFor(target) {
     return `SHA256_${target.toUpperCase().replaceAll("-", "_")}`;
 }
 
-async function collectValues(version) {
-    const values = { VERSION: version };
+async function collectChecksums(version) {
+    const names = new Set(TEMPLATES.flatMap((template) => template.targets));
+    const checksums = new Map();
 
-    for (const target of TARGETS) {
-        values[tokenFor(target)] = await readChecksum(version, target);
+    for (const target of names) {
+        const hex = await readChecksum(version, target);
+
+        if (hex) {
+            checksums.set(target, hex);
+        }
     }
 
-    return values;
+    return checksums;
 }
 
 function render(text, values) {
@@ -60,24 +96,69 @@ function render(text, values) {
     return out;
 }
 
+async function renderTemplate(template, version, checksums) {
+    const values = { VERSION: version };
+
+    for (const target of template.targets) {
+        values[tokenFor(target)] = checksums.get(target);
+    }
+
+    const text = render(await Deno.readTextFile(template.path), values);
+    const leftover = text.match(LEFTOVER_TOKEN);
+
+    if (leftover) {
+        throw new Error(`${template.path} still has ${leftover[0]}.`);
+    }
+
+    const outPath = join(OUT_DIR, template.path.split("/").pop());
+
+    await Deno.writeTextFile(outPath, text);
+
+    return outPath;
+}
+
 async function main() {
+    const { strict } = readMode(Deno.args);
     const version = await readLockstepVersion();
-    const values = await collectValues(version);
+    const checksums = await collectChecksums(version);
+
+    const plan = TEMPLATES.map((template) => ({
+        template,
+        missing: template.targets.filter((t) => !checksums.has(t)),
+    }));
+
+    //  Strict checks everything before writing anything, so a failed
+    //  release run leaves no half-rendered set behind.
+    for (const { template, missing } of plan) {
+        if (missing.length > 0 && strict) {
+            throw new Error(
+                `${template.path} needs ${missing.join(", ")}. ` +
+                    `Run 'deno task build ${ALL_KEYWORD}' first.`,
+            );
+        }
+    }
 
     await Deno.mkdir(OUT_DIR, { recursive: true });
 
-    for (const template of TEMPLATES) {
-        const text = render(await Deno.readTextFile(template), values);
-        const leftover = text.match(LEFTOVER_TOKEN);
+    let rendered = 0;
 
-        if (leftover) {
-            throw new Error(`${template} still has ${leftover[0]}.`);
+    for (const { template, missing } of plan) {
+        if (missing.length > 0) {
+            console.log(
+                `⏭️  ${template.path} skipped: needs ` +
+                    `${missing.join(", ")}`,
+            );
+            continue;
         }
 
-        const outPath = join(OUT_DIR, template.split("/").pop());
+        const outPath = await renderTemplate(template, version, checksums);
 
-        await Deno.writeTextFile(outPath, text);
         console.log(`📝 ${outPath}`);
+        rendered++;
+    }
+
+    if (rendered === 0) {
+        throw new Error("Nothing rendered. Build the targets named above.");
     }
 }
 
