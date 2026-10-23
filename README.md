@@ -140,10 +140,10 @@ in the suite — one machine's catalog is not a project invariant.
           want real client traffic through a dev build.
     - [ ] Verify `SystemdAdapter` on a real systemd host. Written
           and rendered on macOS, never run against `systemctl`.
-  - [ ] **Phase 3 — Release automation**
-    - [ ] CI release workflow that attaches artifacts to a tagged
+  - [x] **Phase 3 — Release automation**
+    - [x] CI release workflow that attaches artifacts to a tagged
           GitHub release.
-    - [ ] Packaging *scaffolding* only, not maintained repos:
+    - [x] Packaging *scaffolding* only, not maintained repos:
           `packaging/nfpm.yaml` (deb/rpm), `packaging/PKGBUILD`
           template, `packaging/shuntd.rb` Homebrew formula template.
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
