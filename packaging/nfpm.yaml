@@ -24,25 +24,25 @@ section: net
 priority: optional
 maintainer: Niko Lowry <niko@neeks.me>
 description: |
-  Local-first LLM routing daemon. Sits in front of an
-  OpenAI-compatible backend and routes each request to the right
-  local model, logging every decision.
+    Local-first LLM routing daemon. Sits in front of an
+    OpenAI-compatible backend and routes each request to the right
+    local model, logging every decision.
 homepage: https://github.com/shuntd-dev/shuntd
 license: AGPL-3.0-or-later
 
 #  `expand: true` is per entry: without it nfpm takes ${STAGE}
 #  literally in src and dst. version and arch expand on their own.
 contents:
-  - src: ${STAGE}/shuntd
-    dst: /usr/bin/shuntd
-    expand: true
-    file_info:
-      mode: 0755
-  - src: ${STAGE}/shunt
-    dst: /usr/bin/shunt
-    expand: true
-    file_info:
-      mode: 0755
-  - src: ${STAGE}/LICENSE
-    dst: /usr/share/licenses/shuntd/LICENSE
-    expand: true
+    - src: ${STAGE}/shuntd
+      dst: /usr/bin/shuntd
+      expand: true
+      file_info:
+          mode: 0755
+    - src: ${STAGE}/shunt
+      dst: /usr/bin/shunt
+      expand: true
+      file_info:
+          mode: 0755
+    - src: ${STAGE}/LICENSE
+      dst: /usr/share/licenses/shuntd/LICENSE
+      expand: true
