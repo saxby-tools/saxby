@@ -84,17 +84,24 @@ jobs:
                       dist/packaging/
                   if-no-files-found: error
 
+            #  v0.* and -suffixed tags (v1.1.0-rc.1) are pre-releases:
+            #  GitHub hides them from "latest" until a human says so.
             - name: Draft release
               if: github.event_name == 'push'
               env:
                   GH_TOKEN: ${{ github.token }}
-              run: >-
-                  gh release create "$GITHUB_REF_NAME"
-                  --draft
-                  --verify-tag
-                  --title "shuntd $GITHUB_REF_NAME"
-                  --generate-notes
-                  dist/*.tar.gz
-                  dist/*.sha256
-                  dist/packaging/PKGBUILD
-                  dist/packaging/shuntd.rb
+              run: |
+                  pre=""
+                  case "$GITHUB_REF_NAME" in
+                      v0.* | *-*) pre="--prerelease" ;;
+                  esac
+                  gh release create "$GITHUB_REF_NAME" \
+                      --draft \
+                      --verify-tag \
+                      $pre \
+                      --title "shuntd $GITHUB_REF_NAME" \
+                      --generate-notes \
+                      dist/*.tar.gz \
+                      dist/*.sha256 \
+                      dist/packaging/PKGBUILD \
+                      dist/packaging/shuntd.rb
