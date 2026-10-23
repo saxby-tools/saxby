@@ -148,3 +148,32 @@ Deno.test("contract — EMITTABLE_TAGS is exactly what extract emits", () => {
 
     assertEquals([...emitted].sort(), [...EMITTABLE_TAGS].sort());
 });
+
+//  ---------------------------------------------------------------------
+//  Payload weight
+//  ---------------------------------------------------------------------
+//  The estimate drives the context-fit check in selectModel. It once
+//  counted the latest user turn twice, so the same text weighed
+//  double as a question and single as a system prompt.
+
+const PROSE = "x ".repeat(4000);
+
+Deno.test("weight — the current turn is counted once", () => {
+    const result = ask(PROSE);
+
+    assertEquals(result.metrics.estimatedTokens, 2000);
+});
+
+Deno.test("weight — the same text weighs the same anywhere", () => {
+    const asQuestion = ask(PROSE).metrics.estimatedTokens;
+
+    const asSystem = extractIntent({
+        model: "shuntd",
+        messages: [
+            { role: "system", content: PROSE },
+            { role: "user", content: "" },
+        ],
+    }, CONFIG).metrics.estimatedTokens;
+
+    assertEquals(asQuestion, asSystem);
+});
