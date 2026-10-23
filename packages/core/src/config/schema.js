@@ -63,7 +63,8 @@ export const ShuntdConfigSchema = v.strictObject({
     ),
     upstream_url: v.optional(v.string(), "http://127.0.0.1:11434"),
     //  When true, a request that sets `stream: false` is tagged
-    //  TAG_BACKGROUND and nothing else (looksLikeBackgroundTask in
+    //  TAG_BACKGROUND, plus any TAG_VISION / TAG_AUDIO requirement,
+    //  and skips the structural scan (looksLikeBackgroundTask in
     //  extract.js). Utility generators — titles, tags, follow-ups —
     //  are the non-streaming callers.
     route_background_tasks: v.optional(v.boolean(), true),
