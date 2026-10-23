@@ -240,7 +240,21 @@ second opinion that sometimes loses a race. `docs/` carries a recipe
 per platform instead.
 
 **One version for every package**, bumped together in the release
-commit. The first tag is `v1.0.0`.
+commit. `v0.9.0` is a pre-release that proves the release path and
+gives the packages real artifacts; `v1.0.0` follows when the
+`v1.0.0` milestone on GitHub is empty. Any `v0.*` or `-suffixed` tag
+is published as a pre-release.
+
+**Packages are published, boring, and automated.** Shipping packaging
+templates nobody submits looks worse than shipping none, so the
+release workflow publishes binary packages itself: a Homebrew tap
+(`shuntd-dev/homebrew-tap`), `shuntd-bin` on the AUR, and JSR. This
+reverses the M6 plan's "scaffolding only, no maintained repos"; the
+reason that plan gave — a maintained package is a per-release
+promise — is met by making every release update them with no manual
+step. **Support happens on GitHub issues only.** Package pages point
+there; nobody monitors AUR or Homebrew comment threads. If shuntd
+grows, others can maintain fancier packages or forks.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
 shuntd's own job); a hosted typed-classification API (unpublished
