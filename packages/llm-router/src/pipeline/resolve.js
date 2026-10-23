@@ -19,6 +19,10 @@
 import { bestMatch, normalize } from "../semantic/vector.js";
 import { embedOne } from "../semantic/embed.js";
 
+//  Requirements are filters, not scores: a model that cannot see is
+//  not a worse choice for an image, it is a broken one.
+const REQUIREMENT_TAGS = ["TAG_VISION", "TAG_AUDIO"];
+
 /**
  * Every model named as a persona's default. Used to break scoring
  * ties toward the model the user explicitly chose for that role.
@@ -59,23 +63,33 @@ function compareCandidates(a, b, personaDefaults) {
 }
 
 /**
+ * The requirement tags present in a prompt's tags.
+ */
+function requiredTags(tags) {
+    return REQUIREMENT_TAGS.filter((tag) => tags.includes(tag));
+}
+
+/**
+ * True when a capability list covers every required tag.
+ */
+function meetsRequirements(capabilities, required) {
+    for (const requirement of required) {
+        if (!capabilities.includes(requirement)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Scores catalog models by how many of the prompt's tags they claim.
+ * A model missing a required capability is removed, not scored down.
  */
 function scoreCatalogByTags(tags, config) {
     const personaDefaults = collectPersonaDefaults(config.personas);
+    const required = requiredTags(tags);
     const scored = [];
-
-    //  Requirements are filters, not scores. A model missing a
-    //  required capability is removed from the candidate set.
-    const required = [];
-
-    if (tags.includes("TAG_VISION")) {
-        required.push("TAG_VISION");
-    }
-
-    if (tags.includes("TAG_AUDIO")) {
-        required.push("TAG_AUDIO");
-    }
 
     for (const [modelId, model] of Object.entries(config.catalog)) {
         const capabilities = model.capabilities || [];
@@ -84,17 +98,7 @@ function scoreCatalogByTags(tags, config) {
             continue;
         }
 
-        let meetsRequirements = true;
-
-        for (const requirement of required) {
-            if (capabilities.includes(requirement)) {
-                continue;
-            }
-
-            meetsRequirements = false;
-        }
-
-        if (!meetsRequirements) {
+        if (!meetsRequirements(capabilities, required)) {
             continue;
         }
 
@@ -123,14 +127,26 @@ function scoreCatalogByTags(tags, config) {
 /**
  * Scores personas by tag overlap, for configs that route by persona
  * rather than by per-model capability.
+ *
+ * Requirements hold here too: a persona whose default_model lacks a
+ * required capability is skipped. Before this, an audio prompt that
+ * also carried TAG_CODER reached the coder persona's deaf model.
  */
-function scorePersonasByTags(tags, personas) {
+function scorePersonasByTags(tags, config) {
+    const required = requiredTags(tags);
     const scored = [];
 
-    for (const [name, persona] of Object.entries(personas)) {
+    for (const [name, persona] of Object.entries(config.personas)) {
         const owned = persona.tags || [];
 
         if (owned.length === 0) {
+            continue;
+        }
+
+        const model = config.catalog[persona.default_model];
+        const capabilities = model?.capabilities || [];
+
+        if (!meetsRequirements(capabilities, required)) {
             continue;
         }
 
@@ -160,6 +176,30 @@ function scorePersonasByTags(tags, personas) {
     });
 
     return scored;
+}
+
+/**
+ * Why Tier 2 found nothing. A missing requirement is named outright:
+ * "nothing can see this image" is a different problem from "the
+ * catalog has no capabilities set".
+ */
+function describeTier2Miss(tags) {
+    const required = requiredTags(tags);
+
+    if (required.length > 0) {
+        return {
+            tier: 2,
+            reason: `no catalog model claims required ` +
+                `[${required.join(",")}] — nothing here can serve it`,
+        };
+    }
+
+    return {
+        tier: 2,
+        reason: `tags [${tags.join(",")}] matched no catalog ` +
+            `capability and no persona tags — check that catalog ` +
+            `entries have 'capabilities' set`,
+    };
 }
 
 /**
@@ -206,10 +246,7 @@ export function resolveIntent(extracted, config) {
             };
         }
 
-        const byPersona = scorePersonasByTags(
-            extracted.tags,
-            config.personas,
-        );
+        const byPersona = scorePersonasByTags(extracted.tags, config);
 
         if (byPersona.length > 0) {
             const best = byPersona[0];
@@ -223,12 +260,7 @@ export function resolveIntent(extracted, config) {
             };
         }
 
-        abstentions.push({
-            tier: 2,
-            reason: `tags [${extracted.tags.join(",")}] matched no catalog ` +
-                `capability and no persona tags — check that catalog ` +
-                `entries have 'capabilities' set`,
-        });
+        abstentions.push(describeTier2Miss(extracted.tags));
     }
 
     return {
