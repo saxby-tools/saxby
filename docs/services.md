@@ -79,7 +79,8 @@ shunt -i dev config generate
 To make dev route exactly like production, copy production's config
 into `~/.config/shuntd/instances/dev/` and set `listen_port` back to
 the dev port. A freshly generated config lacks any exemplars you added
-by hand.
+by hand. Leave `log_path` unset in the copy, or dev writes wherever it
+points (see `docs/instances.md`).
 
 **Dev build against real traffic** is the explicit third mode, for
 when a change needs real clients rather than a probe. Stop the
@@ -111,9 +112,10 @@ belong there.
 Editing Homebrew's plist does not stick. `brew services start`
 regenerates `~/Library/LaunchAgents/sh.brew.ollama.plist` (or the
 legacy `homebrew.mxcl.ollama.plist`) from the formula every time,
-and `restart` and upgrades do the same. A login agent that runs `launchctl setenv`
-does not fix it either: it and Ollama's agent start in no fixed
-order, so after a reboot the variables may or may not arrive.
+and `restart` and upgrades do the same. A login agent that runs
+`launchctl setenv` does not fix it either: it and Ollama's agent
+start in no fixed order, so after a reboot the variables may or may
+not arrive.
 
 The reliable fix is to let your own LaunchAgent start Ollama. Stop
 the Homebrew service first:
