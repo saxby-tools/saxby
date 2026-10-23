@@ -172,6 +172,13 @@ choice for an image, it is a broken one. Claim them on every model
 that genuinely can, and on none that cannot. They are separate
 because a model may see without hearing.
 
+If no model in the catalog claims a requirement, nothing can serve
+the request, and shuntd refuses it rather than guess. The client gets
+a 400 with code `unmet_requirement` and a message naming the missing
+tag. The refusal is logged with tier and outcome `refused`, and
+`/shuntd/v1/explain` shows it. An explicit `/command` still routes
+where it was told to.
+
 At boot, shuntd checks the tags in both directions and warns when:
 
 - a claimed tag is reserved, so the claim can never match;
