@@ -9,7 +9,7 @@ and needs no root.
 The service runs a compiled `shuntd`, never a source checkout. A
 service that ran `deno run` from the repository would pick up any
 half-finished edit on its next restart. Deploy a build first (see
-`docs/releasing.md`), then:
+[Releasing](releasing.md)), then:
 
 ```bash
 shunt service install
@@ -83,7 +83,7 @@ To make dev route exactly like production, copy production's config
 into `~/.config/shuntd/instances/dev/` and set `listen_port` back to
 the dev port. A freshly generated config lacks any exemplars you added
 by hand. Leave `log_path` unset in the copy, or dev writes wherever it
-points (see `docs/instances.md`).
+points (see [Instances](instances.md)).
 
 **Dev build against real traffic** is the explicit third mode, for
 when a change needs real clients rather than a probe. Stop the
