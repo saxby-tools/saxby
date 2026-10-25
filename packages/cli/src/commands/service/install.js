@@ -1,6 +1,6 @@
 import { Command } from "@cliffy/command";
 import { join, resolve } from "@std/path";
-import { fetchShuntdStatus } from "@shuntd/core";
+import { fetchShuntdStatus, getInstanceDir, isPortHeld } from "@shuntd/core";
 import {
     displayName,
     fail,
@@ -119,6 +119,16 @@ export const installCommand = new Command()
                 `:${port} is already served by instance ` +
                     `'${displayName(holder.instance)}' (pid ${holder.pid}) ` +
                     `outside this service. Stop it first.`,
+            );
+        }
+
+        //  The same crash loop, against a program that is not shuntd.
+        //  Skipped while our own service runs: it holds the port too.
+        if (!holder && !service.pid && isPortHeld(port)) {
+            fail(
+                `:${port} is held by a process that is not shuntd. ` +
+                    `Stop it, or change listen_port in ` +
+                    `${getInstanceDir(instance)}.`,
             );
         }
 
