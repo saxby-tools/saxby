@@ -1,38 +1,38 @@
 #  Services
 
-shuntd runs as a user service: a LaunchAgent on macOS, a
+Saxby runs as a user service: a LaunchAgent on macOS, a
 `systemd --user` unit on Linux. It runs as you, reads your config,
 and needs no root.
 
 ##  Install
 
-The service runs a compiled `shuntd`, never a source checkout. A
+The service runs a compiled `saxbyd`, never a source checkout. A
 service that ran `deno run` from the repository would pick up any
 half-finished edit on its next restart. Deploy a build first (see
 [Releasing](releasing.md)), then:
 
 ```bash
-shunt service install
+saxby service install
 ```
 
-Install finds `shuntd` on `PATH` and writes its absolute path into the
+Install finds `saxbyd` on `PATH` and writes its absolute path into the
 service file. Pass `--bin <path>` to choose a different binary. It
 refuses to install when something else already holds the instance's
-port — another shuntd, or a program that is not shuntd — since the
+port — another saxbyd, or a program that is not saxbyd — since the
 new service would only crash-loop against it. Stop the other one
 first.
 
 If `XDG_CONFIG_HOME` is set when you install, it is written into the
-service so the service reads the same config `shunt` does. Every
+service so the service reads the same config `saxby` does. Every
 service also gets `NO_COLOR=1`, which keeps terminal color codes out
 of its log.
 
 | | macOS | Linux |
 | --- | --- | --- |
-| Default instance | `org.shuntd.router` | `shuntd.service` |
-| Named instance | `org.shuntd.router.<name>` | `shuntd-<name>.service` |
+| Default instance | `tools.saxby.router` | `saxbyd.service` |
+| Named instance | `tools.saxby.router.<name>` | `saxbyd-<name>.service` |
 | Service file | `~/Library/LaunchAgents/` | `~/.config/systemd/user/` |
-| Logs | `~/Library/Logs/shuntd/` | `journalctl --user -u <unit>` |
+| Logs | `~/Library/Logs/saxby/` | `journalctl --user -u <unit>` |
 
 On macOS, the first install shows a "Background Items Added"
 notification. That is expected.
@@ -44,68 +44,68 @@ box, turn it on yourself with `loginctl enable-linger`.
 ##  Day to day
 
 ```bash
-shunt service status
+saxby service status
 ```
 
 ```bash
-shunt service restart
+saxby service restart
 ```
 
 ```bash
-shunt service uninstall
+saxby service uninstall
 ```
 
 Uninstall removes the service only. Config, the decision log, and log
 files stay.
 
-`shunt instance list` shows every instance, whether it is running,
+`saxby instance list` shows every instance, whether it is running,
 its pid and version, and whether a service is installed for it.
 
-##  Dev and prod
+##  The default instance and the dev instance
 
-Three ways to run shuntd, each with its own job.
+Three ways to run Saxby, each with its own job.
 
-**Production** is the default instance on `:11435`, run by the
-service from a deployed binary. Every client points here and stays
-pointed here.
+**The default instance** is the one your clients use, on `:11435`, run
+by the service from a deployed binary. Every client points here and
+stays pointed here.
 
-**Development** is `deno task dev`. It runs the source tree under
-`--watch` as the `dev` instance, on its own port (`:11436` by
-convention) with its own config, decision log and exemplar vectors.
-Production keeps running and its archive stays clean. Create the dev
-instance once:
+**The dev instance** runs the source tree with `deno task dev`, under
+`--watch`, on its own port (`:11436` by convention) with its own
+config, decision log and exemplar vectors. The default instance keeps
+running and its archive stays clean. Create the dev instance once:
 
 ```bash
-shunt -i dev config generate
+saxby -i dev config generate
 ```
 
-To make dev route exactly like production, copy production's config
-into `~/.config/shuntd/instances/dev/` and set `listen_port` back to
-the dev port. A freshly generated config lacks any exemplars you added
-by hand. Leave `log_path` unset in the copy, or dev writes wherever it
+To make the dev instance route exactly like the default instance, copy
+`~/.config/saxby/config.jsonc` into `~/.config/saxby/instances/dev/`
+and set `listen_port` back to the dev instance's port. A freshly
+generated config lacks any exemplars you added by hand. Leave
+`log_path` unset in the copy, or the dev instance writes wherever it
 points (see [Instances](instances.md)).
 
-**Dev build against real traffic** is the explicit third mode, for
-when a change needs real clients rather than a probe. Stop the
-service and run the source tree as the default instance:
+**The source tree as the default instance** is the explicit third
+mode, for when a change needs real clients rather than a probe. Stop
+the service and run the source tree as the default instance:
 
 ```bash
-launchctl bootout gui/$(id -u)/org.shuntd.router
+launchctl bootout gui/$(id -u)/tools.saxby.router
 ```
 
-On Linux, `systemctl --user stop shuntd` does the same.
+On Linux, `systemctl --user stop saxbyd` does the same.
 
 ```bash
 deno run -A packages/llm-router/src/main.js --trace
 ```
 
-That run writes to the production decision log, which is why it
-stays a manual step. When done, stop it and bring the service back
-with `shunt service install`.
+That run writes to the default instance's decision log, which is why
+it stays a manual step. When done, stop it and bring the service back
+with `saxby service install`.
 
 ##  Backend environment
 
-shuntd does not set the backend's environment. Ollama runs under its
+Saxby does not set the backend's environment. Ollama runs under its
 own supervisor, and whatever starts a process owns its environment.
 Variables such as `OLLAMA_MAX_LOADED_MODELS` and `OLLAMA_KEEP_ALIVE`
 belong there.
