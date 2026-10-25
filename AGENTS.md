@@ -1,4 +1,4 @@
-#  shuntd
+#  Saxby
 
 A local-first LLM routing daemon in a Deno/JSR monorepo. It sits in
 front of an OpenAI-compatible backend, listens on `:11435` by default, and 
@@ -6,6 +6,11 @@ routes each request to the right local model. The goal is closing the gap to
 a frontier-model experience on owned hardware, with a transparent
 archive of every routing decision so the system gets tuned against
 evidence rather than intuition.
+
+Saxby was called shuntd through v0.9.3, with a CLI named `shunt`.
+Those releases, and older issues and discussions, still use the old
+names. The rename was a clean break: no aliases, no fallbacks, no
+migration.
 
 > **How to read this file.** Everything above "Reference environment"
 > is true for any checkout. That last section describes ONE working
@@ -17,19 +22,27 @@ evidence rather than intuition.
 
 ```
 packages/core            shared contracts: tags, config, plist, root
-packages/cli             `shunt` — config generation, vram-mac-guard
-packages/llm-router      `shuntd` — the daemon
-packages/vram-mac-guard  Apple Silicon VRAM ceiling LaunchDaemon
+packages/cli             `saxby` — config generation, vram-guard-mac
+packages/llm-router      `saxbyd` — the daemon
+packages/vram-guard-mac  Apple Silicon VRAM ceiling LaunchDaemon
 ```
 
-`vram-mac-guard` is platform-specific on purpose and names it. The
+`vram-guard-mac` is platform-specific on purpose and names it. The
 router is platform-agnostic and must stay that way.
+
+The guard changes a macOS-only setting while the machine runs, so it
+has no Linux twin. On Linux what matters is the memory design, not
+the GPU vendor. A GPU card's memory is fixed, with no ceiling to
+raise. AMD's shared-memory chips, such as Strix Halo, set the GPU's
+share with kernel parameters at boot, which is a docs recipe, not a
+daemon. The platform goes last in the name so a sibling, if one ever
+appears, sorts beside it.
 
 ##  Routing tiers
 
 | Tier | Mechanism | Resolves to |
 | ---- | --------- | ----------- |
-| 1 | `/coder`, `shuntd/<model>` bypass, raw model name | exactly what was asked |
+| 1 | `/coder`, `saxby/<model>` bypass, raw model name | exactly what was asked |
 | 2a | structural tags ∩ catalog `capabilities` | best-scoring model |
 | 2b | structural tags ∩ persona `tags` | persona `default_model` |
 | 3 | embedding similarity vs persona exemplars | persona `default_model` |
@@ -71,7 +84,7 @@ deno run -A packages/cli/src/main.js config generate
 deno check packages/cli/src/main.js
 ```
 
-`POST /shuntd/v1/explain` takes a `/v1/chat/completions` body and
+`POST /saxby/v1/explain` takes a `/v1/chat/completions` body and
 returns the full routing decision as JSON with **no upstream call** —
 no tokens, no model load. Use it to verify routing rather than
 generating completions.
@@ -86,14 +99,16 @@ a project invariant.
 M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
-**M6: MVP / v1 release** — Phases 0–3 and the Phase 4 docs are done;
-the JSDoc sweep and the v1.0.0 tag remain ([Roadmap](docs/roadmap.md)).
+**M6: MVP / v1 release** — Phases 0–3 and the Phase 4 docs are done.
+What remains is one GitHub milestone each: the rename (v0.9.4),
+packaging and publishing (v0.9.5), the JSDoc sweep (v0.9.6), then
+the v1.0.0 tag ([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
-(`getInstanceDir`, `--instance`, `shunt instance list`, the dev/prod
-split, `shunt probe`), because everything after it assumes them.
+(`getInstanceDir`, `--instance`, `saxby instance list`, the dev
+instance, `saxby probe`), because everything after it assumes them.
 Then cross-compilation for four targets with `--include` for the vram
 script. Then a `ServiceAdapter` registry (`LaunchdAdapter`,
-`SystemdAdapter`) behind `shunt service
+`SystemdAdapter`) behind `saxby service
 install|uninstall|status|restart`. Then release
 automation and packaging *scaffolding* (nfpm, PKGBUILD, Homebrew
 templates — no maintained repos). Documentation last, since it
@@ -196,48 +211,58 @@ leaves routing working.
 **Instances isolate config, archive and vectors together.** A named
 instance resolves to `instances/<name>/` under the config root; no
 name resolves to the root itself, so existing installs need no
-migration. Isolation is total rather than partial because the
-decision log is the point: dev traffic landing beside production rows
-would quietly corrupt the data that threshold calibration and
-exemplar tuning depend on. The useful consequence is that an A/B
-between embedders becomes two files to compare rather than one file
-to filter.
+migration. Isolation is total rather than partial because the decision
+log is the point: the dev instance's traffic landing beside the
+default instance's rows would quietly corrupt the data that threshold
+calibration and exemplar tuning depend on. The useful consequence is
+that an A/B between embedders becomes two files to compare rather than
+one file to filter.
 
-**Development runs on a non-default port, production keeps `:11435`.**
-Clients point at a port and stay pointed there, so the stable thing
-gets the stable address. Moving production would mean either dev gets
-no client traffic — testing nothing the split was meant to help with
-— or repointing clients on every run.
+**The dev instance runs on a non-default port; the default instance
+keeps `:11435`.** Clients point at a port and stay pointed there, so
+the stable thing gets the stable address. Moving the default instance
+would mean either the dev instance gets no client traffic — testing
+nothing the split was meant to help with — or repointing clients on
+every run.
 
-**Service labels use the `org.shuntd` prefix**, from the project's
-domain. Default instance bare, named instances suffixed:
-`org.shuntd.router`, `org.shuntd.router.dev`; on Linux
-`shuntd.service`, `shuntd-dev.service`. The VRAM guard is
-`org.shuntd.vram-mac-guard`, one name for package, command, script and
-label. The prefix is one constant in `@shuntd/core`.
+**Names follow one model.** The brand, the CLI and the model ID
+clients ask for are `saxby`; the daemon's binary is `saxbyd`, the same
+split as `tailscale` and `tailscaled`. Any other name applies that
+ecosystem's convention to this model: packages are named for the
+project and ship both binaries, the AUR adds `-bin` because the
+packages are prebuilt, and systemd units are named for the binary.
+Env vars use `SAXBY_`, JSR packages `@saxby/<pkg>`, the HTTP namespace
+`/saxby/v1/*`.
+
+**Service labels use the `tools.saxby` prefix**, reverse-DNS from
+`saxby.tools`. Default instance bare, named instances suffixed:
+`tools.saxby.router`, `tools.saxby.router.dev`; on Linux
+`saxbyd.service`, `saxbyd-dev.service`. The VRAM guard is
+`tools.saxby.vram-guard-mac`, one name for package, command, script and
+label. The prefix is one constant in `@saxby/core`.
 
 **Installed files live under `/usr/local`, not `/etc`.** The guard's
-script goes to `/usr/local/libexec/shuntd/` and its optional override
-file to `/usr/local/etc/shuntd/vram-mac-guard.env` — the FHS split
+script goes to `/usr/local/libexec/saxby/` and its optional override
+file to `/usr/local/etc/saxby/vram-guard-mac.env` — the FHS split
 between program and config, with `/etc` left to the OS. The script
 sources that file AS ROOT, so it refuses a file that root does not own
 or that anyone else can write; `/usr/local` is user-writable on some
 Homebrew setups. Uninstall leaves the config, as pacman does.
 
-**The config schema and loader live in `@shuntd/core`.** The config
-file is a contract between packages: `shunt config generate` writes
-it, the daemon reads it, `shunt probe` and `shunt instance list` read
+**The config schema and loader live in `@saxby/core`.** The config
+file is a contract between packages: `saxby config generate` writes
+it, the daemon reads it, `saxby probe` and `saxby instance list` read
 it. A CLI importing the daemon's internals would point the dependency
 the wrong way.
 
-**License is AGPL-3.0-or-later.** shuntd is a network service, and
+**License is AGPL-3.0-or-later.** Saxby is a network service, and
 plain GPL never triggers for software that is only run, not
 distributed.
 
-**shuntd does not manage the backend's environment.** Ollama runs
+**Saxby does not manage the backend's environment.** Ollama runs
 under its own supervisor — `brew services`, Ollama.app, or a system
 unit on Linux that a `systemd --user` service cannot reach. Whatever
-starts the backend owns its environment; shuntd setting it would be a
+starts the backend owns its environment; Saxby setting it would be a
 second opinion that sometimes loses a race. `docs/` carries a recipe
 per platform instead.
 
@@ -250,17 +275,17 @@ is published as a pre-release.
 **Packages are published, boring, and automated.** Shipping packaging
 templates nobody submits looks worse than shipping none, so the
 release workflow publishes binary packages itself: a Homebrew tap
-(`shuntd-dev/homebrew-tap`), `shuntd-bin` on the AUR, and JSR. This
+(`saxby-tools/homebrew-tap`), `saxby-bin` on the AUR, and JSR. This
 reverses the M6 plan's "scaffolding only, no maintained repos"; the
 reason that plan gave — a maintained package is a per-release
 promise — is met by making every release update them with no manual
 step. **Support happens on GitHub issues only.** Package pages point
-there; nobody monitors AUR or Homebrew comment threads. If shuntd
+there; nobody monitors AUR or Homebrew comment threads. If Saxby
 grows, others can maintain fancier packages or forks.
 
-**shuntd serves this machine only, until keys exist.** It checks no
+**Saxby serves this machine only, until keys exist.** It checks no
 credentials, so it listens on `127.0.0.1` only — `Deno.serve` with no
-hostname listens on every interface, and until v0.9.2 that put shuntd,
+hostname listens on every interface, and until v0.9.2 that put Saxby,
 and through its catch-all Ollama's management API, on the LAN. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
@@ -275,7 +300,7 @@ when it lands, "identified by `User-Agent`, never by API key" must be
 revisited, since its objection is to keys nobody verifies.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
-shuntd's own job); a hosted typed-classification API (unpublished
+Saxby's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
 maintainer, no GFM tables, no position offsets); port-per-client
 identification (multiplies config); FFI for NLP (per-platform build
@@ -353,7 +378,7 @@ fallback with credential substitution.
 **Infrastructure:** `packages/dashboard` (read-only, Evidence.dev);
 first-class `/v1/embeddings` route so embedding traffic is logged;
 semantic search over the prompt archive (prompts are already
-embedded); hot reload of `$XDG_CONFIG_HOME/shuntd`; middleware hooks
+embedded); hot reload of `$XDG_CONFIG_HOME/saxby`; middleware hooks
 for response transforms; per-persona `num_ctx` via the Ollama-native
 capability layer; a multilingual extractor, which the canonical tag
 vocabulary was designed to accept as a drop-in.
@@ -376,7 +401,7 @@ because several decisions above were validated against it, and
 knowing the shape of that validation is useful context.
 
 Apple Silicon, 128 GB unified memory, with the VRAM ceiling raised to
-roughly 112 GB by `vram-mac-guard`. A second machine runs Arch Linux.
+roughly 112 GB by `vram-guard-mac`. A second machine runs Arch Linux.
 
 Backend is Ollama. Catalog: a 31B multimodal generalist as the global
 default, a long-context coder, a multi-file coding specialist, a
@@ -384,8 +409,8 @@ default, a long-context coder, a multi-file coding specialist, a
 `bge-m3` as the embedder — deliberately outside the routing catalog.
 
 Open WebUI runs in a container with `ENABLE_OLLAMA_API=false`, so all
-of its traffic goes through shuntd, and its Task Model is set to
-`shuntd` so background generation is routed and logged rather than
+of its traffic goes through Saxby, and its Task Model is set to
+`saxby` so background generation is routed and logged rather than
 bypassing. OpenClaw is configured as an OpenAI-compatible provider
 pointed at `:11435`.
 
