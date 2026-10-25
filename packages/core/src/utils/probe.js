@@ -67,3 +67,28 @@ export async function fetchShuntdStatus(port) {
 
     return body;
 }
+
+/**
+ * Whether something already holds a local port, found by trying to
+ * listen on it the way the daemon does. Answers exactly what startup
+ * will meet, including for a process that is not shuntd and so never
+ * answers fetchShuntdStatus. The test listener closes at once.
+ *
+ * Only "address in use" counts as held. Any other failure is left to
+ * the daemon to report when it starts.
+ * @param {number} port
+ * @returns {boolean}
+ */
+export function isPortHeld(port) {
+    let listener;
+
+    try {
+        listener = Deno.listen({ hostname: PROBE_HOST, port });
+    } catch (err) {
+        return err instanceof Deno.errors.AddrInUse;
+    }
+
+    listener.close();
+
+    return false;
+}
