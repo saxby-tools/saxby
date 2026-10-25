@@ -16,6 +16,13 @@ header on to the backend, and Ollama ignores it, but many clients
 refuse to start without one. Clients are told apart by their
 `User-Agent`, never by their key.
 
+Because nothing is checked, shuntd only serves clients on the same
+machine. It listens on `127.0.0.1` only, and it refuses requests that
+came through a proxy, came from a web page, or name a host other than
+`localhost`, `127.0.0.1`, `[::1]` or `host.docker.internal`. Each
+refusal is a 403 explained in `docs/troubleshooting.md`. Serving
+other machines needs per-client keys, which are planned after v1.
+
 Use `shuntd/<model>` to skip routing and reach one model directly.
 See `docs/routing.md`.
 
@@ -34,9 +41,27 @@ OPENAI_API_KEY=shuntd
 ENABLE_OLLAMA_API=false
 ```
 
-`host.docker.internal` is how a container reaches your machine. It
-works out of the box with Docker Desktop on macOS. On Linux, start
-the container with `--add-host=host.docker.internal:host-gateway`.
+`host.docker.internal` is how a container reaches your machine.
+shuntd listens only on `127.0.0.1`, and Docker Desktop on macOS
+routes `host.docker.internal` to the host's loopback, so this works
+as is.
+
+**On Linux**, a container cannot reach the host's loopback through
+Docker's bridge network. Run Open WebUI with host networking
+(`--network host`, or `network_mode: host` in Compose) and point it
+at loopback directly:
+
+```
+OPENAI_API_BASE_URL=http://127.0.0.1:11435/v1
+HOST=127.0.0.1
+```
+
+`HOST=127.0.0.1` keeps Open WebUI's own port (8080, under host
+networking) on loopback too. Without it, host networking puts Open
+WebUI on every network interface. That is Open WebUI's exposure, not
+shuntd's, but it is fixed in the same place. Podman's
+`host.containers.internal` is not accepted; use host networking there
+as well.
 
 **Turn off Open WebUI's own Ollama connection** with
 `ENABLE_OLLAMA_API=false`. Otherwise Open WebUI talks to Ollama
