@@ -1,15 +1,17 @@
-#  shuntd
+#  Saxby
 
-[![CI](https://github.com/shuntd-dev/shuntd/actions/workflows/ci.yml/badge.svg)](https://github.com/shuntd-dev/shuntd/actions/workflows/ci.yml)
-[![Release build](https://github.com/shuntd-dev/shuntd/actions/workflows/release.yml/badge.svg)](https://github.com/shuntd-dev/shuntd/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/shuntd-dev/shuntd?include_prereleases)](https://github.com/shuntd-dev/shuntd/releases)
+[![CI](https://github.com/saxby-tools/saxby/actions/workflows/ci.yml/badge.svg)](https://github.com/saxby-tools/saxby/actions/workflows/ci.yml)
+[![Release build](https://github.com/saxby-tools/saxby/actions/workflows/release.yml/badge.svg)](https://github.com/saxby-tools/saxby/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/saxby-tools/saxby?include_prereleases)](https://github.com/saxby-tools/saxby/releases)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-A local-first router for your own models. shuntd sits in front of an
+A local-first router for your own models. Saxby sits in front of an
 OpenAI-compatible backend such as Ollama, shows your apps one model
-called `shuntd`, and sends each request to the model in your catalog
+called `saxby`, and sends each request to the model in your catalog
 that suits it best. Every decision is logged, with the reasons, so
 you can tune routing against evidence instead of guesses.
+
+Saxby was called shuntd through v0.9.3.
 
 ##  How it picks
 
@@ -22,15 +24,15 @@ you can tune routing against evidence instead of guesses.
 
 Image and audio are requirements, not preferences: a model that
 cannot see never gets an image. When nothing in your catalog can
-serve a request, shuntd says so instead of guessing.
+serve a request, Saxby says so instead of guessing.
 
-`POST /shuntd/v1/explain` shows the whole decision for any request
-without generating a token. shuntd never touches the filesystem: file
+`POST /saxby/v1/explain` shows the whole decision for any request
+without generating a token. Saxby never touches the filesystem: file
 paths in prompts are matched by shape only, never opened.
 
-##  Why shuntd
+##  Why Saxby
 
-shuntd is one daemon binary, with no router model to run and no GPU
+Saxby is one daemon binary, with no router model to run and no GPU
 to need. Reading a prompt and choosing a model takes well under a
 millisecond for everyday prompts, and about 13 ms for a
 150,000-character payload; the meaning-based fallback costs one call
@@ -47,15 +49,15 @@ scale.
 ##  Quick start
 
 ```bash
-shunt config generate
+saxby config generate
 ```
 
 ```bash
-shunt service install
+saxby service install
 ```
 
 Then point your apps at `http://127.0.0.1:11435/v1` with the model
-`shuntd`. Installing the binaries comes first; see
+`saxby`. Installing the binaries comes first; see
 [Getting started](docs/getting-started.md).
 
 ##  Documentation
@@ -67,9 +69,9 @@ Then point your apps at `http://127.0.0.1:11435/v1` with the model
 - [Configuration](docs/configuration.md) — every field, tags,
   personas, Tier 3
 - [Clients](docs/clients.md) — Open WebUI, OpenClaw, scripts
-- [Instances](docs/instances.md) — a separate dev copy with its own
-  log
-- [Services](docs/services.md) — launchd and systemd, dev and live
+- [Instances](docs/instances.md) — the dev instance, with its own log
+- [Services](docs/services.md) — launchd and systemd, the default
+  instance and the dev instance
 - [Troubleshooting](docs/troubleshooting.md) — messages and what to
   do
 - [Architecture](docs/architecture.md) — how it fits together
@@ -79,10 +81,10 @@ Then point your apps at `http://127.0.0.1:11435/v1` with the model
 ##  Project
 
 Known limitations are issues labelled
-[`known-gap`](https://github.com/shuntd-dev/shuntd/issues?q=label%3Aknown-gap):
+[`known-gap`](https://github.com/saxby-tools/saxby/issues?q=label%3Aknown-gap):
 everything found and not yet fixed is written down there. Open
 questions and ideas past v1 are in
-[Discussions](https://github.com/shuntd-dev/shuntd/discussions).
+[Discussions](https://github.com/saxby-tools/saxby/discussions).
 
 [`AGENTS.md`](AGENTS.md) records the design decisions and the reasoning behind
 them. Read it before changing behavior.
@@ -97,16 +99,16 @@ deno task test
 deno task dev
 ```
 
-`deno task dev` runs the source as the `dev` instance on its own port,
+`deno task dev` runs the source as the dev instance on its own port,
 so the service on your machine keeps running untouched. See
 [Instances](docs/instances.md).
 
 | Package | What it is |
 | --- | --- |
-| `packages/llm-router` | `shuntd`, the daemon |
-| `packages/cli` | `shunt`, the command line |
+| `packages/llm-router` | `saxbyd`, the daemon |
+| `packages/cli` | `saxby`, the command line |
 | `packages/core` | Contracts shared by both |
-| `packages/vram-mac-guard` | Apple Silicon VRAM ceiling, macOS only |
+| `packages/vram-guard-mac` | Apple Silicon VRAM ceiling, macOS only |
 
 ##  License
 
