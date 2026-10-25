@@ -4,6 +4,7 @@ import {
     fetchShuntdStatus,
     getHomeDir,
     getInstanceDir,
+    isPortHeld,
     listInstances,
     loadConfig,
 } from "@shuntd/core";
@@ -50,8 +51,9 @@ async function describeService(name) {
 
 /**
  * One row per instance. "running" means the shuntd on the configured
- * port says it IS this instance. A port held by another instance is
- * reported as blocked, since starting this one would fail.
+ * port says it IS this instance. A port held by another instance, or
+ * by a program that is not shuntd, is reported as blocked, since
+ * starting this one would fail.
  */
 async function describeInstance(name) {
     const row = {
@@ -77,6 +79,13 @@ async function describeInstance(name) {
     row.port = String(config.listen_port);
 
     const holder = await fetchShuntdStatus(config.listen_port);
+
+    if (!holder && isPortHeld(config.listen_port)) {
+        row.state = "blocked";
+        row.error = `port ${row.port} is held by a process that is ` +
+            `not shuntd`;
+        return row;
+    }
 
     if (!holder) {
         row.state = "stopped";
