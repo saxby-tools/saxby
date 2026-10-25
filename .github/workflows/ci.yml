@@ -49,6 +49,7 @@ jobs:
                   packages/cli/src/main.js
                   packages/llm-router/src/main.js
                   scripts/build.js
+                  scripts/deploy.js
                   scripts/package.js
                   scripts/version.js
 
