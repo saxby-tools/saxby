@@ -149,6 +149,63 @@ shuntd could not reach its upstream at http://127.0.0.1:11434: fetch failed
 shuntd is fine; the backend is not answering. Check that Ollama is
 running and that `upstream_url` is right.
 
+##  Requests are refused (403)
+
+shuntd checks no credentials, so it serves only clients on the same
+machine and refuses anything that looks otherwise. Each refusal is
+logged as a line starting with `🚫`, with its reason and source.
+
+###  proxy_attribution_required
+
+```
+Refused: the request carries 'x-forwarded-for', so it came through a proxy. shuntd only serves clients on this machine directly.
+```
+
+A reverse proxy — Caddy, nginx, `tailscale serve` — is passing
+requests to shuntd. On the same machine, every proxied request looks
+local, including ones from strangers, so shuntd refuses them. Point
+the client at `127.0.0.1:11435` directly instead of through the
+proxy. Serving through a proxy needs per-client keys, planned after
+v1.
+
+###  origin_not_allowed
+
+```
+Refused: the request came from a web page (Origin 'https://evil.example'). shuntd does not serve browsers.
+```
+
+A web page in a browser tried to call shuntd. Any site you visit can
+send requests to `127.0.0.1`, so every request carrying an `Origin`
+header is refused. Server-side apps such as Open WebUI's backend send
+none.
+
+###  host_not_allowed
+
+```
+Refused: Host 'attacker.example' is not a local name. Use 127.0.0.1 or localhost.
+```
+
+The request named a host other than `localhost`, `127.0.0.1`, `[::1]`
+or `host.docker.internal`. A site that points its own name at your
+machine — DNS rebinding — is refused this way. If a container sends
+another name, such as Podman's `host.containers.internal`, use host
+networking; see `docs/clients.md`.
+
+###  management_not_allowed
+
+```
+Refused: '/api/pull' manages Ollama's models and is not served through shuntd. Call Ollama directly.
+```
+
+Pulling, pushing, creating, copying and deleting models are Ollama's
+job, not a router's. Run `ollama pull` or call Ollama on port 11434.
+
+###  Another machine cannot connect
+
+shuntd listens on `127.0.0.1` only, so nothing beyond this machine
+can reach it. That is deliberate until per-client keys exist, after
+v1.
+
 ##  Requests go to the wrong model
 
 Start with `explain`. It shows the tags, the tier, and why every tier
