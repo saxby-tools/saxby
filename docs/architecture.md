@@ -39,16 +39,34 @@ from `cli`, which includes the guard's shell script.
 5. **Tier 3.** Check the embedder answers, then embed any exemplars
    not already cached and prune stale ones. A failure here costs
    Tier 3, not routing.
-6. **Serve.** Bind the port. A clash is explained by asking the
-   holder who it is.
+6. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
+   shuntd checks no credentials, so nothing beyond this machine may
+   reach it until per-client keys exist. A port clash is explained by
+   asking the holder who it is.
 
 Steps 4 and 5 can fail without stopping shuntd. Observability and
 cleverness are optional; routing is not.
 
+##  The guard
+
+Before any route — chat, `explain`, `status`, the catch-all — every
+request passes `security/guard.js`. It refuses, with a 403 and a log
+line, anything that is not a local, non-browser client:
+
+- **forwarding headers** (`X-Forwarded-*`, `Forwarded`, `Via` and
+  similar): a proxy on this machine makes strangers look local;
+- **any `Origin` header**: a web page in a browser;
+- **a `Host` that is not a local name**: DNS rebinding;
+- **Ollama's management paths** (`/api/pull`, `push`, `create`,
+  `copy`, `delete`, `blobs`): nothing needs them through a router.
+
+It decides "browser" by `Origin` and `Host` only, never `Sec-Fetch-*`,
+which Node's own `fetch` sends from server code.
+
 ##  A routed request
 
 `POST /v1/chat/completions` with `model: "shuntd"`, in
-`routes/v1/chat.js`:
+`routes/v1/chat.js`, once the guard has let it through:
 
 1. **Identify the client** from app headers or the `User-Agent`
    (`log/client.js`).
@@ -81,7 +99,7 @@ recorded, as `bypass` and `raw`.
 | `GET /v1/models` | Lists `shuntd` and `shuntd/<model>` |
 | `POST /shuntd/v1/explain` | Runs steps 2 to 4 only; returns the decision |
 | `GET /shuntd/v1/status` | Instance, port, pid and version |
-| anything else | Proxied to the backend unchanged |
+| anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
 catch-all lives in `main.js` and forwards headers as they arrive,
