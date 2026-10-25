@@ -17,9 +17,10 @@ shunt service install
 
 Install finds `shuntd` on `PATH` and writes its absolute path into the
 service file. Pass `--bin <path>` to choose a different binary. It
-refuses to install when another shuntd already answers on the
-instance's port, since the new service would only crash-loop against
-it. Stop the other one first.
+refuses to install when something else already holds the instance's
+port — another shuntd, or a program that is not shuntd — since the
+new service would only crash-loop against it. Stop the other one
+first.
 
 If `XDG_CONFIG_HOME` is set when you install, it is written into the
 service so the service reads the same config `shunt` does. Every
