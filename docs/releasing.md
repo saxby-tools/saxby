@@ -187,11 +187,14 @@ environment. Its header shows the command. It is not run in CI.
 (checked on Deno 2.9.6). Under legacy semantics the signal also fires
 after a response has been fully delivered. In
 [`chat.js`](../packages/llm-router/src/routes/v1/chat.js) that is after
-the upstream stream has ended, so it changes nothing: a compiled binary
-and `deno run` produced the same decision log rows for a completed
-stream and for a client that disconnected mid-stream. The binary prints
-one warning about it at boot. Recheck this when upgrading Deno, since
-the new behavior is meant to become the default.
+the upstream stream has ended, so it changes nothing. Checked again on
+Deno 2.9.8 against a fake backend: a compiled binary and `deno run`
+both log a stream read to the end as `completed`, and one the client
+cut off mid-stream as `aborted`, with its first-byte time and
+duration. (Before v0.9.3, both builds left that cut-off row open
+instead.) The binary prints one warning about it at boot. Recheck this
+when upgrading Deno, since the new behavior is meant to become the
+default.
 
 **macOS quarantines downloaded archives.** A tarball downloaded
 through a browser gets a quarantine attribute, and Gatekeeper blocks
