@@ -112,8 +112,8 @@ STATE is one of four values:
 | State | Meaning |
 | --- | --- |
 | `running` | The shuntd on this port says it is this instance |
-| `stopped` | No shuntd answers on this port |
-| `blocked` | Another instance holds this port; this one cannot start |
+| `stopped` | Nothing holds this port; this instance can start |
+| `blocked` | Another instance, or a program that is not shuntd, holds this port; this one cannot start |
 | `error` | Config missing or invalid; the reason prints below the table |
 
 SERVICE shows whether a user service is installed for the instance.
