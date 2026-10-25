@@ -1,7 +1,7 @@
 #  Architecture
 
 How shuntd is put together, for anyone changing it. The reasoning
-behind each decision lives in `AGENTS.md`; this page is the map.
+behind each decision lives in [`AGENTS.md`](../AGENTS.md); this page is the map.
 
 ##  Packages
 
@@ -27,7 +27,8 @@ from `cli`, which includes the guard's shell script.
 
 ##  Boot
 
-`packages/llm-router/src/main.js`, in order:
+[`packages/llm-router/src/main.js`](../packages/llm-router/src/main.js),
+in order:
 
 1. **Instance.** `--instance`, then `SHUNTD_INSTANCE`, then the
    default. This fixes which folder everything else comes from.
@@ -50,8 +51,10 @@ cleverness are optional; routing is not.
 ##  The guard
 
 Before any route — chat, `explain`, `status`, the catch-all — every
-request passes `security/guard.js`. It refuses, with a 403 and a log
-line, anything that is not a local, non-browser client:
+request passes
+[`security/guard.js`](../packages/llm-router/src/security/guard.js). It
+refuses, with a 403 and a log line, anything that is not a local,
+non-browser client:
 
 - **forwarding headers** (`X-Forwarded-*`, `Forwarded`, `Via` and
   similar): a proxy on this machine makes strangers look local;
@@ -66,26 +69,31 @@ which Node's own `fetch` sends from server code.
 ##  A routed request
 
 `POST /v1/chat/completions` with `model: "shuntd"`, in
-`routes/v1/chat.js`, once the guard has let it through:
+[`routes/v1/chat.js`](../packages/llm-router/src/routes/v1/chat.js),
+once the guard has let it through:
 
 1. **Identify the client** from app headers or the `User-Agent`
-   (`log/client.js`).
-2. **Extract intent** (`pipeline/extract.js`). Intent comes from the
-   last user message; weight comes from the whole payload. Image and
-   audio parts are counted, never stringified.
-3. **Resolve** (`pipeline/resolve.js`). Tiers 1 and 2 are synchronous
-   and cost microseconds. Tier 3 makes one embedding call, so it runs
-   only when both abstain. Every tier that declines records why.
+   ([`log/client.js`](../packages/llm-router/src/log/client.js)).
+2. **Extract intent**
+   ([`pipeline/extract.js`](../packages/llm-router/src/pipeline/extract.js)).
+   Intent comes from the last user message; weight comes from the whole
+   payload. Image and audio parts are counted, never stringified.
+3. **Resolve**
+   ([`pipeline/resolve.js`](../packages/llm-router/src/pipeline/resolve.js)).
+   Tiers 1 and 2 are synchronous and cost microseconds. Tier 3 makes one
+   embedding call, so it runs only when both abstain. Every tier that
+   declines records why.
 4. **Select.** The first candidate whose context window fits wins.
    Requests nothing can serve are refused with a 400 here, without
    touching the backend.
 5. **Record.** The decision is queued for the log.
 6. **Proxy.** The request goes upstream with only `Content-Type` and
    `Authorization`, asking the backend to report token usage.
-7. **Observe** (`observability/stream.js`). Each chunk is passed to
-   the client first and inspected second, so watching the stream
-   never delays it. Time to first byte and token counts are read on
-   the way past.
+7. **Observe**
+   ([`observability/stream.js`](../packages/llm-router/src/observability/stream.js)).
+   Each chunk is passed to the client first and inspected second, so
+   watching the stream never delays it. Time to first byte and token
+   counts are read on the way past.
 8. **Complete.** When the stream ends, the log row is updated with
    the outcome and timings.
 
@@ -102,15 +110,18 @@ recorded, as `bypass` and `raw`.
 | anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
-catch-all lives in `main.js` and forwards headers as they arrive,
-minus `accept-encoding`, `content-length` and `host`. Issue #22 covers
-what that means for user-identifying headers.
+catch-all lives in [`main.js`](../packages/llm-router/src/main.js) and
+forwards headers as they arrive, minus `accept-encoding`,
+`content-length` and `host`.
+[Issue #22](https://github.com/shuntd-dev/shuntd/issues/22) covers what
+that means for user-identifying headers.
 
 ##  The decision log
 
-`log/db.js` and `log/schema.js`. SQLite through Deno's built-in
-`node:sqlite`, so there is no dependency and nothing that complicates
-cross-compiling.
+[`log/db.js`](../packages/llm-router/src/log/db.js) and
+[`log/schema.js`](../packages/llm-router/src/log/schema.js). SQLite
+through Deno's built-in `node:sqlite`, so there is no dependency and
+nothing that complicates cross-compiling.
 
 **Two-phase.** A row is inserted when the decision is made and
 updated when the response finishes. A row that never got its update
@@ -138,13 +149,14 @@ nothing.
 ##  Instances and services
 
 An instance is a folder holding one config, one log and its vectors
-(`core/src/config/instance.js`). Every command and the daemon resolve
-the instance the same way, and `/shuntd/v1/status` is how anything
-finds out which instance owns a port. See `docs/instances.md`.
+([`core/src/config/instance.js`](../packages/core/src/config/instance.js)).
+Every command and the daemon resolve the instance the same way, and
+`/shuntd/v1/status` is how anything finds out which instance owns a
+port. See [Instances](instances.md).
 
 `shunt service` drives launchd or `systemd --user` through one
 adapter per platform (`cli/src/services/`), each with the same
-methods. See `docs/services.md`.
+methods. See [Services](services.md).
 
 ##  Tests
 
