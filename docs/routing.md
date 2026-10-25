@@ -1,22 +1,22 @@
 #  Routing
 
-shuntd shows clients one model, `shuntd`. Ask for it, and shuntd
+Saxby shows clients one model, `saxby`. Ask for it, and Saxby
 reads the request, picks a model from your catalog, and forwards the
 request there. This page explains how it picks, and how to see why it
 picked what it did.
 
 ##  Three ways to ask
 
-The `model` field of a chat request decides whether shuntd routes at
+The `model` field of a chat request decides whether Saxby routes at
 all:
 
 | `model` | What happens |
 | --- | --- |
-| `shuntd` | shuntd routes the request, as described below |
-| `shuntd/<model>` | Sent straight to `<model>`; no routing |
+| `saxby` | Saxby routes the request, as described below |
+| `saxby/<model>` | Sent straight to `<model>`; no routing |
 | anything else | Passed through unchanged; no routing |
 
-`GET /v1/models` lists `shuntd` plus `shuntd/<model>` for every
+`GET /v1/models` lists `saxby` plus `saxby/<model>` for every
 catalog entry, so a client's model picker can offer both. Every
 request is logged either way: routed requests with their tier,
 the other two as `bypass` and `raw`.
@@ -40,7 +40,7 @@ yours.
 
 ###  Tier 2: structure
 
-shuntd scans the last user message for structure — code, file paths,
+Saxby scans the last user message for structure — code, file paths,
 stack traces, tables, math — and turns what it finds into tags. The
 scan works on structure, not words, so it behaves the same in any
 language.
@@ -105,13 +105,13 @@ that does not claim the requirement is never considered, however well
 it matches otherwise.
 
 If no model in the catalog claims a requirement, nothing can serve
-the request. shuntd refuses it instead of guessing, with a 400 and
+the request. Saxby refuses it instead of guessing, with a 400 and
 code `unmet_requirement`:
 
 ```json
 {
     "error": {
-        "message": "No model in this shuntd catalog claims TAG_AUDIO, so nothing here can handle audio. Add TAG_AUDIO to the capabilities of a model that can.",
+        "message": "No model in this Saxby catalog claims TAG_AUDIO, so nothing here can handle audio. Add TAG_AUDIO to the capabilities of a model that can.",
         "type": "invalid_request_error",
         "code": "unmet_requirement"
     }
@@ -132,14 +132,14 @@ to turn it off.
 
 ##  Fitting the context window
 
-After a tier picks its candidates, shuntd checks that the request
+After a tier picks its candidates, Saxby checks that the request
 fits. It estimates the size of the **whole** request — system prompt
 and every earlier turn, not just the last message — at roughly four
 characters per token, with code charged at a denser rate. Any
 candidate whose `max_context` is smaller is skipped, with the reason
 recorded.
 
-If every candidate is too small, shuntd falls back to the global
+If every candidate is too small, Saxby falls back to the global
 default, but only if it fits and meets any requirement. Otherwise it
 uses the capable model with the largest context window. If no model
 in the catalog can take the request, it refuses with the size it
@@ -150,14 +150,14 @@ its size.
 
 ##  Seeing why
 
-`POST /shuntd/v1/explain` takes the same body as a chat request and
+`POST /saxby/v1/explain` takes the same body as a chat request and
 returns the whole decision as JSON. It never calls the upstream: no
 tokens, no model load. It is the safe way to test routing.
 
 ```bash
-curl -s http://127.0.0.1:11435/shuntd/v1/explain \
+curl -s http://127.0.0.1:11435/saxby/v1/explain \
     -H "Content-Type: application/json" \
-    -d '{"model": "shuntd", "messages": [{"role": "user",
+    -d '{"model": "saxby", "messages": [{"role": "user",
         "content": "move app/a.js into app/b.js"}]}'
 ```
 
@@ -173,7 +173,7 @@ The fields worth reading first:
 | `semantic` | Tier 3's best match, score and margin, even when it lost |
 | `skipped` | Candidates that did not fit, and why |
 
-For many prompts at once, `shunt probe` prints Tier 3 scores and
+For many prompts at once, `saxby probe` prints Tier 3 scores and
 margins for a list of prompts. Running the daemon with `--trace`
 prints every decision and every abstention reason as requests arrive.
 Every decision is also stored in the instance's decision log.
@@ -201,4 +201,4 @@ recorded and the global default took the request. Adding an exemplar
 like it to `general` would make it a Tier 3 match.
 
 The same prompts route differently against a different catalog. That
-is the point: the routes come from your config, not from shuntd.
+is the point: the routes come from your config, not from Saxby.
