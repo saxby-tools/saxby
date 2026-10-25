@@ -18,6 +18,11 @@ const ROUTER_LABEL = `${SERVICE_PREFIX}.router`;
 const AGENTS_DIR = "Library/LaunchAgents";
 const LOGS_DIR = "Library/Logs/shuntd";
 
+//  launchd sends SIGTERM, then kills a job still running after its
+//  ExitTimeOut, 20 seconds by default. Wait a little longer than that.
+const UNLOAD_TIMEOUT_MS = 25_000;
+const UNLOAD_POLL_MS = 250;
+
 function domain() {
     return `gui/${Deno.uid()}`;
 }
@@ -39,6 +44,32 @@ async function isLoaded(label) {
     ]);
 
     return result.code === 0;
+}
+
+/**
+ * Unloads a job and waits until launchd has let it go.
+ *
+ * `launchctl bootout` returns while the job may still be shutting
+ * down — shuntd flushes its decision log on SIGTERM — and a bootstrap
+ * that lands before it is gone fails with "5: Input/output error".
+ * In a reinstall that left no service loaded at all.
+ */
+async function bootout(label) {
+    await runOrThrow("launchctl", ["bootout", `${domain()}/${label}`]);
+
+    const deadline = Date.now() + UNLOAD_TIMEOUT_MS;
+
+    while (await isLoaded(label)) {
+        if (Date.now() > deadline) {
+            throw new Error(
+                `${label} is still loaded ${UNLOAD_TIMEOUT_MS / 1000} s ` +
+                    `after launchctl bootout. Check it with ` +
+                    `'launchctl print ${domain()}/${label}'.`,
+            );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, UNLOAD_POLL_MS));
+    }
 }
 
 export class LaunchdAdapter {
@@ -108,7 +139,7 @@ export class LaunchdAdapter {
         //  Reinstalling is updating: unload the old definition first,
         //  or bootstrap refuses a label that is already loaded.
         if (await isLoaded(label)) {
-            await runOrThrow("launchctl", ["bootout", `${domain()}/${label}`]);
+            await bootout(label);
         }
 
         const plist = this.render({ instance, binary, environment });
@@ -121,7 +152,7 @@ export class LaunchdAdapter {
         const label = this.name(instance);
 
         if (await isLoaded(label)) {
-            await runOrThrow("launchctl", ["bootout", `${domain()}/${label}`]);
+            await bootout(label);
         }
 
         await Deno.remove(this.path(instance)).catch(() => {});
@@ -129,6 +160,17 @@ export class LaunchdAdapter {
 
     static async restart(instance) {
         const label = this.name(instance);
+
+        //  The service file can exist with nothing loaded — after a
+        //  failed bootstrap, or `launchctl bootout` by hand. kickstart
+        //  then says only "Could not find service".
+        if (!(await isLoaded(label))) {
+            throw new Error(
+                `${label} is installed but not loaded, so there is ` +
+                    `nothing to restart. Run 'shunt service install' ` +
+                    `to load it.`,
+            );
+        }
 
         await runOrThrow("launchctl", [
             "kickstart",
