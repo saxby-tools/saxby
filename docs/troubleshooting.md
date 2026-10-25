@@ -49,7 +49,7 @@ Every problem is listed at once, each with its path. Unknown fields
 are errors on purpose, so a typo cannot be silently ignored. A model
 named anywhere — `global_default_model`, a persona's
 `default_model`, `semantic.active` — must exist in the catalog. See
-`docs/configuration.md`.
+[Configuration](configuration.md).
 
 ###  The port is taken
 
@@ -117,7 +117,7 @@ Deno.serve: request.signal aborts on successful responses (legacy behavior). ...
 ```
 
 Printed once at boot by compiled binaries. It is expected and
-harmless; `docs/releasing.md` explains why.
+harmless; [Releasing](releasing.md) explains why.
 
 ##  Requests fail
 
@@ -189,7 +189,7 @@ The request named a host other than `localhost`, `127.0.0.1`, `[::1]`
 or `host.docker.internal`. A site that points its own name at your
 machine — DNS rebinding — is refused this way. If a container sends
 another name, such as Podman's `host.containers.internal`, use host
-networking; see `docs/clients.md`.
+networking; see [Clients](clients.md).
 
 ###  management_not_allowed
 
@@ -232,7 +232,7 @@ not lower the threshold. `shunt probe` checks many prompts at once.
 
 **Requests go to a small model for no reason.** The request probably
 sets `stream: false`, which marks it as background work. Many SDKs do
-this. See "Background requests" in `docs/routing.md`.
+this. See "Background requests" in [Routing](routing.md).
 
 **A model is skipped.** `skipped` in the `explain` output says why,
 usually that the conversation does not fit its `max_context`.
@@ -246,7 +246,7 @@ usually that the conversation does not fit its `max_context`.
 ```
 
 The service runs a compiled binary. Build and install one first, as
-`docs/releasing.md` describes.
+[Releasing](releasing.md) describes.
 
 ```
 ❌ :11435 is already served by instance 'default' (pid 80797) outside this service. Stop it first.
@@ -294,7 +294,7 @@ Warnings print to the error log on macOS.
 `shunt instance list` shows each instance's version. Code changes
 reach the service on your machine only after a deploy. From a
 checkout, `deno task deploy` builds, installs, restarts and checks
-the version in one step. See `docs/releasing.md`.
+the version in one step. See [Releasing](releasing.md).
 
 If the deploy says the service reports an older version than it
 built, the service file points at a `shuntd` in another folder. Run
@@ -310,7 +310,7 @@ built, the service file points at a `shuntd` in another folder. Run
 ❌ Instance name 'default' is reserved. Omit the name to use the default instance.
 ```
 
-See `docs/instances.md` for naming. A **blocked** state in
+See [Instances](instances.md) for naming. A **blocked** state in
 `instance list` means something else holds this one's port: another
 instance, or a program that is not shuntd. The line under the table
 says which.
@@ -323,10 +323,11 @@ command yet. Run `rehash`, or open a new terminal.
 **"Background Items Added".** macOS shows this the first time a
 service is installed. It is expected.
 
-**A downloaded binary will not open on macOS.** Release binaries are
-not signed yet, so Gatekeeper blocks them when the archive came
-through a browser. Issue #7 tracks signing. Until then, clear the
-quarantine flag yourself, only on a download you trust:
+**A downloaded binary will not open on macOS.** Release binaries are not
+signed yet, so Gatekeeper blocks them when the archive came through a
+browser. [Issue #7](https://github.com/shuntd-dev/shuntd/issues/7)
+tracks signing. Until then, clear the quarantine flag yourself, only on
+a download you trust:
 
 ```bash
 xattr -d com.apple.quarantine shuntd shunt
