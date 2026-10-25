@@ -87,7 +87,7 @@ M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
 **M6: MVP / v1 release** — Phases 0–3 and the Phase 4 docs are done;
-the JSDoc sweep and the v1.0.0 tag remain (`docs/roadmap.md`).
+the JSDoc sweep and the v1.0.0 tag remain ([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `shunt instance list`, the dev/prod
 split, `shunt probe`), because everything after it assumes them.
@@ -111,10 +111,11 @@ math is deliberately unsupported — currency appears in prompts far
 more often than inline LaTeX.
 
 **Owned regex uses Regex+ (`npm:regex`).** Four silent-failure traps,
-documented at the top of `detect.js`: a literal space must be `\x20`
-even inside a character class (`[ ]` compiles to `[]` and matches
-nothing); inside a class escape `/ ) -`; outside a class `\-` is
-invalid; `(?(DEFINE))` must come last.
+documented at the top of
+[`detect.js`](packages/llm-router/src/pipeline/detect.js): a literal
+space must be `\x20` even inside a character class (`[ ]` compiles to
+`[]` and matches nothing); inside a class escape `/ ) -`; outside a
+class `\-` is invalid; `(?(DEFINE))` must come last.
 
 **No NLP library.** Structural detectors are language-agnostic,
 keyword triggers are user config, and multilingual intent falls out of
@@ -132,9 +133,10 @@ a broken one. They are separate tags because a model may do one and
 not the other. This is the second concept in the tag vocabulary and
 the one most likely to be mistaken for the first.
 
-**Tag vocabulary lives in `packages/core/src/tags/index.js`** and is
-validated in both directions at boot. It is the contract between the
-extractor that emits tags and the catalog that claims them.
+**Tag vocabulary lives in
+[`packages/core/src/tags/index.js`](packages/core/src/tags/index.js)**
+and is validated in both directions at boot. It is the contract between
+the extractor that emits tags and the catalog that claims them.
 
 **Multimodal `content` arrives as an ARRAY of parts**, not a string.
 It must be normalised before anything reads it — collapsing it with
@@ -259,18 +261,18 @@ grows, others can maintain fancier packages or forks.
 **shuntd serves this machine only, until keys exist.** It checks no
 credentials, so it listens on `127.0.0.1` only — `Deno.serve` with no
 hostname listens on every interface, and until v0.9.2 that put shuntd,
-and through its catch-all Ollama's management API, on the LAN. A
-guard (`security/guard.js`) runs before every route and refuses
-forwarding headers (a proxy on the same box makes strangers look
-local), any `Origin` (a browser), a non-local `Host` (DNS rebinding)
-and Ollama's management paths. It judges "browser" by `Origin` and
-`Host` only: Node's `fetch` sends `sec-fetch-mode: cors` from server
-code, and OpenClaw's real requests carry it. `host.docker.internal`
-is allowed because a Docker Desktop container reaches the host by
-that name. Serving other machines — keys, a trusted-proxy list,
-non-loopback binds — is the post-v1 exposure work; when it lands,
-"identified by `User-Agent`, never by API key" must be revisited, since
-its objection is to keys nobody verifies.
+and through its catch-all Ollama's management API, on the LAN. A guard
+([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
+before every route and refuses forwarding headers (a proxy on the same
+box makes strangers look local), any `Origin` (a browser), a non-local
+`Host` (DNS rebinding) and Ollama's management paths. It judges
+"browser" by `Origin` and `Host` only: Node's `fetch` sends
+`sec-fetch-mode: cors` from server code, and OpenClaw's real requests
+carry it. `host.docker.internal` is allowed because a Docker Desktop
+container reaches the host by that name. Serving other machines — keys,
+a trusted-proxy list, non-loopback binds — is the post-v1 exposure work;
+when it lands, "identified by `User-Agent`, never by API key" must be
+revisited, since its objection is to keys nobody verifies.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
 shuntd's own job); a hosted typed-classification API (unpublished
@@ -286,14 +288,15 @@ True regardless of whose machine this runs on.
 Deno 2.9+. `node:sqlite` is built in since 2.2. `DatabaseSync` is
 synchronous, which is why log writes are batched off the request path.
 
-Root `deno.json` sets `"unstable": ["no-legacy-abort"]` so that
-`request.signal` fires only on a real client disconnect. Without it
-the signal ALSO fires after a response is fully delivered. `deno
-compile` ignores the setting, and the explicit flag too, so compiled
-binaries run legacy semantics. In `chat.js` the late abort lands after
-the upstream stream has ended and changes nothing — checked end to end
-on Deno 2.9.6, see `docs/releasing.md`. Code that reads the signal
-must stay correct under both semantics.
+Root [`deno.json`](deno.json) sets `"unstable": ["no-legacy-abort"]` so
+that `request.signal` fires only on a real client disconnect. Without it
+the signal ALSO fires after a response is fully delivered.
+`deno compile` ignores the setting, and the explicit flag too, so
+compiled binaries run legacy semantics. In
+[`chat.js`](packages/llm-router/src/routes/v1/chat.js) the late abort
+lands after the upstream stream has ended and changes nothing — checked
+end to end on Deno 2.9.6, see [Releasing](docs/releasing.md). Code that
+reads the signal must stay correct under both semantics.
 
 Ollama honours `stream_options: {include_usage: true}` on its
 OpenAI-compatible endpoint, so token counts come free.
