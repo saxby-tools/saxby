@@ -17,7 +17,7 @@ and editing that file afterward.
 The default instance reads `~/.config/shuntd/config.jsonc`. A named
 instance reads `~/.config/shuntd/instances/<name>/config.jsonc`. If
 `XDG_CONFIG_HOME` is set, it replaces `~/.config`. See
-`docs/instances.md`.
+[Instances](instances.md).
 
 The file is JSONC, so comments are allowed. A plain `config.json`
 works too. If both exist, shuntd loads `config.jsonc` and warns that
@@ -158,7 +158,7 @@ vocabulary, but nothing emits them yet, so a claim on either never
 matches. shuntd warns at boot if a config claims one. Writing prompts
 reach a writer persona through its Tier 3 exemplars instead.
 
-`docs/routing.md` covers exactly how each one is detected.
+[Routing](routing.md) covers exactly how each one is detected.
 
 **A tag is a routing preference, not a capability claim.** A model
 that *can* write code should not claim `TAG_CODER` unless it is the
@@ -294,7 +294,7 @@ later still applies to old traffic.
 
 `log_path` moves the decision log. Leave it unset in a named instance:
 its log then stays in the instance's folder. See
-`docs/instances.md`.
+[Instances](instances.md).
 
 ##  When the file is wrong
 
