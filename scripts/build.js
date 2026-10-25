@@ -1,8 +1,8 @@
 //  =====================================================================
 //  deno task build
 //  =====================================================================
-//  Cross-compiles saxbyd and saxby, then packs one tarball per target
-//  with a .sha256 beside it:
+//  Cross-compiles saxbyd and saxby, writes saxby's shell completions,
+//  then packs one tarball per target with a .sha256 beside it:
 //
 //    dist/saxby-<version>-<target>/          staged, ready to deploy
 //    dist/saxby-<version>-<target>.tar.gz
@@ -28,6 +28,12 @@
 //  explicit --unstable-no-legacy-abort is accepted but has no effect
 //  in the binary (Deno 2.9.6). Compiled binaries therefore run with
 //  legacy request.signal semantics. See docs/releasing.md.
+//
+//  Completions come from the source with `deno run`, not from a
+//  compiled binary: a cross-compiled binary cannot run on the build
+//  machine. The scripts are text and the same for every target, so
+//  they are made once per build. They name the version, so they are
+//  made fresh each build rather than committed.
 
 import { basename, join } from "@std/path";
 import { readLockstepVersion } from "./version.js";
@@ -36,6 +42,8 @@ const DIST_DIR = "dist";
 const ARCHIVE_PREFIX = "saxby";
 
 const ALL_KEYWORD = "all";
+
+const CLI_ENTRY = "packages/cli/src/main.js";
 
 //  os and arch use Deno.build's names, so the host can be matched.
 const TARGETS = [
@@ -79,7 +87,7 @@ const BINARIES = [
     },
     {
         name: "saxby",
-        entry: "packages/cli/src/main.js",
+        entry: CLI_ENTRY,
         permissions: [
             "--allow-net",
             "--allow-env",
@@ -93,6 +101,17 @@ const BINARIES = [
 ];
 
 const EXTRA_FILES = ["LICENSE", "README.md"];
+
+//  File names are what each shell looks for once installed: zsh
+//  autoloads `_saxby` from its fpath, and the packages install the
+//  bash and fish files under the names those shells expect.
+const COMPLETIONS_DIR = "completions";
+
+const COMPLETIONS = [
+    { shell: "bash", file: "saxby.bash" },
+    { shell: "zsh", file: "_saxby" },
+    { shell: "fish", file: "saxby.fish" },
+];
 
 function knownNames() {
     return TARGETS.map((target) => target.name).join(", ");
@@ -208,7 +227,50 @@ async function pack(stageName) {
     return archivePath;
 }
 
-async function buildTarget(target, version) {
+//  No permission flags: printing completions touches nothing, and
+//  --no-prompt makes a future need fail the build instead of waiting
+//  on a prompt nobody will answer.
+async function generateCompletion(shell) {
+    const child = new Deno.Command("deno", {
+        args: ["run", "--no-prompt", CLI_ENTRY, "completions", shell],
+        stdout: "piped",
+        stderr: "inherit",
+    });
+
+    const { code, stdout } = await child.output();
+
+    if (code !== 0) {
+        throw new Error(`saxby completions ${shell} exited ${code}`);
+    }
+
+    return new TextDecoder().decode(stdout);
+}
+
+async function generateCompletions() {
+    const scripts = [];
+
+    for (const completion of COMPLETIONS) {
+        console.log(`🐚 completions: ${completion.shell}`);
+
+        const text = await generateCompletion(completion.shell);
+
+        scripts.push({ file: completion.file, text });
+    }
+
+    return scripts;
+}
+
+async function writeCompletions(scripts, stageDir) {
+    const dir = join(stageDir, COMPLETIONS_DIR);
+
+    await Deno.mkdir(dir);
+
+    for (const script of scripts) {
+        await Deno.writeTextFile(join(dir, script.file), script.text);
+    }
+}
+
+async function buildTarget(target, version, completions) {
     const stageName = `${ARCHIVE_PREFIX}-${version}-${target.name}`;
     const stageDir = join(DIST_DIR, stageName);
 
@@ -222,6 +284,8 @@ async function buildTarget(target, version) {
     for (const file of EXTRA_FILES) {
         await Deno.copyFile(file, join(stageDir, file));
     }
+
+    await writeCompletions(completions, stageDir);
 
     const archivePath = await pack(stageName);
 
@@ -246,8 +310,10 @@ export async function build(names) {
 
     console.log(`Saxby ${version}, ${targets.length} target(s)\n`);
 
+    const completions = await generateCompletions();
+
     for (const target of targets) {
-        stageDirs.push(await buildTarget(target, version));
+        stageDirs.push(await buildTarget(target, version, completions));
     }
 
     return { version, stageDirs };
