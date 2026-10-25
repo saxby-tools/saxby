@@ -117,7 +117,7 @@ STATE is one of four values:
 | `error` | Config missing or invalid; the reason prints below the table |
 
 SERVICE shows whether a user service is installed for the instance.
-See `docs/services.md`.
+See [Services](services.md).
 
 The list asks each port who is there through `GET /shuntd/v1/status`,
 which answers from memory with the instance name, port, pid and
