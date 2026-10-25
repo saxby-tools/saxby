@@ -292,8 +292,13 @@ Warnings print to the error log on macOS.
 ###  It is running an old build
 
 `shunt instance list` shows each instance's version. Code changes
-reach the service on your machine only after a deploy: build,
-install, then `shunt service restart`. See `docs/releasing.md`.
+reach the service on your machine only after a deploy. From a
+checkout, `deno task deploy` builds, installs, restarts and checks
+the version in one step. See `docs/releasing.md`.
+
+If the deploy says the service reports an older version than it
+built, the service file points at a `shuntd` in another folder. Run
+`shunt service install` to point it at the one on `PATH`.
 
 ##  Instances
 
