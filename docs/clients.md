@@ -20,11 +20,11 @@ Because nothing is checked, shuntd only serves clients on the same
 machine. It listens on `127.0.0.1` only, and it refuses requests that
 came through a proxy, came from a web page, or name a host other than
 `localhost`, `127.0.0.1`, `[::1]` or `host.docker.internal`. Each
-refusal is a 403 explained in `docs/troubleshooting.md`. Serving
+refusal is a 403 explained in [Troubleshooting](troubleshooting.md). Serving
 other machines needs per-client keys, which are planned after v1.
 
 Use `shuntd/<model>` to skip routing and reach one model directly.
-See `docs/routing.md`.
+See [Routing](routing.md).
 
 ##  Open WebUI
 
@@ -85,7 +85,7 @@ sends every title request to that large model too.
 
 Open WebUI sends this background work with `stream: false`, which
 shuntd routes to the model claiming `TAG_BACKGROUND` — a small, fast
-one, ideally. See `docs/configuration.md`.
+one, ideally. See [Configuration](configuration.md).
 
 ###  Telling Open WebUI apart in the log
 
@@ -100,12 +100,13 @@ ENABLE_FORWARD_USER_INFO_HEADERS=true
 That makes Open WebUI send each user's name, id, email and role as
 headers. shuntd only checks that the headers are present and never
 stores their values. On chat requests it does not pass them on to the
-backend. Requests shuntd does not route itself — embeddings, for
-example — are passed through with their headers intact, so if Open
-WebUI embeds through shuntd, the backend sees them. Issue #22 tracks
-whether shuntd should strip them.
-Whether that is worth it is your call; without it, everything still
-works and the client is simply logged as `python`.
+backend. Requests shuntd does not route itself — embeddings, for example
+— are passed through with their headers intact, so if Open WebUI embeds
+through shuntd, the backend sees them.
+[Issue #22](https://github.com/shuntd-dev/shuntd/issues/22) tracks
+whether shuntd should strip them. Whether that is worth it is your call;
+without it, everything still works and the client is simply logged as
+`python`.
 
 If you also set `FORWARD_USER_INFO_HEADER_JWT_SECRET`, Open WebUI
 sends one signed `X-OpenWebUI-User-Jwt` header instead, which shuntd
@@ -120,7 +121,7 @@ to `http://host.docker.internal:11436/v1` — the `dev` instance from
 `deno task dev` — and give it the Prefix ID `dev`. Its models appear
 as `dev.shuntd` and `dev.shuntd/<model>` beside the real ones. Open
 WebUI removes the prefix before the request reaches shuntd. See
-`docs/instances.md` for the dev instance.
+[Instances](instances.md) for the dev instance.
 
 ##  OpenClaw
 
@@ -176,8 +177,9 @@ OpenClaw uses the OpenAI JavaScript SDK, so the decision log calls it
 
 Any other client built on the same SDK gets the same name — on one
 machine, OpenClaw and another app both logged as `openai`, so this
-mapping would mislabel the other one. Issue #21 tracks a way to tell
-them apart.
+mapping would mislabel the other one.
+[Issue #21](https://github.com/shuntd-dev/shuntd/issues/21) tracks a way
+to tell them apart.
 
 OpenClaw's memory search can embed text through Ollama directly.
 Those calls do not pass through shuntd and are not logged.
@@ -187,10 +189,12 @@ Those calls do not pass through shuntd and are not logged.
 `curl`, the OpenAI SDKs and your own scripts work with the three
 settings above. Two things to know:
 
-- A request with `stream: false` is routed as background work. Most
-  SDKs can send non-streaming requests, so a script that does will
-  land on your background model. Set `route_background_tasks` to
-  `false` if that is wrong for you. Issue #1 tracks a better rule.
+- A request with `stream: false` is routed as background work. Most SDKs
+  can send non-streaming requests, so a script that does will land on
+  your background model. Set `route_background_tasks` to `false` if that
+  is wrong for you.
+  [Issue #1](https://github.com/shuntd-dev/shuntd/issues/1) tracks a
+  better rule.
 - The log names a script by the first word of its `User-Agent`:
   `python`, `node`, `curl`, `openai`. Use `client_names` to tell them
   apart.
