@@ -271,6 +271,19 @@ different `listen_port`.
 Linux only. There is no user service manager here, which is common
 in containers and some minimal installs.
 
+###  restart says nothing is loaded
+
+```
+❌ org.shuntd.router is installed but not loaded, so there is nothing to restart. Run 'shunt service install' to load it.
+```
+
+macOS only. The service file exists, but launchd is not running it.
+Run `shunt service install`, which loads it again.
+
+Before v0.9.3, a reinstall could end this way, with `Bootstrap failed:
+5: Input/output error`. The old service was still shutting down when
+the new one tried to load. Install now waits for it.
+
 ###  The service stopped when I logged out
 
 Linux only. User services stop at logout unless lingering is on for
