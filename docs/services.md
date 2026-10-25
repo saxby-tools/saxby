@@ -22,7 +22,9 @@ instance's port, since the new service would only crash-loop against
 it. Stop the other one first.
 
 If `XDG_CONFIG_HOME` is set when you install, it is written into the
-service so the service reads the same config `shunt` does.
+service so the service reads the same config `shunt` does. Every
+service also gets `NO_COLOR=1`, which keeps terminal color codes out
+of its log.
 
 | | macOS | Linux |
 | --- | --- | --- |
