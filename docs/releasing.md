@@ -133,8 +133,9 @@ reports, so a stale build is visible at a glance.
 
 ##  Release
 
-Releases are built by `.github/workflows/release.yml` on a macOS
-runner, never from a laptop, so every artifact comes from a clean
+Releases are built by
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) on a
+macOS runner, never from a laptop, so every artifact comes from a clean
 checkout of a tagged commit.
 
 **Dry run first.** Push the release commit, then open the repository's
@@ -155,40 +156,42 @@ git push origin v<version>
 ```
 
 The workflow opens a **draft** release with the four tarballs, their
-`.sha256` files, and the rendered `PKGBUILD` and `shuntd.rb`. Read it
-over, then click Publish. Nothing is public until then.
+`.sha256` files, and the rendered [`PKGBUILD`](../packaging/PKGBUILD)
+and [`shuntd.rb`](../packaging/shuntd.rb). Read it over, then click
+Publish. Nothing is public until then.
 
 ##  Packaging
 
 The templates in `packaging/` are scaffolding, not maintained
 repositories. None of them is edited by hand per release.
 
-`PKGBUILD` (AUR `shuntd-bin`) and `shuntd.rb` (Homebrew) carry
-`@VERSION@` and `@SHA256_<TARGET>@` tokens. `deno task package` fills
-them from the checksums in `dist/` and never writes a file with a
-token left in it. The `PKGBUILD` needs both Linux builds; the formula
-needs all four. With a partial build, it renders what it can and
-names what it skipped. `deno task package all` fails instead, which
-is what the workflow runs before attaching the results to the draft
-release.
+[`PKGBUILD`](../packaging/PKGBUILD) (AUR `shuntd-bin`) and
+[`shuntd.rb`](../packaging/shuntd.rb) (Homebrew) carry `@VERSION@` and
+`@SHA256_<TARGET>@` tokens. `deno task package` fills them from the
+checksums in `dist/` and never writes a file with a token left in it.
+The `PKGBUILD` needs both Linux builds; the formula needs all four. With
+a partial build, it renders what it can and names what it skipped.
+`deno task package all` fails instead, which is what the workflow runs
+before attaching the results to the draft release.
 
-`nfpm.yaml` builds `.deb` and `.rpm` packages and reads its version,
-architecture and staged directory from the environment. Its header
-shows the command. It is not run in CI.
+[`nfpm.yaml`](../packaging/nfpm.yaml) builds `.deb` and `.rpm` packages
+and reads its version, architecture and staged directory from the
+environment. Its header shows the command. It is not run in CI.
 
 ##  Known caveats
 
 **Compiled binaries run with legacy `request.signal` semantics.**
-`deno compile` ignores the `unstable` list in `deno.json`, and an
-explicit `--unstable-no-legacy-abort` is accepted but has no effect
-in the binary (checked on Deno 2.9.6). Under legacy semantics the
-signal also fires after a response has been fully delivered. In
-`chat.js` that is after the upstream stream has ended, so it changes
-nothing: a compiled binary and `deno run` produced the same decision
-log rows for a completed stream and for a client that disconnected
-mid-stream. The binary prints one warning about it at boot. Recheck
-this when upgrading Deno, since the new behavior is meant to become
-the default.
+`deno compile` ignores the `unstable` list in
+[`deno.json`](../deno.json), and an explicit
+`--unstable-no-legacy-abort` is accepted but has no effect in the binary
+(checked on Deno 2.9.6). Under legacy semantics the signal also fires
+after a response has been fully delivered. In
+[`chat.js`](../packages/llm-router/src/routes/v1/chat.js) that is after
+the upstream stream has ended, so it changes nothing: a compiled binary
+and `deno run` produced the same decision log rows for a completed
+stream and for a client that disconnected mid-stream. The binary prints
+one warning about it at boot. Recheck this when upgrading Deno, since
+the new behavior is meant to become the default.
 
 **macOS quarantines downloaded archives.** A tarball downloaded
 through a browser gets a quarantine attribute, and Gatekeeper blocks
