@@ -43,7 +43,7 @@ you need in one command. Each target lands in `dist/`:
 
 ```
 dist/saxby-<version>-<target>/                  staged binaries
-dist/saxby-<version>-<target>.tar.gz            LICENSE and README too
+dist/saxby-<version>-<target>.tar.gz            + LICENSE, README, completions/
 dist/saxby-<version>-<target>.tar.gz.sha256
 ```
 
