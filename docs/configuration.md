@@ -1,11 +1,11 @@
 #  Configuration
 
-shuntd reads one config file per instance, at boot. The quickest way
-to get one is to let `shunt` write it from what your backend has
+Saxby reads one config file per instance, at boot. The quickest way
+to get one is to let `saxby` write it from what your backend has
 installed:
 
 ```bash
-shunt config generate
+saxby config generate
 ```
 
 It finds the backend, asks which model plays which role, suggests
@@ -14,20 +14,20 @@ and editing that file afterward.
 
 ##  Where it lives
 
-The default instance reads `~/.config/shuntd/config.jsonc`. A named
-instance reads `~/.config/shuntd/instances/<name>/config.jsonc`. If
+The default instance reads `~/.config/saxby/config.jsonc`. A named
+instance reads `~/.config/saxby/instances/<name>/config.jsonc`. If
 `XDG_CONFIG_HOME` is set, it replaces `~/.config`. See
 [Instances](instances.md).
 
 The file is JSONC, so comments are allowed. A plain `config.json`
-works too. If both exist, shuntd loads `config.jsonc` and warns that
+works too. If both exist, Saxby loads `config.jsonc` and warns that
 it is ignoring the other one, so an edit to the wrong file does not
 silently do nothing.
 
-shuntd reads the config only at boot. After editing, restart:
+Saxby reads the config only at boot. After editing, restart:
 
 ```bash
-shunt service restart
+saxby service restart
 ```
 
 `deno task dev` restarts on code changes, not config changes. Stop
@@ -91,10 +91,10 @@ and start it after editing the dev instance's config.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `listen_port` | `11435` | Port shuntd listens on, 1024 to 65535 |
+| `listen_port` | `11435` | Port Saxby listens on, 1024 to 65535 |
 | `upstream_url` | `http://127.0.0.1:11434` | The OpenAI-compatible backend |
 | `global_default_model` | required | Catalog key used when nothing matches |
-| `catalog` | required | The models shuntd may route to |
+| `catalog` | required | The models Saxby may route to |
 | `personas` | required | Named routing roles; may be empty |
 | `semantic` | off | Tier 3 settings; leave out to disable |
 | `route_background_tasks` | `true` | Treat `stream: false` as background |
@@ -108,8 +108,8 @@ Unknown fields are an error, not a warning. A misspelled key such as
 ##  The catalog
 
 Each key is a model id exactly as the backend knows it. The key is
-what shuntd sends upstream, and what `global_default_model`,
-`default_model` and the `shuntd/<model>` bypass refer to.
+what Saxby sends upstream, and what `global_default_model`,
+`default_model` and the `saxby/<model>` bypass refer to.
 
 | Field | Meaning |
 | --- | --- |
@@ -119,7 +119,7 @@ what shuntd sends upstream, and what `global_default_model`,
 | `system_prefix` | Optional text sent as a system message to this model only |
 | `description` | Optional note for humans |
 
-`max_context` matters. shuntd estimates the size of the whole
+`max_context` matters. Saxby estimates the size of the whole
 request, every message and not just the last one, and skips any model
 the request would not fit. `config generate` reads it from the
 backend.
@@ -155,7 +155,7 @@ A model that claims a tag in `capabilities` is a candidate for it.
 
 `TAG_WRITER` and `TAG_LONG_CONTEXT` are **reserved**. They are in the
 vocabulary, but nothing emits them yet, so a claim on either never
-matches. shuntd warns at boot if a config claims one. Writing prompts
+matches. Saxby warns at boot if a config claims one. Writing prompts
 reach a writer persona through its Tier 3 exemplars instead.
 
 [Routing](routing.md) covers exactly how each one is detected.
@@ -173,13 +173,13 @@ that genuinely can, and on none that cannot. They are separate
 because a model may see without hearing.
 
 If no model in the catalog claims a requirement, nothing can serve
-the request, and shuntd refuses it rather than guess. The client gets
+the request, and Saxby refuses it rather than guess. The client gets
 a 400 with code `unmet_requirement` and a message naming the missing
 tag. The refusal is logged with tier and outcome `refused`, and
-`/shuntd/v1/explain` shows it. An explicit `/command` still routes
+`/saxby/v1/explain` shows it. An explicit `/command` still routes
 where it was told to.
 
-At boot, shuntd checks the tags in both directions and warns when:
+At boot, Saxby checks the tags in both directions and warns when:
 
 - a claimed tag is reserved, so the claim can never match;
 - a claimed tag is not in the vocabulary at all, which is almost
@@ -245,7 +245,7 @@ whichever specialist happens to be nearest.
 When a prompt lands on the wrong persona, **add an exemplar shaped
 like it. Do not lower the threshold.** A missing exemplar looks
 exactly like a threshold that is too high, and lowering the threshold
-widens every persona at once. `shunt probe` shows scores and margins
+widens every persona at once. `saxby probe` shows scores and margins
 without generating a token.
 
 ##  Semantic (Tier 3)
@@ -272,7 +272,7 @@ Vectors are cached per embedding model, so switching `active` to
 another profile and back does not re-embed anything. That makes
 comparing two embedders a one-line change.
 
-Tier 3 is optional. If the embedder cannot be reached at boot, shuntd
+Tier 3 is optional. If the embedder cannot be reached at boot, Saxby
 warns and keeps routing with Tiers 1 and 2.
 
 ##  Logging
@@ -298,8 +298,9 @@ its log then stays in the instance's folder. See
 
 ##  When the file is wrong
 
-A config that fails validation stops the boot. shuntd prints what
-failed, then `Invalid shuntd configuration.`. Besides the field rules
+A config that fails validation stops the boot. Saxby prints
+`❌ Invalid config in <path>:` and lists everything that failed; see
+[Troubleshooting](troubleshooting.md). Besides the field rules
 above, it checks that every model named anywhere exists in the
 catalog — `global_default_model`, each persona's `default_model`, and
 `semantic.active` among the profiles.
