@@ -1,6 +1,6 @@
 #  Architecture
 
-How shuntd is put together, for anyone changing it. The reasoning
+How Saxby is put together, for anyone changing it. The reasoning
 behind each decision lives in [`AGENTS.md`](../AGENTS.md); this page is the map.
 
 ##  Packages
@@ -8,9 +8,9 @@ behind each decision lives in [`AGENTS.md`](../AGENTS.md); this page is the map.
 ```
 packages/core            shared contracts: tags, config, instances,
                          service naming, the status probe
-packages/llm-router      shuntd — the daemon
-packages/cli             shunt — config, instances, services, probe
-packages/vram-mac-guard  Apple Silicon VRAM ceiling LaunchDaemon
+packages/llm-router      saxbyd — the daemon
+packages/cli             saxby — config, instances, services, probe
+packages/vram-guard-mac  Apple Silicon VRAM ceiling LaunchDaemon
 ```
 
 Everything depends on `core`; nothing depends on `llm-router`. The
@@ -19,10 +19,10 @@ daemon that reads it, so its schema and loader live in `core` rather
 than in either side. The same goes for the tag vocabulary, which the
 extractor emits and the catalog claims.
 
-`vram-mac-guard` is macOS-only on purpose and says so in its name.
+`vram-guard-mac` is macOS-only on purpose and says so in its name.
 Everything else is platform-agnostic.
 
-The build makes two binaries: `shuntd` from `llm-router`, and `shunt`
+The build makes two binaries: `saxbyd` from `llm-router`, and `saxby`
 from `cli`, which includes the guard's shell script.
 
 ##  Boot
@@ -30,7 +30,7 @@ from `cli`, which includes the guard's shell script.
 [`packages/llm-router/src/main.js`](../packages/llm-router/src/main.js),
 in order:
 
-1. **Instance.** `--instance`, then `SHUNTD_INSTANCE`, then the
+1. **Instance.** `--instance`, then `SAXBY_INSTANCE`, then the
    default. This fixes which folder everything else comes from.
 2. **Config.** Load and validate. Any problem stops the boot here,
    naming the file.
@@ -41,11 +41,11 @@ in order:
    not already cached and prune stale ones. A failure here costs
    Tier 3, not routing.
 6. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
-   shuntd checks no credentials, so nothing beyond this machine may
+   Saxby checks no credentials, so nothing beyond this machine may
    reach it until per-client keys exist. A port clash is explained by
    asking the holder who it is.
 
-Steps 4 and 5 can fail without stopping shuntd. Observability and
+Steps 4 and 5 can fail without stopping Saxby. Observability and
 cleverness are optional; routing is not.
 
 ##  The guard
@@ -68,7 +68,7 @@ which Node's own `fetch` sends from server code.
 
 ##  A routed request
 
-`POST /v1/chat/completions` with `model: "shuntd"`, in
+`POST /v1/chat/completions` with `model: "saxby"`, in
 [`routes/v1/chat.js`](../packages/llm-router/src/routes/v1/chat.js),
 once the guard has let it through:
 
@@ -97,23 +97,23 @@ once the guard has let it through:
 8. **Complete.** When the stream ends, the log row is updated with
    the outcome and timings.
 
-`shuntd/<model>` and other model names skip steps 2 to 4 but are still
+`saxby/<model>` and other model names skip steps 2 to 4 but are still
 recorded, as `bypass` and `raw`.
 
 ##  The other routes
 
 | Route | What it does |
 | --- | --- |
-| `GET /v1/models` | Lists `shuntd` and `shuntd/<model>` |
-| `POST /shuntd/v1/explain` | Runs steps 2 to 4 only; returns the decision |
-| `GET /shuntd/v1/status` | Instance, port, pid and version |
+| `GET /v1/models` | Lists `saxby` and `saxby/<model>` |
+| `POST /saxby/v1/explain` | Runs steps 2 to 4 only; returns the decision |
+| `GET /saxby/v1/status` | Instance, port, pid and version |
 | anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
 catch-all lives in [`main.js`](../packages/llm-router/src/main.js) and
 forwards headers as they arrive, minus `accept-encoding`,
 `content-length` and `host`.
-[Issue #22](https://github.com/shuntd-dev/shuntd/issues/22) covers what
+[Issue #22](https://github.com/saxby-tools/saxby/issues/22) covers what
 that means for user-identifying headers.
 
 ##  The decision log
@@ -136,7 +136,7 @@ On `SIGINT` or `SIGTERM` the queue is flushed before exit.
 **Strict and migrated.** Tables are `STRICT`, so a bad write fails
 loudly instead of being coerced. Migrations are append-only and
 numbered. The file runs in WAL mode so a reader can open it while
-shuntd writes.
+Saxby writes.
 
 **Views** for the questions asked most: `v_routing_funnel`,
 `v_client_mix`, `v_unclaimed_tags`, `v_incomplete` and
@@ -151,10 +151,10 @@ nothing.
 An instance is a folder holding one config, one log and its vectors
 ([`core/src/config/instance.js`](../packages/core/src/config/instance.js)).
 Every command and the daemon resolve the instance the same way, and
-`/shuntd/v1/status` is how anything finds out which instance owns a
+`/saxby/v1/status` is how anything finds out which instance owns a
 port. See [Instances](instances.md).
 
-`shunt service` drives launchd or `systemd --user` through one
+`saxby service` drives launchd or `systemd --user` through one
 adapter per platform (`cli/src/services/`), each with the same
 methods. See [Services](services.md).
 
@@ -163,7 +163,7 @@ methods. See [Services](services.md).
 Colocated as `*.test.js`, run with `deno task test`. They use fixture
 catalogs and an injected embedder, so they need no daemon, no
 backend and no user config. Assertions about real model names belong
-in a personal script against `/shuntd/v1/explain`, not the suite: one
+in a personal script against `/saxby/v1/explain`, not the suite: one
 machine's catalog is not a project rule.
 
 One test guards a contract that drifted before: the extractor must
