@@ -64,10 +64,11 @@ known gaps are issues labelled
   - [x] **Phase 1 — Build**
     - [x] `deno task build` cross-compiling `shuntd` and `shunt` for
           darwin-arm64, darwin-x64, linux-x64, linux-arm64.
-    - [x] `--include` the `vram-mac-guard.sh` asset so the compiled
-          binary is self-contained.
+    - [x] `--include` the
+          [`vram-mac-guard.sh`](../packages/vram-mac-guard/src/vram-mac-guard.sh)
+          asset so the compiled binary is self-contained.
     - [x] Emit tarballs plus SHA256 checksums into `dist/`.
-    - [x] `docs/releasing.md` — the checklist. Four targets, four
+    - [x] [Releasing](releasing.md) — the checklist. Four targets, four
           checksums, a tag, and a local deploy. Packaging templates
           join it in Phase 3. This works by hand the first time and
           drifts silently by the third.
@@ -97,19 +98,24 @@ known gaps are issues labelled
     - [x] CI release workflow that attaches artifacts to a tagged
           GitHub release.
     - [x] Packaging *scaffolding* only, not maintained repos:
-          `packaging/nfpm.yaml` (deb/rpm), `packaging/PKGBUILD`
-          template, `packaging/shuntd.rb` Homebrew formula template.
+          [`packaging/nfpm.yaml`](../packaging/nfpm.yaml) (deb/rpm),
+          [`packaging/PKGBUILD`](../packaging/PKGBUILD) template,
+          [`packaging/shuntd.rb`](../packaging/shuntd.rb) Homebrew
+          formula template.
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
     - [ ] JSDoc sweep (#26), consistent across the repo. Mechanical and
           verifiable with `deno check` — safe to start any time, and
           independent of the phases above.
-    - [x] Create `docs/` — `getting-started.md`, `configuration.md`,
-          `instances.md`, `routing.md`, `services.md`, `clients.md`,
-          `releasing.md`, `troubleshooting.md`, `architecture.md`.
+    - [x] Create `docs/` — [Getting started](getting-started.md),
+          [Configuration](configuration.md), [Instances](instances.md),
+          [Routing](routing.md), [Services](services.md),
+          [Clients](clients.md), [Releasing](releasing.md),
+          [Troubleshooting](troubleshooting.md),
+          [Architecture](architecture.md).
     - [x] Rewrite the README as a landing page that links into
           `docs/`.
-    - [x] `docs/clients.md`: how to point OpenClaw at shuntd, and
+    - [x] [Clients](clients.md): how to point OpenClaw at shuntd, and
           Open WebUI setup including the Task Model setting for
           background generation. Cover the layer-ownership rule —
           when a UI sits in front of an agent, every capability the
