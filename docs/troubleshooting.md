@@ -1,16 +1,16 @@
 #  Troubleshooting
 
 Each entry starts with what you see, then what it means and what to
-do. The messages are quoted as shuntd prints them.
+do. The messages are quoted as Saxby prints them.
 
 Two tools answer most questions:
 
 ```bash
-shunt instance list
+saxby instance list
 ```
 
 ```bash
-shunt service status
+saxby service status
 ```
 
 The first shows every instance, its port, whether it is running, and
@@ -18,13 +18,13 @@ which build. The second shows what the service manager thinks next to
 what the port says. When those two disagree, that disagreement is
 usually the answer.
 
-##  shuntd will not start
+##  Saxby will not start
 
 ###  No config
 
 ```
-❌ No config found in ~/.config/shuntd
-Please run 'shunt config generate' to launch the interactive setup guide.
+❌ No config found in ~/.config/saxby
+Please run 'saxby config generate' to launch the interactive setup guide.
 ```
 
 The instance has no `config.jsonc` or `config.json`. Run the command
@@ -33,7 +33,7 @@ it names. For a named instance, the command includes `-i <name>`.
 ###  The config is broken
 
 ```
-❌ ~/.config/shuntd/config.json is not valid JSON or JSONC:
+❌ ~/.config/saxby/config.json is not valid JSON or JSONC:
 Cannot parse JSONC: unexpected end of JSONC input
 ```
 
@@ -41,7 +41,7 @@ A syntax error, often a missing brace or a stray comma. JSONC allows
 comments; it does not forgive broken structure.
 
 ```
-❌ Invalid config in ~/.config/shuntd/config.jsonc:
+❌ Invalid config in ~/.config/saxby/config.jsonc:
 - unknown field 'listen_prot' — check the spelling
 ```
 
@@ -55,17 +55,17 @@ named anywhere — `global_default_model`, a persona's
 
 ```
 ❌ Port 11435 is already in use.
-   Another shuntd is already serving this instance ('default', pid 13995).
-   Usual cause: a second supervisor — brew services, shunt service, or a dev run left open.
+   Another saxbyd is already serving the default instance (pid 13995).
+   Usual cause: a second supervisor — brew services, saxby service, or a terminal run left open.
 ```
 
 Two copies of the same instance. The usual culprit is a terminal run
 left open while the service is installed, or both `brew services`
-and `shunt service` running it. Stop one. The pid says which process
+and `saxby service` running it. Stop one. The pid says which process
 to stop.
 
 If the message names a **different** instance, two instances share a
-`listen_port`; change one. If it says the holder **is not shuntd**,
+`listen_port`; change one. If it says the holder **is not saxbyd**,
 something else owns the port; change `listen_port` in the folder the
 message names.
 
@@ -73,7 +73,7 @@ Under the service, a refused start retries every few seconds, so the
 message repeats in the log until the clash is fixed. That is
 deliberate.
 
-##  shuntd starts, with warnings
+##  Saxby starts, with warnings
 
 ###  Reserved tags
 
@@ -124,7 +124,7 @@ harmless; [Releasing](releasing.md) explains why.
 ###  400, unmet_requirement
 
 ```
-No model in this shuntd catalog claims TAG_VISION, so nothing here can handle images. Add TAG_VISION to the capabilities of a model that can.
+No model in this Saxby catalog claims TAG_VISION, so nothing here can handle images. Add TAG_VISION to the capabilities of a model that can.
 ```
 
 The request has an image or audio, and no catalog model claims it can
@@ -134,7 +134,7 @@ handle that. If one of your models can, add the tag to its
 ###  400, too large for every model
 
 ```
-No model in this shuntd catalog fits a request of about 1500000 tokens. The largest context window in the catalog is 393216.
+No model in this Saxby catalog fits a request of about 1500000 tokens. The largest context window in the catalog is 393216.
 ```
 
 The whole conversation is bigger than any model's `max_context`.
@@ -143,27 +143,27 @@ Start a new conversation, or have the client trim history.
 ###  502, upstream unreachable
 
 ```
-shuntd could not reach its upstream at http://127.0.0.1:11434: fetch failed
+Saxby could not reach its upstream at http://127.0.0.1:11434: fetch failed
 ```
 
-shuntd is fine; the backend is not answering. Check that Ollama is
+Saxby is fine; the backend is not answering. Check that Ollama is
 running and that `upstream_url` is right.
 
 ##  Requests are refused (403)
 
-shuntd checks no credentials, so it serves only clients on the same
+Saxby checks no credentials, so it serves only clients on the same
 machine and refuses anything that looks otherwise. Each refusal is
 logged as a line starting with `🚫`, with its reason and source.
 
 ###  proxy_attribution_required
 
 ```
-Refused: the request carries 'x-forwarded-for', so it came through a proxy. shuntd only serves clients on this machine directly.
+Refused: the request carries 'x-forwarded-for', so it came through a proxy. Saxby only serves clients on this machine directly.
 ```
 
 A reverse proxy — Caddy, nginx, `tailscale serve` — is passing
-requests to shuntd. On the same machine, every proxied request looks
-local, including ones from strangers, so shuntd refuses them. Point
+requests to Saxby. On the same machine, every proxied request looks
+local, including ones from strangers, so Saxby refuses them. Point
 the client at `127.0.0.1:11435` directly instead of through the
 proxy. Serving through a proxy needs per-client keys, planned after
 v1.
@@ -171,10 +171,10 @@ v1.
 ###  origin_not_allowed
 
 ```
-Refused: the request came from a web page (Origin 'https://evil.example'). shuntd does not serve browsers.
+Refused: the request came from a web page (Origin 'https://evil.example'). Saxby does not serve browsers.
 ```
 
-A web page in a browser tried to call shuntd. Any site you visit can
+A web page in a browser tried to call Saxby. Any site you visit can
 send requests to `127.0.0.1`, so every request carrying an `Origin`
 header is refused. Server-side apps such as Open WebUI's backend send
 none.
@@ -194,7 +194,7 @@ networking; see [Clients](clients.md).
 ###  management_not_allowed
 
 ```
-Refused: '/api/pull' manages Ollama's models and is not served through shuntd. Call Ollama directly.
+Refused: '/api/pull' manages Ollama's models and is not served through Saxby. Call Ollama directly.
 ```
 
 Pulling, pushing, creating, copying and deleting models are Ollama's
@@ -202,7 +202,7 @@ job, not a router's. Run `ollama pull` or call Ollama on port 11434.
 
 ###  Another machine cannot connect
 
-shuntd listens on `127.0.0.1` only, so nothing beyond this machine
+Saxby listens on `127.0.0.1` only, so nothing beyond this machine
 can reach it. That is deliberate until per-client keys exist, after
 v1.
 
@@ -212,9 +212,9 @@ Start with `explain`. It shows the tags, the tier, and why every tier
 that declined, declined — without generating anything:
 
 ```bash
-curl -s http://127.0.0.1:11435/shuntd/v1/explain \
+curl -s http://127.0.0.1:11435/saxby/v1/explain \
     -H "Content-Type: application/json" \
-    -d '{"model": "shuntd", "messages": [{"role": "user",
+    -d '{"model": "saxby", "messages": [{"role": "user",
         "content": "the prompt that misrouted"}]}'
 ```
 
@@ -228,7 +228,7 @@ usually say the same thing.
 **Short prompts land on the wrong persona.** Tier 3 is choosing by
 meaning. Look at `semantic.score` and `semantic.margin`. Add an
 exemplar shaped like the prompt to the persona it should reach. Do
-not lower the threshold. `shunt probe` checks many prompts at once.
+not lower the threshold. `saxby probe` checks many prompts at once.
 
 **Requests go to a small model for no reason.** The request probably
 sets `stream: false`, which marks it as background work. Many SDKs do
@@ -242,23 +242,23 @@ usually that the conversation does not fit its `max_context`.
 ###  install refuses
 
 ```
-❌ No 'shuntd' on PATH. Deploy a build first (docs/releasing.md) or pass --bin <path>.
+❌ No 'saxbyd' on PATH. Deploy a build first (docs/releasing.md) or pass --bin <path>.
 ```
 
 The service runs a compiled binary. Build and install one first, as
 [Releasing](releasing.md) describes.
 
 ```
-❌ :11435 is already served by instance 'default' (pid 80797) outside this service. Stop it first.
+❌ :11435 is already served by the default instance (pid 80797) outside this service. Stop it first.
 ```
 
-A shuntd started by hand — usually a terminal run of the source as
+A saxbyd started by hand — usually a terminal run of the source as
 the default instance — already holds the port. Stop it, then install.
-`deno task dev` runs the `dev` instance on its own port, so it never
+`deno task dev` runs the dev instance on its own port, so it never
 blocks this.
 
 ```
-❌ :11435 is held by a process that is not shuntd. Stop it, or change listen_port in ~/.config/shuntd.
+❌ :11435 is held by a process that is not saxbyd. Stop it, or change listen_port in ~/.config/saxby.
 ```
 
 Another program owns the port. Stop it, or give this instance a
@@ -274,11 +274,11 @@ in containers and some minimal installs.
 ###  restart says nothing is loaded
 
 ```
-❌ org.shuntd.router is installed but not loaded, so there is nothing to restart. Run 'shunt service install' to load it.
+❌ tools.saxby.router is installed but not loaded, so there is nothing to restart. Run 'saxby service install' to load it.
 ```
 
 macOS only. The service file exists, but launchd is not running it.
-Run `shunt service install`, which loads it again.
+Run `saxby service install`, which loads it again.
 
 Before v0.9.3, a reinstall could end this way, with `Bootstrap failed:
 5: Input/output error`. The old service was still shutting down when
@@ -297,21 +297,21 @@ loginctl enable-linger
 
 | Platform | Logs |
 | --- | --- |
-| macOS | `~/Library/Logs/shuntd/org.shuntd.router.out.log` and `.error.log` |
-| Linux | `journalctl --user -u shuntd` |
+| macOS | `~/Library/Logs/saxby/tools.saxby.router.out.log` and `.error.log` |
+| Linux | `journalctl --user -u saxbyd` |
 
 Warnings print to the error log on macOS.
 
 ###  It is running an old build
 
-`shunt instance list` shows each instance's version. Code changes
+`saxby instance list` shows each instance's version. Code changes
 reach the service on your machine only after a deploy. From a
 checkout, `deno task deploy` builds, installs, restarts and checks
 the version in one step. See [Releasing](releasing.md).
 
 If the deploy says the service reports an older version than it
-built, the service file points at a `shuntd` in another folder. Run
-`shunt service install` to point it at the one on `PATH`.
+built, the service file points at a `saxbyd` in another folder. Run
+`saxby service install` to point it at the one on `PATH`.
 
 ##  Instances
 
@@ -320,17 +320,20 @@ built, the service file points at a `shuntd` in another folder. Run
 ```
 
 ```
-❌ Instance name 'default' is reserved. Omit the name to use the default instance.
+ℹ️  'default' is reserved for the default instance. Using ~/.config/saxby.
 ```
+
+Not an error: `-i default` and `SAXBY_INSTANCE=default` select the
+default instance, and the note says which folder that is.
 
 See [Instances](instances.md) for naming. A **blocked** state in
 `instance list` means something else holds this one's port: another
-instance, or a program that is not shuntd. The line under the table
+instance, or a program that is not saxbyd. The line under the table
 says which.
 
 ##  The shell and the system
 
-**"zsh: correct 'shunt' to 'shout'".** zsh has not noticed the new
+**"zsh: correct 'saxby' to 'shout'".** zsh has not noticed the new
 command yet. Run `rehash`, or open a new terminal.
 
 **"Background Items Added".** macOS shows this the first time a
@@ -338,12 +341,12 @@ service is installed. It is expected.
 
 **A downloaded binary will not open on macOS.** Release binaries are not
 signed yet, so Gatekeeper blocks them when the archive came through a
-browser. [Issue #7](https://github.com/shuntd-dev/shuntd/issues/7)
+browser. [Issue #7](https://github.com/saxby-tools/saxby/issues/7)
 tracks signing. Until then, clear the quarantine flag yourself, only on
 a download you trust:
 
 ```bash
-xattr -d com.apple.quarantine shuntd shunt
+xattr -d com.apple.quarantine saxbyd saxby
 ```
 
 ##  Generating a config
@@ -364,7 +367,7 @@ and an embedding model such as `bge-m3` for Tier 3.
 
 ##  Still stuck
 
-Search the [open issues](https://github.com/shuntd-dev/shuntd/issues),
+Search the [open issues](https://github.com/saxby-tools/saxby/issues),
 including the `known-gap` label, which lists every known limitation.
 Open a new issue with the `explain` output for a routing problem, or
 the log lines for anything else.
