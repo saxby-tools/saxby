@@ -13,16 +13,16 @@ release commit:
 packages/cli/deno.json
 packages/core/deno.json
 packages/llm-router/deno.json
-packages/vram-mac-guard/deno.json
+packages/vram-guard-mac/deno.json
 ```
 
 `deno task build` refuses to run if they disagree, so a mixed release
 cannot ship. The running daemon reports its version at
-`/shuntd/v1/status`, and `shunt instance list` shows it.
+`/saxby/v1/status`, and `saxby instance list` shows it.
 
 ##  Build
 
-With no argument, this builds `shuntd` and `shunt` for the machine
+With no argument, this builds `saxbyd` and `saxby` for the machine
 you are on. That is all a local deploy needs, and it takes a few
 seconds:
 
@@ -42,9 +42,9 @@ linux-arm64`. Each build clears `dist/` first, so name every target
 you need in one command. Each target lands in `dist/`:
 
 ```
-dist/shuntd-<version>-<target>/                  staged binaries
-dist/shuntd-<version>-<target>.tar.gz            LICENSE and README too
-dist/shuntd-<version>-<target>.tar.gz.sha256
+dist/saxby-<version>-<target>/                  staged binaries
+dist/saxby-<version>-<target>.tar.gz            LICENSE and README too
+dist/saxby-<version>-<target>.tar.gz.sha256
 ```
 
 The first build for a target other than your own machine downloads
@@ -64,18 +64,18 @@ On Linux, use `sha256sum -c` instead. The line format is the same.
 Then check the native binary reports the version you expect:
 
 ```bash
-./dist/shuntd-<version>-darwin-arm64/shuntd --version
+./dist/saxby-<version>-darwin-arm64/saxbyd --version
 ```
 
-And that it starts. Run it against a dev instance, never the one
-your clients use:
+And that it starts. Run it against the dev instance, never the
+default instance your clients use:
 
 ```bash
-./dist/shuntd-<version>-darwin-arm64/shuntd --instance dev
+./dist/saxby-<version>-darwin-arm64/saxbyd --instance dev
 ```
 
 ```bash
-curl -s http://127.0.0.1:11436/shuntd/v1/status
+curl -s http://127.0.0.1:11436/saxby/v1/status
 ```
 
 ##  Deploy to this machine
@@ -89,38 +89,38 @@ deno task deploy
 
 It does four things, in order:
 
-1. Builds `shuntd` and `shunt` for this machine.
+1. Builds `saxbyd` and `saxby` for this machine.
 2. Installs both into `~/.local/bin`, which is user-owned and on
    `PATH` on both macOS and Arch.
-3. Restarts the default instance's service with the new `shunt`.
+3. Restarts the default instance's service with the new `saxby`.
 4. Asks the service which version it runs, and fails unless that is
    the version it just built.
 
 The last step is the reason the task exists. Typed by hand, these
 steps went stale after a version bump: the install named an old
 folder and failed, and the service quietly kept the old build. Now a
-deploy either ends with `✅ The service on this machine runs shuntd
+deploy either ends with `✅ The service on this machine runs Saxby
 <version>` or exits with an error that says what to do.
 
-It deploys the default instance only. Dev runs from source with
-`deno task dev` and needs no deploy. If the service is not installed
-yet, the binaries are still installed and the task tells you to run
-`shunt service install`.
+It deploys the default instance only. The dev instance runs from
+source with `deno task dev` and needs no deploy. If the service is not
+installed yet, the binaries are still installed and the task tells you
+to run `saxby service install`.
 
 A restart does not rewrite the service file. When a release changes
 what that file contains — a new environment variable, for example —
-run `shunt service install` once after deploying.
+run `saxby service install` once after deploying.
 
 ###  By hand
 
 The same steps, if you need them. Use `install`, never `cp`:
 
 ```bash
-install -m 755 dist/shuntd-<version>-darwin-arm64/{shuntd,shunt} ~/.local/bin/
+install -m 755 dist/saxby-<version>-darwin-arm64/{saxbyd,saxby} ~/.local/bin/
 ```
 
 ```bash
-shunt service restart
+saxby service restart
 ```
 
 `install` removes the old file and writes a new one, so the running
@@ -128,7 +128,7 @@ process keeps the old binary until it restarts. `cp` overwrites the
 file the process is running from, which on macOS can get it killed
 once its code signature no longer matches the pages on disk.
 
-`shunt instance list` shows the version each running instance
+`saxby instance list` shows the version each running instance
 reports, so a stale build is visible at a glance.
 
 ##  Release
@@ -142,13 +142,13 @@ checkout of a tagged commit.
 Actions tab, pick "release", and click "Run workflow". It runs the
 tests, builds all four targets, verifies the checksums, renders the
 packaging files, and uploads everything as a workflow artifact named
-`shuntd-dry-run`. No tag, no release.
+`saxby-dry-run`. No tag, no release.
 
 **Then tag.** The tag must match the package version, or the workflow
 stops before building:
 
 ```bash
-git tag -a v<version> -m "shuntd v<version>"
+git tag -a v<version> -m "Saxby v<version>"
 ```
 
 ```bash
@@ -157,7 +157,7 @@ git push origin v<version>
 
 The workflow opens a **draft** release with the four tarballs, their
 `.sha256` files, and the rendered [`PKGBUILD`](../packaging/PKGBUILD)
-and [`shuntd.rb`](../packaging/shuntd.rb). Read it over, then click
+and [`saxby.rb`](../packaging/saxby.rb). Read it over, then click
 Publish. Nothing is public until then.
 
 ##  Packaging
@@ -165,8 +165,8 @@ Publish. Nothing is public until then.
 The templates in `packaging/` are scaffolding, not maintained
 repositories. None of them is edited by hand per release.
 
-[`PKGBUILD`](../packaging/PKGBUILD) (AUR `shuntd-bin`) and
-[`shuntd.rb`](../packaging/shuntd.rb) (Homebrew) carry `@VERSION@` and
+[`PKGBUILD`](../packaging/PKGBUILD) (AUR `saxby-bin`) and
+[`saxby.rb`](../packaging/saxby.rb) (Homebrew) carry `@VERSION@` and
 `@SHA256_<TARGET>@` tokens. `deno task package` fills them from the
 checksums in `dist/` and never writes a file with a token left in it.
 The `PKGBUILD` needs both Linux builds; the formula needs all four. With
