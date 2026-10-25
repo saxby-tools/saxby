@@ -13,8 +13,8 @@ import { openDecisionLog } from "./log/db.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
 import { inspectRequest } from "./security/guard.js";
-
-const INSTANCE_FLAGS = ["--instance", "-i"];
+import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
+import packageConfig from "../deno.json" with { type: "json" };
 
 //  Loopback only. shuntd checks no credentials, so nothing beyond this
 //  machine may reach it until keys exist (AGENTS.md). Docker Desktop's
@@ -25,38 +25,8 @@ const LISTEN_HOSTNAME = "127.0.0.1";
 //  logging them buries the lines that matter.
 const QUIET_PATHS = new Set(["/shuntd/v1/status"]);
 
-/**
- * Reads `--instance <name>`, `--instance=<name>` or `-i <name>`.
- *
- * Hand-rolled like initTracing rather than a parser dependency: the
- * daemon takes four flags. A service file passes the name as an
- * argument so `ps` shows which instance a process serves.
- * @param {string[]} args
- * @returns {string | undefined}
- */
-function readInstanceFlag(args) {
-    for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
-
-        if (arg.startsWith("--instance=")) {
-            return arg.slice("--instance=".length);
-        }
-
-        if (!INSTANCE_FLAGS.includes(arg)) {
-            continue;
-        }
-
-        const value = args[i + 1];
-
-        if (value === undefined || value.startsWith("-")) {
-            throw new Error(`${arg} needs an instance name.`);
-        }
-
-        return value;
-    }
-
-    return undefined;
-}
+//  The usual exit code for a command-line usage error.
+const EXIT_USAGE = 2;
 
 /**
  * Prepares Tier 3: resolves the active profile, confirms the embedder
@@ -191,7 +161,38 @@ async function guardRequests(c, next) {
     }, verdict.status);
 }
 
+/**
+ * Handles --version, --help and bad arguments before anything starts.
+ * @returns {boolean} true when the daemon should go on to start.
+ */
+function shouldStart(args) {
+    let command;
+
+    try {
+        command = parseCommand(args);
+    } catch (err) {
+        console.error(`❌ ${err.message}\n\n${USAGE}`);
+        Deno.exit(EXIT_USAGE);
+    }
+
+    if (command === "version") {
+        console.log(`shuntd ${packageConfig.version}`);
+        return false;
+    }
+
+    if (command === "help") {
+        console.log(USAGE);
+        return false;
+    }
+
+    return true;
+}
+
 async function main() {
+    if (!shouldStart(Deno.args)) {
+        return;
+    }
+
     console.log("🚀 Starting shuntd llm-router...");
 
     const level = initTracing(Deno.args);
