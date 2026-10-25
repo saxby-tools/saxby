@@ -1,8 +1,8 @@
 #  Releasing
 
 The checklist for cutting a release and for deploying a local build
-to production. It works by hand the first time and drifts silently by
-the third, which is why it is written down.
+to the service on this machine. It works by hand the first time and
+drifts silently by the third, which is why it is written down.
 
 ##  Version
 
@@ -61,8 +61,14 @@ cd dist && shasum -a 256 -c *.sha256
 
 On Linux, use `sha256sum -c` instead. The line format is the same.
 
-Then check that the native binary starts and reports the version you
-expect. Run it against a dev instance, never production:
+Then check the native binary reports the version you expect:
+
+```bash
+./dist/shuntd-<version>-darwin-arm64/shuntd --version
+```
+
+And that it starts. Run it against a dev instance, never the one
+your clients use:
 
 ```bash
 ./dist/shuntd-<version>-darwin-arm64/shuntd --instance dev
@@ -74,11 +80,47 @@ curl -s http://127.0.0.1:11436/shuntd/v1/status
 
 ##  Deploy to this machine
 
-Production binaries live in `~/.local/bin`, which is user-owned and on
-`PATH` on both macOS and Arch. Deploy with `install`, never `cp`:
+One command builds this checkout, installs it, restarts the service
+and checks the result:
+
+```bash
+deno task deploy
+```
+
+It does four things, in order:
+
+1. Builds `shuntd` and `shunt` for this machine.
+2. Installs both into `~/.local/bin`, which is user-owned and on
+   `PATH` on both macOS and Arch.
+3. Restarts the default instance's service with the new `shunt`.
+4. Asks the service which version it runs, and fails unless that is
+   the version it just built.
+
+The last step is the reason the task exists. Typed by hand, these
+steps went stale after a version bump: the install named an old
+folder and failed, and the service quietly kept the old build. Now a
+deploy either ends with `✅ The service on this machine runs shuntd
+<version>` or exits with an error that says what to do.
+
+It deploys the default instance only. Dev runs from source with
+`deno task dev` and needs no deploy. If the service is not installed
+yet, the binaries are still installed and the task tells you to run
+`shunt service install`.
+
+A restart does not rewrite the service file. When a release changes
+what that file contains — a new environment variable, for example —
+run `shunt service install` once after deploying.
+
+###  By hand
+
+The same steps, if you need them. Use `install`, never `cp`:
 
 ```bash
 install -m 755 dist/shuntd-<version>-darwin-arm64/{shuntd,shunt} ~/.local/bin/
+```
+
+```bash
+shunt service restart
 ```
 
 `install` removes the old file and writes a new one, so the running
@@ -86,14 +128,8 @@ process keeps the old binary until it restarts. `cp` overwrites the
 file the process is running from, which on macOS can get it killed
 once its code signature no longer matches the pages on disk.
 
-Then restart the service so it runs the new build:
-
-```bash
-shunt service restart
-```
-
 `shunt instance list` shows the version each running instance
-reports, so a stale production binary is visible at a glance.
+reports, so a stale build is visible at a glance.
 
 ##  Release
 
