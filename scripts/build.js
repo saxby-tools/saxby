@@ -226,11 +226,20 @@ async function buildTarget(target, version) {
     const archivePath = await pack(stageName);
 
     console.log(`📦 ${archivePath}`);
+
+    return stageDir;
 }
 
-async function main() {
+/**
+ * Builds the named targets, or this machine's alone when none are
+ * named. Also used by scripts/deploy.js.
+ * @param {string[]} names target names, or ["all"]
+ * @returns {Promise<{version: string, stageDirs: string[]}>}
+ */
+export async function build(names) {
     const version = await readLockstepVersion();
-    const targets = selectTargets(Deno.args);
+    const targets = selectTargets(names);
+    const stageDirs = [];
 
     await Deno.remove(DIST_DIR, { recursive: true }).catch(() => {});
     await Deno.mkdir(DIST_DIR);
@@ -238,8 +247,14 @@ async function main() {
     console.log(`shuntd ${version}, ${targets.length} target(s)\n`);
 
     for (const target of targets) {
-        await buildTarget(target, version);
+        stageDirs.push(await buildTarget(target, version));
     }
+
+    return { version, stageDirs };
+}
+
+async function main() {
+    await build(Deno.args);
 }
 
 //  Script errors are user errors here — a missing build, mismatched
