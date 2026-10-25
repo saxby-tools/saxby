@@ -347,6 +347,14 @@ export function registerChatRoutes(app) {
                 tracer.done(upstreamRes.status);
                 closeRow("completed");
             },
+
+            //  The client left mid-response. Same outcome as leaving
+            //  before the backend answered, with whatever timing and
+            //  usage arrived first.
+            onCancel: () => {
+                tracer.aborted();
+                closeRow("aborted");
+            },
         });
 
         return new Response(observed, {
