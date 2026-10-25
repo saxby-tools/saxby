@@ -1,26 +1,26 @@
 #  Instances
 
-An instance is one shuntd with its own config, its own decision log
-and its own cached exemplar vectors. Run several side by side and
-none of them sees the others' data.
+An instance is one running copy of Saxby with its own config, its own
+decision log and its own cached exemplar vectors. Run several side by
+side and none of them sees the others' data.
 
-The usual pair is production and development. Production answers
-your clients on `:11435`. A `dev` instance runs the code you are
-changing on its own port, and its traffic never lands in the
-production log.
+The usual pair is the default instance and the dev instance. The
+default instance is the one your clients use, on `:11435`. The dev
+instance runs the code you are changing on its own port, and its
+traffic never lands in the default instance's log.
 
 ##  Why isolation is total
 
-The decision log is the point of shuntd. Threshold calibration and
-exemplar tuning are only as good as the rows they read. If dev
-traffic landed beside production rows, it would quietly skew that
-data, with nothing to tell the two apart later. So an instance shares
-nothing: not config, not the log, not the vectors.
+The decision log is the point of Saxby. Threshold calibration and
+exemplar tuning are only as good as the rows they read. If the dev
+instance's traffic landed beside the default instance's rows, it would
+quietly skew that data, with nothing to tell the two apart later. So
+an instance shares nothing: not config, not the log, not the vectors.
 
 ##  Where instances live
 
 ```
-~/.config/shuntd/              the default instance
+~/.config/saxby/               the default instance
 ├── config.jsonc
 ├── decision-log.db
 └── instances/
@@ -30,7 +30,7 @@ nothing: not config, not the log, not the vectors.
 ```
 
 The default instance is the config folder itself, which is where
-shuntd kept everything before instances existed. An older install
+Saxby kept everything before instances existed. An older install
 needs no migration. A named instance lives in `instances/<name>/`.
 
 If `XDG_CONFIG_HOME` is set, it replaces `~/.config`.
@@ -42,8 +42,9 @@ reused 0`. That is not a bug.
 
 **Leave `log_path` unset in a named instance's config.** The log
 defaults to the instance's own folder. Setting `log_path` points the
-instance at whatever file you name, and if that is production's log,
-the isolation is gone. `shunt config generate` never writes it.
+instance at whatever file you name, and if that is the default
+instance's log, the isolation is gone. `saxby config generate` never
+writes it.
 
 ##  Naming an instance
 
@@ -53,78 +54,83 @@ launchd label and a systemd unit, which is why the alphabet is
 narrow. A dot would make the launchd label ambiguous, and a leading
 hyphen reads as a flag.
 
-`default` is reserved. It would create `instances/default/`, a second
-"default" that is not the real one. To use the default instance, give
-no name at all.
+`default` is reserved: it always means the default instance, at the
+config folder itself. Giving no name selects it, and so do
+`-i default` and `SAXBY_INSTANCE=default`, which print a note saying
+which folder they used. Nothing ever creates `instances/default/`.
+
+`dev` is an ordinary name, not a reserved one. It is special only
+because `deno task dev` runs the source tree as the dev instance.
 
 ##  Choosing an instance
 
-Every `shunt` command takes `-i <name>` or `--instance <name>`,
+Every `saxby` command takes `-i <name>` or `--instance <name>`,
 before or after the command:
 
 ```bash
-shunt -i dev config generate
+saxby -i dev config generate
 ```
 
 ```bash
-shunt config generate -i dev
+saxby config generate -i dev
 ```
 
 The daemon takes the same flag, as `--instance <name>`,
 `--instance=<name>` or `-i <name>`. Service files pass it as an
 argument, so `ps` shows which instance a process serves.
 
-Without a flag, both read `SHUNTD_INSTANCE`. With neither, they use
+Without a flag, both read `SAXBY_INSTANCE`. With neither, they use
 the default instance. The flag always wins.
 
 A misspelled name fails instead of creating anything. Only
-`shunt config generate` creates an instance folder, so `-i dve` stops
+`saxby config generate` creates an instance folder, so `-i dve` stops
 with "No config found" and leaves no empty instance behind.
 
 ##  Creating one
 
 ```bash
-shunt -i dev config generate
+saxby -i dev config generate
 ```
 
 For a named instance, the port prompt suggests `11436` instead of
-`11435`, so accepting the default does not collide with production.
-Pick another port for a third instance.
+`11435`, so accepting the default does not collide with the default
+instance. Pick another port for a third instance.
 
-To make an instance route exactly like production, copy production's
-config into its folder and change `listen_port`. A freshly generated
-config lacks any exemplars you added by hand.
+To make an instance route exactly like the default instance, copy
+`~/.config/saxby/config.jsonc` into its folder and change
+`listen_port`. A freshly generated config lacks any exemplars you
+added by hand.
 
 ##  Seeing them all
 
 ```bash
-shunt instance list
+saxby instance list
 ```
 
 ```
 NAME     PORT   STATE    PID    VERSION  SERVICE    DIRECTORY
-default  11435  running  13995  0.1.0    installed  ~/.config/shuntd
-dev      11436  running  80797  0.1.0    -          ~/.config/shuntd/instances/dev
+default  11435  running  13995  0.1.0    installed  ~/.config/saxby
+dev      11436  running  80797  0.1.0    -          ~/.config/saxby/instances/dev
 ```
 
 STATE is one of four values:
 
 | State | Meaning |
 | --- | --- |
-| `running` | The shuntd on this port says it is this instance |
+| `running` | The saxbyd on this port says it is this instance |
 | `stopped` | Nothing holds this port; this instance can start |
-| `blocked` | Another instance, or a program that is not shuntd, holds this port; this one cannot start |
+| `blocked` | Another instance, or a program that is not saxbyd, holds this port; this one cannot start |
 | `error` | Config missing or invalid; the reason prints below the table |
 
 SERVICE shows whether a user service is installed for the instance.
 See [Services](services.md).
 
-The list asks each port who is there through `GET /shuntd/v1/status`,
+The list asks each port who is there through `GET /saxby/v1/status`,
 which answers from memory with the instance name, port, pid and
 version:
 
 ```bash
-curl -s http://127.0.0.1:11436/shuntd/v1/status
+curl -s http://127.0.0.1:11436/saxby/v1/status
 ```
 
 ```json
@@ -136,27 +142,27 @@ curl -s http://127.0.0.1:11436/shuntd/v1/status
 ##  When two instances want one port
 
 Each instance's config sets its own `listen_port`, and nothing stops
-two configs from naming the same one. The second shuntd to start
+two configs from naming the same one. The second saxbyd to start
 fails, and says which instance is in the way:
 
 ```
 ❌ Port 11436 is already in use.
-   It is held by shuntd instance 'dev' (pid 80797).
+   It is held by the dev instance (pid 80797).
 ```
 
 If the holder is the same instance, the usual cause is a second
-supervisor — `brew services`, `shunt service`, or a dev run left
-open — and the message says so. If the holder is not shuntd at all,
+supervisor — `brew services`, `saxby service`, or a terminal run left
+open — and the message says so. If the holder is not saxbyd at all,
 the message says that too, and names the instance folder whose
 `listen_port` to change.
 
 ##  Probing one
 
-`shunt probe` scores prompts against one instance's Tier 3
+`saxby probe` scores prompts against one instance's Tier 3
 exemplars without generating a token:
 
 ```bash
-shunt -i dev probe "the loop runs one too many times"
+saxby -i dev probe "the loop runs one too many times"
 ```
 
 It refuses to run if the port answers as a different instance, so it
@@ -168,11 +174,11 @@ There is no command for it. Uninstall its service first, if it has
 one, then delete its folder:
 
 ```bash
-shunt -i dev service uninstall
+saxby -i dev service uninstall
 ```
 
 ```bash
-rm -r ~/.config/shuntd/instances/dev
+rm -r ~/.config/saxby/instances/dev
 ```
 
 That deletes the instance's decision log along with its config.
