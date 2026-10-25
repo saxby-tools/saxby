@@ -20,6 +20,10 @@
 //
 //  If usage never arrives the columns stay NULL, which is the honest
 //  outcome — a guessed token count is worse than no token count.
+//
+//  Exactly one of onEnd and onCancel fires. A client that leaves after
+//  the response has started cancels the stream, and flush never runs;
+//  without onCancel that request's log row was never closed.
 
 const SSE_PREFIX = "data: ";
 const SSE_DONE = "[DONE]";
@@ -79,7 +83,9 @@ function readSseLine(line) {
  * @param {Object} handlers
  * @param {() => void} handlers.onFirstByte
  * @param {(usage) => void} handlers.onUsage
- * @param {() => void} handlers.onEnd
+ * @param {() => void} handlers.onEnd  the stream finished normally
+ * @param {() => void} handlers.onCancel  the client left, or the
+ *     upstream stream failed, before the end
  */
 export function observeResponse(body, handlers) {
     if (!body) {
@@ -172,6 +178,12 @@ export function observeResponse(body, handlers) {
             }
 
             handlers.onEnd?.();
+        },
+
+        //  Called instead of flush when the downstream reader cancels
+        //  (a client disconnect) or the upstream side errors.
+        cancel() {
+            handlers.onCancel?.();
         },
     });
 
