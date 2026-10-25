@@ -16,6 +16,12 @@ const EXECUTABLE_BITS = 0o111;
 //  checked. A supervisor does not inherit your shell's environment.
 const FORWARDED_ENV = ["XDG_CONFIG_HOME"];
 
+//  Set on every service. A service writes to a log file or the
+//  journal, never a terminal, and Deno keeps color on regardless, so
+//  the request logger's codes landed in the log as `[32m200[0m`.
+//  Hono's logger and @std/fmt both honour NO_COLOR.
+const SERVICE_ENV = { NO_COLOR: "1" };
+
 async function isExecutableFile(path) {
     let info;
 
@@ -78,7 +84,7 @@ async function resolveBinary(flag) {
 }
 
 function collectEnvironment() {
-    const environment = {};
+    const environment = { ...SERVICE_ENV };
 
     for (const key of FORWARDED_ENV) {
         const value = Deno.env.get(key);
