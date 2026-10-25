@@ -84,7 +84,7 @@ everything found and not yet fixed is written down there. Open
 questions and ideas past v1 are in
 [Discussions](https://github.com/shuntd-dev/shuntd/discussions).
 
-`AGENTS.md` records the design decisions and the reasoning behind
+[`AGENTS.md`](AGENTS.md) records the design decisions and the reasoning behind
 them. Read it before changing behavior.
 
 ##  Development
