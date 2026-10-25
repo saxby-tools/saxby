@@ -256,6 +256,22 @@ step. **Support happens on GitHub issues only.** Package pages point
 there; nobody monitors AUR or Homebrew comment threads. If shuntd
 grows, others can maintain fancier packages or forks.
 
+**shuntd serves this machine only, until keys exist.** It checks no
+credentials, so it listens on `127.0.0.1` only — `Deno.serve` with no
+hostname listens on every interface, and until v0.9.2 that put shuntd,
+and through its catch-all Ollama's management API, on the LAN. A
+guard (`security/guard.js`) runs before every route and refuses
+forwarding headers (a proxy on the same box makes strangers look
+local), any `Origin` (a browser), a non-local `Host` (DNS rebinding)
+and Ollama's management paths. It judges "browser" by `Origin` and
+`Host` only: Node's `fetch` sends `sec-fetch-mode: cors` from server
+code, and OpenClaw's real requests carry it. `host.docker.internal`
+is allowed because a Docker Desktop container reaches the host by
+that name. Serving other machines — keys, a trusted-proxy list,
+non-loopback binds — is the post-v1 exposure work; when it lands,
+"identified by `User-Agent`, never by API key" must be revisited, since
+its objection is to keys nobody verifies.
+
 **Rejected and why:** a hosted router model (opaque dispatcher —
 shuntd's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
