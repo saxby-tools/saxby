@@ -13,7 +13,7 @@ const PACKAGE_MANIFESTS = [
     "packages/cli/deno.json",
     "packages/core/deno.json",
     "packages/llm-router/deno.json",
-    "packages/vram-mac-guard/deno.json",
+    "packages/vram-guard-mac/deno.json",
 ];
 
 export async function readLockstepVersion() {

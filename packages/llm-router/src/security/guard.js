@@ -1,7 +1,7 @@
 //  =====================================================================
 //  Request guard
 //  =====================================================================
-//  shuntd listens on loopback only and checks no credentials, so it
+//  Saxby listens on loopback only and checks no credentials, so it
 //  must be sure every request really comes from a local, non-browser
 //  client. Three ways that assumption breaks, each refused here before
 //  any route runs:
@@ -39,7 +39,7 @@ const PROXY_HEADERS = [
 
 const PROXY_HEADER_PREFIX = "x-forwarded-";
 
-//  Names a local client uses to reach shuntd. host.docker.internal is
+//  Names a local client uses to reach Saxby. host.docker.internal is
 //  how a Docker Desktop container reaches the host; Niko's Open WebUI
 //  sends it. Ports are ignored: the listener decides the port.
 const ALLOWED_HOSTS = new Set([
@@ -113,7 +113,7 @@ export function inspectRequest({ headers, path }) {
             403,
             "proxy_attribution_required",
             `Refused: the request carries '${proxyHeader}', so it came ` +
-                `through a proxy. shuntd only serves clients on this ` +
+                `through a proxy. Saxby only serves clients on this ` +
                 `machine directly. ${DOCS_HINT}`,
         );
     }
@@ -125,7 +125,7 @@ export function inspectRequest({ headers, path }) {
             403,
             "origin_not_allowed",
             `Refused: the request came from a web page (Origin ` +
-                `'${origin}'). shuntd does not serve browsers. ` +
+                `'${origin}'). Saxby does not serve browsers. ` +
                 DOCS_HINT,
         );
     }
@@ -154,7 +154,7 @@ export function inspectRequest({ headers, path }) {
             403,
             "management_not_allowed",
             `Refused: '${path}' manages Ollama's models and is not ` +
-                `served through shuntd. Call Ollama directly. ${DOCS_HINT}`,
+                `served through Saxby. Call Ollama directly. ${DOCS_HINT}`,
         );
     }
 

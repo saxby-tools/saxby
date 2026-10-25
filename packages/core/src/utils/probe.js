@@ -1,14 +1,14 @@
 //  =====================================================================
-//  Which shuntd is on this port?
+//  Which saxbyd is on this port?
 //  =====================================================================
 //  Any process can hold a port, and two instances can be configured
-//  for the same one. The router answers /shuntd/v1/status from memory
+//  for the same one. The router answers /saxby/v1/status from memory
 //  with its instance name and pid, so a probe never reaches the
 //  upstream and never loads a model.
 
 const PROBE_HOST = "127.0.0.1";
 const PROBE_TIMEOUT_MS = 1000;
-const STATUS_PATH = "/shuntd/v1/status";
+const STATUS_PATH = "/saxby/v1/status";
 
 function isStatusShape(body) {
     if (typeof body !== "object" || body === null) {
@@ -31,13 +31,13 @@ function isStatusShape(body) {
 }
 
 /**
- * Asks whatever holds a local port whether it is shuntd.
+ * Asks whatever holds a local port whether it is saxbyd.
  * @param {number} port
  * @returns {Promise<{instance: string | null, port: number,
  *     pid: number, version?: string} | null>} null when nothing
- *     answers or the answer is not from shuntd.
+ *     answers or the answer is not from saxbyd.
  */
-export async function fetchShuntdStatus(port) {
+export async function fetchSaxbyStatus(port) {
     let response;
 
     try {
@@ -71,8 +71,8 @@ export async function fetchShuntdStatus(port) {
 /**
  * Whether something already holds a local port, found by trying to
  * listen on it the way the daemon does. Answers exactly what startup
- * will meet, including for a process that is not shuntd and so never
- * answers fetchShuntdStatus. The test listener closes at once.
+ * will meet, including for a process that is not saxbyd and so never
+ * answers fetchSaxbyStatus. The test listener closes at once.
  *
  * Only "address in use" counts as held. Any other failure is left to
  * the daemon to report when it starts.

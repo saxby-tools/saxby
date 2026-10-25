@@ -1,7 +1,7 @@
 import { registerModelsRoutes } from "./v1/models.js";
 import { registerChatRoutes } from "./v1/chat.js";
-import { registerExplainRoutes } from "./shuntd/v1/explain.js";
-import { registerStatusRoutes } from "./shuntd/v1/status.js";
+import { registerExplainRoutes } from "./saxby/v1/explain.js";
+import { registerStatusRoutes } from "./saxby/v1/status.js";
 
 /**
  * Master route registry.

@@ -1,6 +1,6 @@
 import { Command } from "@cliffy/command";
-import { fetchShuntdStatus } from "@shuntd/core";
-import { displayName, prepare } from "./shared.js";
+import { fetchSaxbyStatus, instanceLabel, instancePhrase } from "@saxby/core";
+import { prepare } from "./shared.js";
 
 const LABEL_WIDTH = 10;
 
@@ -26,21 +26,21 @@ function describeAnswer(holder, instance) {
     }
 
     if (holder.instance !== instance) {
-        return `no — port held by instance ` +
-            `'${displayName(holder.instance)}' (pid ${holder.pid})`;
+        return `no — port held by ${instancePhrase(holder.instance)} ` +
+            `(pid ${holder.pid})`;
     }
 
     return `yes — pid ${holder.pid}, version ${holder.version ?? "unknown"}`;
 }
 
 export const statusCommand = new Command()
-    .description("Show whether the shuntd service is installed and up.")
+    .description("Show whether the Saxby service is installed and up.")
     .action(async (options) => {
         const { instance, adapter, config } = await prepare(options.instance);
         const service = await adapter.status(instance);
-        const holder = await fetchShuntdStatus(config.listen_port);
+        const holder = await fetchSaxbyStatus(config.listen_port);
 
-        line("Instance", displayName(instance));
+        line("Instance", instanceLabel(instance));
         line("Service", `${adapter.name(instance)} (${adapter.displayName})`);
         line("File", service.installed ? adapter.path(instance) : "-");
 
@@ -49,6 +49,6 @@ export const statusCommand = new Command()
         line("Logs", adapter.logHint(instance));
 
         if (!service.installed) {
-            console.log("\nNot installed. Run 'shunt service install'.");
+            console.log("\nNot installed. Run 'saxby service install'.");
         }
     });

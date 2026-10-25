@@ -5,25 +5,25 @@
 //  config, and needs no root. Plain units rather than a template, so
 //  the default instance keeps the plain name:
 //
-//    shuntd.service            default instance
-//    shuntd-dev.service        named instance
+//    saxbyd.service            default instance
+//    saxbyd-dev.service        named instance
 //
 //  User units stop at logout unless lingering is enabled for the
 //  user (`loginctl enable-linger`). On a desktop that is usually what
-//  you want; on a headless box it is not. shuntd does not change it.
+//  you want; on a headless box it is not. Saxby does not change it.
 //
 //  No After=network-online.target: that target lives in the system
 //  manager, so a user unit cannot see it and the line would be dead.
-//  shuntd binds a local port at boot and copes with an unreachable
+//  saxbyd binds a local port at boot and copes with an unreachable
 //  upstream on its own.
 //
-//  Logs go to the journal: `journalctl --user -u shuntd`.
+//  Logs go to the journal: `journalctl --user -u saxbyd`.
 
 import { join } from "@std/path";
-import { getConfigDir } from "@shuntd/core";
+import { getConfigDir, instancePhrase } from "@saxby/core";
 import { COMMAND_NOT_FOUND, runCommand, runOrThrow } from "./run.js";
 
-const UNIT_BASE = "shuntd";
+const UNIT_BASE = "saxbyd";
 const UNIT_DIR = "systemd/user";
 const RESTART_SEC = 5;
 
@@ -99,7 +99,7 @@ export class SystemdAdapter {
 
         const lines = [
             "[Unit]",
-            `Description=shuntd LLM router (${instance ?? "default"})`,
+            `Description=Saxby LLM router (${instancePhrase(instance)})`,
             "",
             "[Service]",
             `ExecStart=${args.map(quote).join(" ")}`,

@@ -18,7 +18,7 @@
 //  seeding them wrote routing rules into every generated config that
 //  could never fire.
 
-import { TAGS } from "@shuntd/core";
+import { TAGS } from "@saxby/core";
 
 const PATTERNS = [
     //  ---- Code specialists ------------------------------------------

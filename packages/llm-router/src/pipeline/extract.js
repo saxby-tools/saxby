@@ -7,7 +7,7 @@
 //  background utility task, in any language, from any client).
 
 import { extractFeatures } from "./detect.js";
-import { TAGS } from "@shuntd/core";
+import { TAGS } from "@saxby/core";
 
 //  A response under this many tokens is a utility task, not a chat
 //  turn. Open WebUI's title/tag/follow-up generators all sit here.
@@ -234,7 +234,7 @@ function measurePayload(messages) {
  * Extracts intent from a full OpenAI-shaped request body.
  *
  * @param {Object} body - the parsed request body
- * @param {Object} config - the shuntd configuration
+ * @param {Object} config - the Saxby configuration
  */
 export function extractIntent(body, config) {
     const messages = body.messages || [];

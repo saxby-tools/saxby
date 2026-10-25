@@ -1,5 +1,5 @@
 {
-    "name": "@shuntd/cli",
+    "name": "@saxby/cli",
     "version": "0.9.3",
     "exports": "./src/main.js"
 }

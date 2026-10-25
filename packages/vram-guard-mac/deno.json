@@ -1,5 +1,5 @@
 {
-    "name": "@shuntd/vram-mac-guard",
+    "name": "@saxby/vram-guard-mac",
     "version": "0.9.3",
     "exports": "./src/index.js"
 }

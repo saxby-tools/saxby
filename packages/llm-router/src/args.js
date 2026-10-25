@@ -4,7 +4,7 @@
 //  The daemon takes a handful of flags, so they are read by hand
 //  rather than with a parser dependency. Every argument is checked
 //  before anything starts: an unknown flag used to be ignored, so
-//  `shuntd --version` booted the daemon, and a typo such as
+//  `saxbyd --version` booted the daemon, and a typo such as
 //  `--instnace dev` would have started the default instance — the one
 //  the service owns.
 //
@@ -20,19 +20,19 @@ const TRACING_FLAGS = ["--trace", "--verbose", "-v"];
 const VERSION_FLAGS = ["--version", "-V"];
 const HELP_FLAGS = ["--help", "-h"];
 
-export const USAGE = `Usage: shuntd [options]
+export const USAGE = `Usage: saxbyd [options]
 
 Options:
-  -i, --instance <name>  Serve a named instance instead of the default.
+  -i, --instance <name>  Serve a named instance, not the default instance.
   -v, --verbose          Print each request's lifecycle.
       --trace            Verbose, plus why each routing tier declined.
   -V, --version          Print the version and exit.
   -h, --help             Print this help and exit.
 
 Environment:
-  SHUNTD_INSTANCE        Instance name, when -i is not given.
-  SHUNTD_VERBOSE=1       Same as --verbose.
-  SHUNTD_TRACE=1         Same as --trace.`;
+  SAXBY_INSTANCE         Instance name, when -i is not given.
+  SAXBY_VERBOSE=1        Same as --verbose.
+  SAXBY_TRACE=1          Same as --trace.`;
 
 function missingValue(flag) {
     return new Error(`${flag} needs an instance name.`);

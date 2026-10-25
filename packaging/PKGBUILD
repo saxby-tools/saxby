@@ -6,23 +6,23 @@
 #
 # Prebuilt binaries, hence the AUR -bin naming convention.
 
-pkgname=shuntd-bin
+pkgname=saxby-bin
 pkgver=@VERSION@
 pkgrel=1
 pkgdesc="Local-first LLM routing daemon"
 arch=('x86_64' 'aarch64')
-url="https://github.com/shuntd-dev/shuntd"
+url="https://github.com/saxby-tools/saxby"
 license=('AGPL-3.0-or-later')
 depends=('glibc')
-provides=('shuntd')
-conflicts=('shuntd')
+provides=('saxby')
+conflicts=('saxby')
 
 # Deno appends the program to the runtime inside each binary.
 # Stripping it removes the program, so never strip.
 options=('!strip')
 
-_base="https://github.com/shuntd-dev/shuntd/releases/download"
-_stage="shuntd-${pkgver}"
+_base="https://github.com/saxby-tools/saxby/releases/download"
+_stage="saxby-${pkgver}"
 
 source_x86_64=("${_base}/v${pkgver}/${_stage}-linux-x64.tar.gz")
 source_aarch64=("${_base}/v${pkgver}/${_stage}-linux-arm64.tar.gz")
@@ -40,8 +40,8 @@ package() {
 
     local dir="${srcdir}/${_stage}-${target}"
 
-    install -Dm755 "${dir}/shuntd" "${pkgdir}/usr/bin/shuntd"
-    install -Dm755 "${dir}/shunt" "${pkgdir}/usr/bin/shunt"
+    install -Dm755 "${dir}/saxbyd" "${pkgdir}/usr/bin/saxbyd"
+    install -Dm755 "${dir}/saxby" "${pkgdir}/usr/bin/saxby"
     install -Dm644 "${dir}/LICENSE" \
         "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

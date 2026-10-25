@@ -87,7 +87,7 @@ function readUserAgentProduct(userAgent) {
  * Identifies the calling client.
  *
  * @param {(name: string) => string|undefined} getHeader
- * @param {Object} config - shuntd config; config.client_names maps a
+ * @param {Object} config - Saxby config; config.client_names maps a
  *   signature to a friendly name, e.g. {"python-httpx": "my-script"}
  *
  * @returns {{id, signature, source, userAgent}}
@@ -139,7 +139,7 @@ export function identifyClient(getHeader, config) {
 /**
  * Lists signatures seen in the log that have no friendly name yet.
  *
- * Written for a `shunt clients` command that does not exist yet: the
+ * Written for a `saxby clients` command that does not exist yet: the
  * user would run it, see what has actually been hitting the router,
  * and name anything worth naming. Nothing calls this today.
  */

@@ -4,13 +4,13 @@
 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 # Must match LOG_OUT in src/constants.js
-LOG_FILE="/var/log/org.shuntd.vram-mac-guard.out.log"
+LOG_FILE="/var/log/tools.saxby.vram-guard-mac.out.log"
 
 # ---------------------------------------------------------
 # 1. ARCHITECTURE GUARDRAIL
 # ---------------------------------------------------------
 if [[ "$(uname -s)" != "Darwin" ]] || [[ "$(uname -m)" != "arm64" ]]; then
-    echo "$(date) - FATAL: vram-mac-guard requires macOS on Apple Silicon (arm64). Exiting." >>"$LOG_FILE"
+    echo "$(date) - FATAL: vram-guard-mac requires macOS on Apple Silicon (arm64). Exiting." >>"$LOG_FILE"
     exit 1
 fi
 
@@ -36,7 +36,7 @@ CALC_HEAVY_MB=$((TOTAL_RAM_MB * 86 / 100))
 # ---------------------------------------------------------
 # 3. ENVIRONMENT OVERRIDES
 # ---------------------------------------------------------
-CONFIG_FILE="/usr/local/etc/shuntd/vram-mac-guard.env"
+CONFIG_FILE="/usr/local/etc/saxby/vram-guard-mac.env"
 
 # The override file is sourced AS ROOT, so it is trusted only when
 # root owns it and nobody else can write to it. /usr/local is
@@ -73,7 +73,7 @@ if [ "$HEAVY_MB" -lt "$SAFE_MB" ]; then
     HEAVY_MB=$SAFE_MB
 fi
 
-echo "$(date) - vram-mac-guard started. Total RAM: ${TOTAL_RAM_MB}MB | Safe: ${SAFE_MB}MB | Heavy: ${HEAVY_MB}MB" >>"$LOG_FILE"
+echo "$(date) - vram-guard-mac started. Total RAM: ${TOTAL_RAM_MB}MB | Safe: ${SAFE_MB}MB | Heavy: ${HEAVY_MB}MB" >>"$LOG_FILE"
 
 LAST_STATE=""
 FIRST_RUN_LOGGED=0

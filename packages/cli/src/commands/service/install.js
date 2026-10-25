@@ -1,18 +1,22 @@
 import { Command } from "@cliffy/command";
 import { join, resolve } from "@std/path";
-import { fetchShuntdStatus, getInstanceDir, isPortHeld } from "@shuntd/core";
 import {
-    displayName,
+    fetchSaxbyStatus,
+    getInstanceDir,
+    instancePhrase,
+    isPortHeld,
+} from "@saxby/core";
+import {
     fail,
     prepare,
     reportAnswer,
     waitForAnswer,
 } from "./shared.js";
 
-const BINARY_NAME = "shuntd";
+const BINARY_NAME = "saxbyd";
 const EXECUTABLE_BITS = 0o111;
 
-//  Carried into the service so it reads the same config `shunt` just
+//  Carried into the service so it reads the same config `saxby` just
 //  checked. A supervisor does not inherit your shell's environment.
 const FORWARDED_ENV = ["XDG_CONFIG_HOME"];
 
@@ -98,35 +102,35 @@ function collectEnvironment() {
 }
 
 export const installCommand = new Command()
-    .description("Install and start shuntd as a user service.")
+    .description("Install and start Saxby as a user service.")
     .option(
         "--bin <path:string>",
-        "The shuntd binary to run. Defaults to shuntd on PATH.",
+        "The saxbyd binary to run. Defaults to saxbyd on PATH.",
     )
     .action(async (options) => {
         const { instance, adapter, config } = await prepare(options.instance);
         const binary = await resolveBinary(options.bin);
         const port = config.listen_port;
 
-        //  A shuntd already on this port outside the service — a dev
+        //  A saxbyd already on this port outside the service — a dev
         //  run, a terminal left open — would put the new service into
         //  a crash loop. Reinstalling over our own service is fine.
         const service = await adapter.status(instance);
-        const holder = await fetchShuntdStatus(port);
+        const holder = await fetchSaxbyStatus(port);
 
         if (holder && holder.pid !== service.pid) {
             fail(
-                `:${port} is already served by instance ` +
-                    `'${displayName(holder.instance)}' (pid ${holder.pid}) ` +
+                `:${port} is already served by ` +
+                    `${instancePhrase(holder.instance)} (pid ${holder.pid}) ` +
                     `outside this service. Stop it first.`,
             );
         }
 
-        //  The same crash loop, against a program that is not shuntd.
+        //  The same crash loop, against a program that is not saxbyd.
         //  Skipped while our own service runs: it holds the port too.
         if (!holder && !service.pid && isPortHeld(port)) {
             fail(
-                `:${port} is held by a process that is not shuntd. ` +
+                `:${port} is held by a process that is not saxbyd. ` +
                     `Stop it, or change listen_port in ` +
                     `${getInstanceDir(instance)}.`,
             );

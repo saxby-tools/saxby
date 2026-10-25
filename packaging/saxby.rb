@@ -3,52 +3,52 @@
 # this file is never edited by hand per release.
 #
 # Keeps a service block, as Homebrew formulae do. `brew services` and
-# `shunt service install` are two supervisors for one port; running
+# `saxby service install` are two supervisors for one port; running
 # both is user error, and the second one to start says so loudly.
-class Shuntd < Formula
-  BASE = "https://github.com/shuntd-dev/shuntd/releases/download".freeze
+class Saxby < Formula
+  BASE = "https://github.com/saxby-tools/saxby/releases/download".freeze
 
   desc "Local-first LLM routing daemon"
-  homepage "https://github.com/shuntd-dev/shuntd"
+  homepage "https://github.com/saxby-tools/saxby"
   version "@VERSION@"
   license "AGPL-3.0-or-later"
 
   on_macos do
     on_arm do
-      url "#{BASE}/v@VERSION@/shuntd-@VERSION@-darwin-arm64.tar.gz"
+      url "#{BASE}/v@VERSION@/saxby-@VERSION@-darwin-arm64.tar.gz"
       sha256 "@SHA256_DARWIN_ARM64@"
     end
 
     on_intel do
-      url "#{BASE}/v@VERSION@/shuntd-@VERSION@-darwin-x64.tar.gz"
+      url "#{BASE}/v@VERSION@/saxby-@VERSION@-darwin-x64.tar.gz"
       sha256 "@SHA256_DARWIN_X64@"
     end
   end
 
   on_linux do
     on_arm do
-      url "#{BASE}/v@VERSION@/shuntd-@VERSION@-linux-arm64.tar.gz"
+      url "#{BASE}/v@VERSION@/saxby-@VERSION@-linux-arm64.tar.gz"
       sha256 "@SHA256_LINUX_ARM64@"
     end
 
     on_intel do
-      url "#{BASE}/v@VERSION@/shuntd-@VERSION@-linux-x64.tar.gz"
+      url "#{BASE}/v@VERSION@/saxby-@VERSION@-linux-x64.tar.gz"
       sha256 "@SHA256_LINUX_X64@"
     end
   end
 
   def install
-    bin.install "shuntd", "shunt"
+    bin.install "saxbyd", "saxby"
   end
 
   service do
-    run [opt_bin/"shuntd"]
+    run [opt_bin/"saxbyd"]
     keep_alive true
-    log_path var/"log/shuntd.log"
-    error_log_path var/"log/shuntd.log"
+    log_path var/"log/saxby.log"
+    error_log_path var/"log/saxby.log"
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/shunt --version")
+    assert_match version.to_s, shell_output("#{bin}/saxby --version")
   end
 end

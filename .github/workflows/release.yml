@@ -67,7 +67,7 @@ jobs:
               run: shasum -a 256 -c *.sha256
 
             - name: Smoke-test the native binary
-              run: ./dist/shuntd-*-darwin-arm64/shunt --version
+              run: ./dist/saxby-*-darwin-arm64/saxby --version
 
             - name: Render packaging
               run: deno task package all
@@ -77,7 +77,7 @@ jobs:
               if: github.event_name == 'workflow_dispatch'
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
-                  name: shuntd-dry-run
+                  name: saxby-dry-run
                   path: |
                       dist/*.tar.gz
                       dist/*.sha256
@@ -99,9 +99,9 @@ jobs:
                       --draft \
                       --verify-tag \
                       $pre \
-                      --title "shuntd $GITHUB_REF_NAME" \
+                      --title "Saxby $GITHUB_REF_NAME" \
                       --generate-notes \
                       dist/*.tar.gz \
                       dist/*.sha256 \
                       dist/packaging/PKGBUILD \
-                      dist/packaging/shuntd.rb
+                      dist/packaging/saxby.rb

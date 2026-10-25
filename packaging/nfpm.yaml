@@ -7,16 +7,16 @@
 #  `deno task build`:
 #
 #    VERSION=1.0.0 ARCH=amd64 \
-#      STAGE=dist/shuntd-1.0.0-linux-x64 \
+#      STAGE=dist/saxby-1.0.0-linux-x64 \
 #      nfpm pkg --packager deb -f packaging/nfpm.yaml --target dist/
 #
 #  ARCH is nfpm's name: amd64 for linux-x64, arm64 for linux-arm64.
 #  Use --packager rpm for an .rpm.
 #
-#  No service files: `shunt service install` sets up a per-user
+#  No service files: `saxby service install` sets up a per-user
 #  service, and a package installs system-wide.
 
-name: shuntd
+name: saxby
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
@@ -27,22 +27,22 @@ description: |
     Local-first LLM routing daemon. Sits in front of an
     OpenAI-compatible backend and routes each request to the right
     local model, logging every decision.
-homepage: https://github.com/shuntd-dev/shuntd
+homepage: https://github.com/saxby-tools/saxby
 license: AGPL-3.0-or-later
 
 #  `expand: true` is per entry: without it nfpm takes ${STAGE}
 #  literally in src and dst. version and arch expand on their own.
 contents:
-    - src: ${STAGE}/shuntd
-      dst: /usr/bin/shuntd
+    - src: ${STAGE}/saxbyd
+      dst: /usr/bin/saxbyd
       expand: true
       file_info:
           mode: 0755
-    - src: ${STAGE}/shunt
-      dst: /usr/bin/shunt
+    - src: ${STAGE}/saxby
+      dst: /usr/bin/saxby
       expand: true
       file_info:
           mode: 0755
     - src: ${STAGE}/LICENSE
-      dst: /usr/share/licenses/shuntd/LICENSE
+      dst: /usr/share/licenses/saxby/LICENSE
       expand: true

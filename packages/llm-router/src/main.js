@@ -2,12 +2,14 @@ import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
 import {
-    fetchShuntdStatus,
+    fetchSaxbyStatus,
     getInstanceDir,
+    instanceLabel,
+    instancePhrase,
     loadConfig,
     resolveInstanceName,
     validateTagContract,
-} from "@shuntd/core";
+} from "@saxby/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
 import { probeProfile } from "./semantic/embed.js";
@@ -16,14 +18,14 @@ import { inspectRequest } from "./security/guard.js";
 import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
-//  Loopback only. shuntd checks no credentials, so nothing beyond this
+//  Loopback only. Saxby checks no credentials, so nothing beyond this
 //  machine may reach it until keys exist (AGENTS.md). Docker Desktop's
 //  host.docker.internal and `tailscale serve` both reach loopback.
 const LISTEN_HOSTNAME = "127.0.0.1";
 
-//  Polled by `shunt` — every half second while a service starts — so
+//  Polled by `saxby` — every half second while a service starts — so
 //  logging them buries the lines that matter.
-const QUIET_PATHS = new Set(["/shuntd/v1/status"]);
+const QUIET_PATHS = new Set(["/saxby/v1/status"]);
 
 //  The usual exit code for a command-line usage error.
 const EXIT_USAGE = 2;
@@ -109,25 +111,25 @@ async function warmSemantic(config, log) {
  */
 async function describePortClash(port, instance) {
     const header = `❌ Port ${port} is already in use.`;
-    const holder = await fetchShuntdStatus(port);
+    const holder = await fetchSaxbyStatus(port);
 
     if (!holder) {
         return `${header}\n` +
-            `   The process holding it is not shuntd. Change ` +
+            `   The process holding it is not saxbyd. Change ` +
             `listen_port in ${getInstanceDir(instance)}.`;
     }
 
     if (holder.instance !== instance) {
         return `${header}\n` +
-            `   It is held by shuntd instance ` +
-            `'${holder.instance ?? "default"}' (pid ${holder.pid}).`;
+            `   It is held by ${instancePhrase(holder.instance)} ` +
+            `(pid ${holder.pid}).`;
     }
 
     return `${header}\n` +
-        `   Another shuntd is already serving this instance ` +
-        `('${instance ?? "default"}', pid ${holder.pid}).\n` +
+        `   Another saxbyd is already serving ` +
+        `${instancePhrase(instance)} (pid ${holder.pid}).\n` +
         `   Usual cause: a second supervisor — brew services, ` +
-        `shunt service, or a dev run left open.`;
+        `saxby service, or a terminal run left open.`;
 }
 
 /**
@@ -176,7 +178,7 @@ function shouldStart(args) {
     }
 
     if (command === "version") {
-        console.log(`shuntd ${packageConfig.version}`);
+        console.log(`saxbyd ${packageConfig.version}`);
         return false;
     }
 
@@ -193,7 +195,7 @@ async function main() {
         return;
     }
 
-    console.log("🚀 Starting shuntd llm-router...");
+    console.log("🚀 Starting saxbyd...");
 
     const level = initTracing(Deno.args);
 
@@ -204,7 +206,7 @@ async function main() {
         instance = resolveInstanceName(readInstanceFlag(Deno.args));
 
         console.log(
-            `📂 Instance: ${instance ?? "default"} ` +
+            `📂 Instance: ${instanceLabel(instance)} ` +
                 `(${getInstanceDir(instance)})`,
         );
 

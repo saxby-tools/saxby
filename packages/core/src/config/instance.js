@@ -3,8 +3,8 @@
 //  =====================================================================
 //  An instance is a folder holding its own config, decision log and
 //  exemplar vectors. Isolation is total because the decision log is
-//  the point: dev traffic beside production rows would corrupt the
-//  data that threshold calibration depends on.
+//  the point: dev traffic beside the rows of your production instance
+//  would corrupt the data that threshold calibration depends on.
 //
 //  No name resolves to the config root itself, so installs from
 //  before instances existed need no migration. A name resolves to
@@ -17,15 +17,17 @@
 import { join } from "@std/path";
 import { getConfigDir } from "../utils/env.js";
 
-const SHUNTD_DIR_NAME = "shuntd";
+const SAXBY_DIR_NAME = "saxby";
 const INSTANCES_DIR_NAME = "instances";
-const INSTANCE_ENV = "SHUNTD_INSTANCE";
+const INSTANCE_ENV = "SAXBY_INSTANCE";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
-//  `default` would resolve to instances/default/, a second "default"
-//  that is not the real one at the config root.
-const RESERVED_NAMES = new Set(["default"]);
+//  `default` names the default instance, which lives at the config
+//  root. As a folder it would be instances/default/, a second
+//  "default" that is not the real one, so it is never a folder name.
+const DEFAULT_LABEL = "default";
+const RESERVED_NAMES = new Set([DEFAULT_LABEL]);
 
 /**
  * Throws unless the name is safe as a folder, label and unit suffix.
@@ -42,32 +44,12 @@ export function validateInstanceName(name) {
 
     if (RESERVED_NAMES.has(name)) {
         throw new Error(
-            `Instance name '${name}' is reserved. Omit the name to use ` +
-                `the default instance.`,
+            `Instance name '${name}' is reserved for the default ` +
+                `instance and is never a folder name.`,
         );
     }
 
     return name;
-}
-
-/**
- * Resolves the instance name: the flag wins, then SHUNTD_INSTANCE,
- * then none. The ONLY place the environment variable is read.
- * @param {string | undefined} flag - Value of --instance, if given.
- * @returns {string | null} A validated name, or null for the default.
- */
-export function resolveInstanceName(flag) {
-    if (flag) {
-        return validateInstanceName(flag);
-    }
-
-    const fromEnv = Deno.env.get(INSTANCE_ENV);
-
-    if (fromEnv) {
-        return validateInstanceName(fromEnv);
-    }
-
-    return null;
 }
 
 /**
@@ -76,13 +58,69 @@ export function resolveInstanceName(flag) {
  * @returns {string}
  */
 export function getInstanceDir(name = null) {
-    const root = join(getConfigDir(), SHUNTD_DIR_NAME);
+    const root = join(getConfigDir(), SAXBY_DIR_NAME);
 
     if (!name) {
         return root;
     }
 
     return join(root, INSTANCES_DIR_NAME, validateInstanceName(name));
+}
+
+//  `default` always means the default instance. Asking for it by name
+//  is not an error, but it never becomes a folder, so say where the
+//  request went.
+function readRequestedName(name) {
+    if (name === DEFAULT_LABEL) {
+        console.warn(
+            `ℹ️  '${DEFAULT_LABEL}' is reserved for the default instance. ` +
+                `Using ${getInstanceDir(null)}.`,
+        );
+        return null;
+    }
+
+    return validateInstanceName(name);
+}
+
+/**
+ * Resolves the instance name: the flag wins, then SAXBY_INSTANCE,
+ * then none. The ONLY place the environment variable is read.
+ * @param {string | undefined} flag - Value of --instance, if given.
+ * @returns {string | null} A validated name, or null for the default.
+ */
+export function resolveInstanceName(flag) {
+    if (flag) {
+        return readRequestedName(flag);
+    }
+
+    const fromEnv = Deno.env.get(INSTANCE_ENV);
+
+    if (fromEnv) {
+        return readRequestedName(fromEnv);
+    }
+
+    return null;
+}
+
+/**
+ * The short name shown in tables and labelled fields: the instance's
+ * own name, or "default".
+ * @param {string | null} name - A name from resolveInstanceName.
+ * @returns {string}
+ */
+export function instanceLabel(name) {
+    return name ?? DEFAULT_LABEL;
+}
+
+/**
+ * How every message names an instance in a sentence: "the default
+ * instance", "the dev instance". The docs use the same words, so
+ * output and docs never drift apart.
+ * @param {string | null} name - A name from resolveInstanceName.
+ * @returns {string}
+ */
+export function instancePhrase(name) {
+    return `the ${instanceLabel(name)} instance`;
 }
 
 function isValidInstanceName(name) {
@@ -100,7 +138,7 @@ function isValidInstanceName(name) {
 /**
  * Every instance: the default (null) first, then named instances that
  * have a directory, sorted. Folders with invalid names are skipped,
- * since shunt could not have created them.
+ * since saxby could not have created them.
  * @returns {Promise<(string | null)[]>}
  */
 export async function listInstances() {

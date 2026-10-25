@@ -4,8 +4,8 @@ import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
 import { hashPrompt, identifyClient } from "../../log/client.js";
 
-const SHUNTD_MODEL = "shuntd";
-const SHUNTD_PREFIX = "shuntd/";
+const SAXBY_MODEL = "saxby";
+const SAXBY_PREFIX = "saxby/";
 
 //  ---------------------------------------------------------------------
 //  Header construction
@@ -126,15 +126,15 @@ export function registerChatRoutes(app) {
         let usage = { promptTokens: null, completionTokens: null };
         let systemPrefix = null;
 
-        //  ---- Direct hardware bypass: shuntd/<model> ----------------
-        if (rawModel.startsWith(SHUNTD_PREFIX)) {
-            targetModel = rawModel.slice(SHUNTD_PREFIX.length);
+        //  ---- Direct hardware bypass: saxby/<model> -----------------
+        if (rawModel.startsWith(SAXBY_PREFIX)) {
+            targetModel = rawModel.slice(SAXBY_PREFIX.length);
             body.model = targetModel;
             tracer.proxy(`bypass ${targetModel}`);
         }
 
-        //  ---- Smart routing: model === "shuntd" ---------------------
-        if (rawModel === SHUNTD_MODEL) {
+        //  ---- Smart routing: model === "saxby" ----------------------
+        if (rawModel === SAXBY_MODEL) {
             const extracted = extractIntent(body, config);
             tracer.extract(extracted);
 
@@ -234,7 +234,7 @@ export function registerChatRoutes(app) {
         if (!logId) {
             systemPrefix = applySystemPrefix(body, targetModel, config);
 
-            const passthroughTier = rawModel.startsWith(SHUNTD_PREFIX)
+            const passthroughTier = rawModel.startsWith(SAXBY_PREFIX)
                 ? "bypass"
                 : "raw";
 
@@ -320,10 +320,10 @@ export function registerChatRoutes(app) {
             closeRow("upstream_error");
 
             //  Name the URL: "fetch failed" alone does not say which
-            //  backend was down, or that shuntd itself is fine.
+            //  backend was down, or that Saxby itself is fine.
             return c.json({
                 error: {
-                    message: `shuntd could not reach its upstream at ` +
+                    message: `Saxby could not reach its upstream at ` +
                         `${config.upstream_url}: ${err.message}`,
                 },
             }, 502);

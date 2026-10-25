@@ -9,7 +9,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { extractIntent } from "./extract.js";
-import { EMITTABLE_TAGS } from "@shuntd/core";
+import { EMITTABLE_TAGS } from "@saxby/core";
 
 const CONFIG = {
     personas: {
@@ -19,7 +19,7 @@ const CONFIG = {
 
 function ask(content, extra = {}) {
     return extractIntent(
-        { model: "shuntd", messages: [{ role: "user", content }], ...extra },
+        { model: "saxby", messages: [{ role: "user", content }], ...extra },
         CONFIG,
     );
 }
@@ -67,7 +67,7 @@ Deno.test("background — an omitted stream field is not background", () => {
 function askWithParts(parts, extra = {}) {
     return extractIntent(
         {
-            model: "shuntd",
+            model: "saxby",
             messages: [{
                 role: "user",
                 content: [{ type: "text", text: "describe this" }, ...parts],
@@ -129,11 +129,11 @@ Deno.test("contract — EMITTABLE_TAGS is exactly what extract emits", () => {
         ask("```js\nconst x = 1;\n```"),
         ask("move the parser out of app/alpha.js into app/beta.js"),
         ask(traceback),
-        ask('{"name": "shuntd", "tags": [1, 2, 3]}'),
+        ask('{"name": "saxby", "tags": [1, 2, 3]}'),
         ask("$$x^2 + y^2 = z^2$$"),
         ask("Generate a title", { stream: false }),
         extractIntent({
-            model: "shuntd",
+            model: "saxby",
             messages: [{
                 role: "user",
                 content: [
@@ -168,7 +168,7 @@ Deno.test("weight — the same text weighs the same anywhere", () => {
     const asQuestion = ask(PROSE).metrics.estimatedTokens;
 
     const asSystem = extractIntent({
-        model: "shuntd",
+        model: "saxby",
         messages: [
             { role: "system", content: PROSE },
             { role: "user", content: "" },

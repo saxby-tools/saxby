@@ -1,12 +1,12 @@
 //  =====================================================================
 //  deno task build
 //  =====================================================================
-//  Cross-compiles shuntd and shunt, then packs one tarball per target
+//  Cross-compiles saxbyd and saxby, then packs one tarball per target
 //  with a .sha256 beside it:
 //
-//    dist/shuntd-<version>-<target>/          staged, ready to deploy
-//    dist/shuntd-<version>-<target>.tar.gz
-//    dist/shuntd-<version>-<target>.tar.gz.sha256
+//    dist/saxby-<version>-<target>/          staged, ready to deploy
+//    dist/saxby-<version>-<target>.tar.gz
+//    dist/saxby-<version>-<target>.tar.gz.sha256
 //
 //  Which targets:
 //
@@ -33,7 +33,7 @@ import { basename, join } from "@std/path";
 import { readLockstepVersion } from "./version.js";
 
 const DIST_DIR = "dist";
-const ARCHIVE_PREFIX = "shuntd";
+const ARCHIVE_PREFIX = "saxby";
 
 const ALL_KEYWORD = "all";
 
@@ -67,7 +67,7 @@ const TARGETS = [
 
 const BINARIES = [
     {
-        name: "shuntd",
+        name: "saxbyd",
         entry: "packages/llm-router/src/main.js",
         permissions: [
             "--allow-net",
@@ -78,7 +78,7 @@ const BINARIES = [
         include: [],
     },
     {
-        name: "shunt",
+        name: "saxby",
         entry: "packages/cli/src/main.js",
         permissions: [
             "--allow-net",
@@ -88,7 +88,7 @@ const BINARIES = [
             "--allow-run",
             "--allow-sys=uid",
         ],
-        include: ["packages/vram-mac-guard/src/vram-mac-guard.sh"],
+        include: ["packages/vram-guard-mac/src/vram-guard-mac.sh"],
     },
 ];
 
@@ -244,7 +244,7 @@ export async function build(names) {
     await Deno.remove(DIST_DIR, { recursive: true }).catch(() => {});
     await Deno.mkdir(DIST_DIR);
 
-    console.log(`shuntd ${version}, ${targets.length} target(s)\n`);
+    console.log(`Saxby ${version}, ${targets.length} target(s)\n`);
 
     for (const target of targets) {
         stageDirs.push(await buildTarget(target, version));

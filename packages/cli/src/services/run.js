@@ -6,7 +6,7 @@ export const COMMAND_NOT_FOUND = 127;
  * Never throws on a non-zero exit; callers decide what failure means.
  *
  * A missing command also comes back as an exit code, 127, as a shell
- * reports it. Throwing instead crashed `shunt instance list` on any
+ * reports it. Throwing instead crashed `saxby instance list` on any
  * Linux machine without systemctl, such as a container.
  * @param {string} command
  * @param {string[]} args

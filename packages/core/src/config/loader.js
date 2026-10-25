@@ -20,8 +20,8 @@ export async function loadConfig(instance = null) {
     const pathJson = join(configDir, CONFIG_FILE_JSON);
 
     const generateHint = instance
-        ? `shunt -i ${instance} config generate`
-        : "shunt config generate";
+        ? `saxby -i ${instance} config generate`
+        : "saxby config generate";
 
     // Try reading config.jsonc first, fall back to config.json
     let rawContent;

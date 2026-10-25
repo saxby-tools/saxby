@@ -1,7 +1,7 @@
 //  =====================================================================
 //  Curated persona defaults
 //  =====================================================================
-//  What a fresh `shunt config generate` scaffolds. These exemplars
+//  What a fresh `saxby config generate` scaffolds. These exemplars
 //  were validated against bge-m3 with a live router, not guessed.
 //
 //  THREE RULES, each learned by watching a probe get it wrong:
@@ -37,7 +37,7 @@
 //  threshold — a missing exemplar looks exactly like a threshold set
 //  too high, and lowering it lets junk through instead.
 
-import { TAGS } from "@shuntd/core";
+import { TAGS } from "@saxby/core";
 
 export const PERSONA_DEFAULTS = {
     coder: {

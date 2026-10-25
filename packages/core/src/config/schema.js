@@ -52,7 +52,7 @@ export const SemanticSchema = v.strictObject({
     profiles: v.record(v.string(), SemanticProfileSchema),
 });
 
-export const ShuntdConfigSchema = v.strictObject({
+export const SaxbyConfigSchema = v.strictObject({
     listen_port: v.optional(
         v.pipe(
             v.number(),
@@ -138,7 +138,7 @@ function describeIssue(issue) {
  * line, for the loader to attach the file path to.
  */
 export function validateConfig(rawConfig) {
-    const result = v.safeParse(ShuntdConfigSchema, rawConfig);
+    const result = v.safeParse(SaxbyConfigSchema, rawConfig);
 
     if (!result.success) {
         const lines = result.issues.map((issue) => `- ${describeIssue(issue)}`);

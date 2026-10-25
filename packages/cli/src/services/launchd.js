@@ -4,19 +4,19 @@
 //  A LaunchAgent, not a LaunchDaemon: the router runs as you, reads
 //  your config, and needs no root. Labels follow the instance:
 //
-//    org.shuntd.router         default instance
-//    org.shuntd.router.dev     named instance
+//    tools.saxby.router         default instance
+//    tools.saxby.router.dev     named instance
 //
-//  Logs go to ~/Library/Logs/shuntd/, not /tmp, which macOS clears
+//  Logs go to ~/Library/Logs/saxby/, not /tmp, which macOS clears
 //  on reboot — taking the evidence of a crash loop with it.
 
 import { join } from "@std/path";
-import { generatePlist, getHomeDir, SERVICE_PREFIX } from "@shuntd/core";
+import { generatePlist, getHomeDir, SERVICE_PREFIX } from "@saxby/core";
 import { runCommand, runOrThrow } from "./run.js";
 
 const ROUTER_LABEL = `${SERVICE_PREFIX}.router`;
 const AGENTS_DIR = "Library/LaunchAgents";
-const LOGS_DIR = "Library/Logs/shuntd";
+const LOGS_DIR = "Library/Logs/saxby";
 
 //  launchd sends SIGTERM, then kills a job still running after its
 //  ExitTimeOut, 20 seconds by default. Wait a little longer than that.
@@ -50,7 +50,7 @@ async function isLoaded(label) {
  * Unloads a job and waits until launchd has let it go.
  *
  * `launchctl bootout` returns while the job may still be shutting
- * down — shuntd flushes its decision log on SIGTERM — and a bootstrap
+ * down — saxbyd flushes its decision log on SIGTERM — and a bootstrap
  * that lands before it is gone fails with "5: Input/output error".
  * In a reinstall that left no service loaded at all.
  */
@@ -167,7 +167,7 @@ export class LaunchdAdapter {
         if (!(await isLoaded(label))) {
             throw new Error(
                 `${label} is installed but not loaded, so there is ` +
-                    `nothing to restart. Run 'shunt service install' ` +
+                    `nothing to restart. Run 'saxby service install' ` +
                     `to load it.`,
             );
         }

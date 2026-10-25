@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { isPortHeld } from "./probe.js";
 
 //  Port 0 asks the OS for any free port, so the test never collides
-//  with a running shuntd.
+//  with a running saxbyd.
 Deno.test("probe — a port with a listener is held", () => {
     const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
     const { port } = listener.addr;

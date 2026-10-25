@@ -4,7 +4,7 @@ import { LABEL } from "../../constants.js";
 export const statusCommand = new Command()
     .description("Check the current memory limits and daemon status.")
     .action(async () => {
-        console.log("📊 Fetching vram-mac-guard status...\n");
+        console.log("📊 Fetching vram-guard-mac status...\n");
 
         // 1. Query the SYSTEM domain explicitly (does not require sudo to read)
         const launchctlCmd = new Deno.Command("launchctl", {
@@ -21,7 +21,7 @@ export const statusCommand = new Command()
             `Daemon Loaded : ${
                 isLoaded
                     ? "✅ Yes"
-                    : "❌ No (Run 'shunt vram-mac-guard install')"
+                    : "❌ No (Run 'saxby vram-guard-mac install')"
             }`,
         );
 

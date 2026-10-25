@@ -154,7 +154,7 @@ const CHARS_PER_TOKEN_CODE = 3;
 //  Path-shaped token. The lookahead requires a slash or dot somewhere
 //  in the token, which stops every bare word from matching. Extension
 //  policy is applied in code afterwards.
-//    matches:  src/main.js  ./utils.ts  ~/.config/shuntd  Button.tsx
+//    matches:  src/main.js  ./utils.ts  ~/.config/saxby  Button.tsx
 //    rejects:  "e.g. this"  "that is all. done"  bare words
 //    deferred: example.com — rejected by the code filter below
 const RE_PATH_CANDIDATE = regex("gm")`

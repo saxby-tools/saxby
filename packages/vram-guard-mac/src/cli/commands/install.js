@@ -2,7 +2,7 @@ import { Command } from "@cliffy/command";
 import {
     executeAsRootMac as executeAsRoot,
     generatePlist,
-} from "@shuntd/core";
+} from "@saxby/core";
 import { join } from "@std/path";
 import {
     DAEMON_DIR,
@@ -25,16 +25,16 @@ export const installCommand = new Command()
             Deno.exit(1);
         }
 
-        console.log("🔧 Preparing vram-mac-guard script and plist...");
+        console.log("🔧 Preparing vram-guard-mac script and plist...");
 
         // 1. Read the bash script (Works locally AND from Deno compiled VFS)
         const localScriptPath = join(
             import.meta.dirname,
-            "../../vram-mac-guard.sh",
+            "../../vram-guard-mac.sh",
         );
         const scriptContent = await Deno.readTextFile(localScriptPath);
 
-        //  Same convention as SHUNTD_VERBOSE on the router: any non-empty
+        //  Same convention as SAXBY_VERBOSE on the router: any non-empty
         //  value turns it on, so the variable is set only when asked for.
         const environment = {};
 
@@ -81,7 +81,7 @@ export const installCommand = new Command()
 
         try {
             await executeAsRoot(rootScript);
-            console.log("✅ Successfully installed and loaded vram-mac-guard!");
+            console.log("✅ Successfully installed and loaded vram-guard-mac!");
         } catch (error) {
             console.error("❌ Installation aborted or failed:", error.message);
         } finally {

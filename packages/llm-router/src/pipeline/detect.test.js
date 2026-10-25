@@ -82,7 +82,7 @@ runTable("filePaths", [
     { yes: true, why: "relative path", text: "check ./utils.js please" },
     { yes: true, why: "nested source path", text: "src/main.js is broken" },
     { yes: true, why: "bare known extension", text: "Button.tsx renders" },
-    { yes: true, why: "home-relative dotfile dir", text: "~/.config/shuntd" },
+    { yes: true, why: "home-relative dotfile dir", text: "~/.config/saxby" },
     { yes: true, why: "absolute path", text: "/etc/hosts got clobbered" },
     { yes: false, why: "latin abbreviation", text: "e.g. this should not" },
     { yes: false, why: "bare domain is not a path", text: "see example.com" },

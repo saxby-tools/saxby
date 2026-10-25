@@ -5,7 +5,7 @@
 //  checksums, read from the .sha256 files `deno task build` wrote:
 //
 //    packaging/PKGBUILD   ->  dist/packaging/PKGBUILD    (both linux)
-//    packaging/shuntd.rb  ->  dist/packaging/shuntd.rb   (all four)
+//    packaging/saxby.rb   ->  dist/packaging/saxby.rb    (all four)
 //
 //  Every template carries a version and checksums. Bumped by hand,
 //  they drift by the third release; rendered from dist/ they cannot.
@@ -32,7 +32,7 @@ const TEMPLATES = [
         targets: ["linux-x64", "linux-arm64"],
     },
     {
-        path: "packaging/shuntd.rb",
+        path: "packaging/saxby.rb",
         targets: ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"],
     },
 ];
@@ -50,7 +50,7 @@ function readMode(args) {
 }
 
 function checksumPath(version, target) {
-    return join(DIST_DIR, `shuntd-${version}-${target}.tar.gz.sha256`);
+    return join(DIST_DIR, `saxby-${version}-${target}.tar.gz.sha256`);
 }
 
 //  null when that target was not built.

@@ -9,20 +9,20 @@ export function registerModelsRoutes(app) {
         // 1. The main smart router endpoint
         const models = [
             {
-                id: "shuntd",
+                id: "saxby",
                 object: "model",
                 created: Math.floor(Date.now() / 1000),
-                owned_by: "shuntd",
+                owned_by: "saxby",
             },
         ];
 
         // 2. The direct-access hardware models
         for (const modelId of Object.keys(config.catalog)) {
             models.push({
-                id: `shuntd/${modelId}`,
+                id: `saxby/${modelId}`,
                 object: "model",
                 created: Math.floor(Date.now() / 1000),
-                owned_by: "shuntd",
+                owned_by: "saxby",
             });
         }
 
@@ -34,17 +34,17 @@ export function registerModelsRoutes(app) {
         let modelId = c.req.param("model");
 
         // Strip the namespace prefix if they query a specific model
-        if (modelId.startsWith("shuntd/")) {
-            modelId = modelId.replace("shuntd/", "");
+        if (modelId.startsWith("saxby/")) {
+            modelId = modelId.replace("saxby/", "");
         }
 
         // If they query the router itself
-        if (modelId === "shuntd" || modelId === "shuntd/") {
+        if (modelId === "saxby" || modelId === "saxby/") {
             return c.json({
-                id: "shuntd",
+                id: "saxby",
                 object: "model",
                 created: Math.floor(Date.now() / 1000),
-                owned_by: "shuntd",
+                owned_by: "saxby",
             });
         }
 
@@ -56,10 +56,10 @@ export function registerModelsRoutes(app) {
         }
 
         return c.json({
-            id: `shuntd/${modelId}`,
+            id: `saxby/${modelId}`,
             object: "model",
             created: Math.floor(Date.now() / 1000),
-            owned_by: "shuntd",
+            owned_by: "saxby",
         });
     });
 }

@@ -3,9 +3,9 @@
 //  =====================================================================
 //  Puts a fresh build of this checkout into service on this machine:
 //
-//    1. build shuntd and shunt for this machine (scripts/build.js)
+//    1. build saxbyd and saxby for this machine (scripts/build.js)
 //    2. install both into ~/.local/bin
-//    3. restart the default instance's service with the new shunt
+//    3. restart the default instance's service with the new saxby
 //    4. confirm the service reports the version just built
 //
 //  Step 4 is the point. Typed by hand, these steps went stale after a
@@ -15,17 +15,17 @@
 //
 //  Default instance only; dev runs from source with `deno task dev`.
 //  Service-file changes, such as a new environment variable, need
-//  `shunt service install` instead of a restart.
+//  `saxby service install` instead of a restart.
 //
-//  The task's --allow-run is unscoped because the new shunt lives
+//  The task's --allow-run is unscoped because the new saxby lives
 //  under $HOME, which deno.json cannot name.
 
 import { join } from "@std/path";
-import { fetchShuntdStatus, getHomeDir, loadConfig } from "@shuntd/core";
+import { fetchSaxbyStatus, getHomeDir, loadConfig } from "@saxby/core";
 import { build } from "./build.js";
 
 const INSTALL_SUBDIR = ".local/bin";
-const BINARIES = ["shuntd", "shunt"];
+const BINARIES = ["saxbyd", "saxby"];
 
 //  `install` removes the old file and writes a new one, so the running
 //  process keeps its binary until it restarts. `cp` overwrites the file
@@ -74,7 +74,7 @@ async function installBinaries(stageDir, targetDir) {
 }
 
 //  A warning, not a failure: the service runs the absolute path in its
-//  service file. But `shunt` typed in a terminal would find another
+//  service file. But `saxby` typed in a terminal would find another
 //  copy, or none.
 function warnIfOffPath(targetDir) {
     const dirs = (Deno.env.get("PATH") ?? "").split(":");
@@ -84,13 +84,13 @@ function warnIfOffPath(targetDir) {
     }
 
     console.warn(
-        `⚠️  ${targetDir} is not on PATH, so 'shunt' in a terminal ` +
+        `⚠️  ${targetDir} is not on PATH, so 'saxby' in a terminal ` +
             `will not find this build.`,
     );
 }
 
 async function restartService(targetDir) {
-    const code = await run(join(targetDir, "shunt"), ["service", "restart"]);
+    const code = await run(join(targetDir, "saxby"), ["service", "restart"]);
 
     if (code !== 0) {
         throw new Error(
@@ -103,12 +103,12 @@ async function restartService(targetDir) {
 async function verifyVersion(version) {
     const config = await loadConfig();
     const port = config.listen_port;
-    const holder = await fetchShuntdStatus(port);
+    const holder = await fetchSaxbyStatus(port);
 
     if (!holder) {
         throw new Error(
             `Nothing answers on :${port} after the restart. Check ` +
-                `the logs: shunt service status.`,
+                `the logs: saxby service status.`,
         );
     }
 
@@ -116,7 +116,7 @@ async function verifyVersion(version) {
         throw new Error(
             `The service on :${port} reports ${holder.version}, but ` +
                 `this build is ${version}. Its service file may run a ` +
-                `shuntd from another folder; 'shunt service install' ` +
+                `saxbyd from another folder; 'saxby service install' ` +
                 `points it at the one on PATH.`,
         );
     }
@@ -134,7 +134,7 @@ async function main() {
     await restartService(targetDir);
     await verifyVersion(version);
 
-    console.log(`\n✅ The service on this machine runs shuntd ${version}.`);
+    console.log(`\n✅ The service on this machine runs Saxby ${version}.`);
 }
 
 //  Same as build.js: these are user errors, so print the message, not

@@ -1,8 +1,9 @@
 import {
-    fetchShuntdStatus,
+    fetchSaxbyStatus,
+    instancePhrase,
     loadConfig,
     resolveInstanceName,
-} from "@shuntd/core";
+} from "@saxby/core";
 import { findServiceAdapter } from "../../services/index.js";
 
 //  Tier 3 warms its exemplar cache before the router listens, so a
@@ -13,10 +14,6 @@ const ANSWER_POLL_MS = 500;
 export function fail(message) {
     console.error(`❌ ${message}`);
     Deno.exit(1);
-}
-
-export function displayName(instance) {
-    return instance ?? "default";
 }
 
 /**
@@ -59,7 +56,7 @@ export async function prepare(flag) {
 }
 
 /**
- * Polls /shuntd/v1/status until this instance answers from a process
+ * Polls /saxby/v1/status until this instance answers from a process
  * other than `previousPid`, so a restart is not mistaken for success
  * while the old process is still up.
  * @returns {Promise<Object | null>} The status, or null on timeout.
@@ -68,7 +65,7 @@ export async function waitForAnswer(port, instance, previousPid = null) {
     const deadline = Date.now() + ANSWER_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
-        const holder = await fetchShuntdStatus(port);
+        const holder = await fetchSaxbyStatus(port);
 
         const isNew = holder !== null &&
             holder.instance === instance &&
@@ -94,7 +91,7 @@ export function reportAnswer(holder, adapter, instance) {
     }
 
     console.log(
-        `✅ Running: instance '${displayName(instance)}', ` +
+        `✅ Running: ${instancePhrase(instance)}, ` +
             `pid ${holder.pid}, version ${holder.version ?? "unknown"}.`,
     );
 }

@@ -1,5 +1,5 @@
 //  =====================================================================
-//  POST /shuntd/v1/explain  —  non-destructive routing audit
+//  POST /saxby/v1/explain  —  non-destructive routing audit
 //  =====================================================================
 //  Takes the same body as /v1/chat/completions, runs the full
 //  extract -> resolve pipeline, and returns the decision as JSON.
@@ -11,7 +11,7 @@
 //  would be testing the model, not the router.
 //
 //  It is also the reason routing tests do not need realistic paths:
-//  shuntd never touches the filesystem. `src/main.js` is a
+//  Saxby never touches the filesystem. `src/main.js` is a
 //  path-SHAPED token, matched by string structure alone. Nothing is
 //  resolved, opened, or read.
 
@@ -19,7 +19,7 @@ import { extractIntent } from "../../../pipeline/extract.js";
 import { resolvePipeline } from "../../../pipeline/resolve.js";
 
 export function registerExplainRoutes(app) {
-    app.post("/shuntd/v1/explain", async (c) => {
+    app.post("/saxby/v1/explain", async (c) => {
         const config = c.get("config");
 
         let body;

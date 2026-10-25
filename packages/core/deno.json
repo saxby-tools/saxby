@@ -1,5 +1,5 @@
 {
-    "name": "@shuntd/core",
+    "name": "@saxby/core",
     "version": "0.9.3",
     "exports": "./src/index.js"
 }

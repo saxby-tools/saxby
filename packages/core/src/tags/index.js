@@ -132,7 +132,7 @@ export function validateTagContract(config) {
         warnings.push(
             "No model or persona claims any capability tag. Tier 2 " +
                 "routing is disabled — every request will fall through " +
-                "to global_default_model. Run 'shunt config generate' " +
+                "to global_default_model. Run 'saxby config generate' " +
                 "or add 'capabilities' to catalog entries.",
         );
 

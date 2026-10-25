@@ -400,7 +400,7 @@ function describeNoFit(estimatedTokens, required, config) {
         ? ` and claims ${required.join(" and ")}`
         : "";
 
-    return `No model in this shuntd catalog fits a request of about ` +
+    return `No model in this Saxby catalog fits a request of about ` +
         `${estimatedTokens} tokens${needs}. The largest context ` +
         `window in the catalog is ${largest}.`;
 }
@@ -471,7 +471,7 @@ function describeRefusal(unmet) {
     const nouns = unmet.map((tag) => REQUIREMENT_NOUNS[tag]).join(" or ");
     const tags = unmet.join(" or ");
 
-    return `No model in this shuntd catalog claims ${tags}, so nothing ` +
+    return `No model in this Saxby catalog claims ${tags}, so nothing ` +
         `here can handle ${nouns}. Add ${unmet.join(" and ")} to the ` +
         `capabilities of a model that can.`;
 }

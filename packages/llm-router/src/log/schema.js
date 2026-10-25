@@ -1,7 +1,7 @@
 //  =====================================================================
 //  Decision log schema
 //  =====================================================================
-//  The transparent archive. Every routing decision shuntd makes lands
+//  The transparent archive. Every routing decision Saxby makes lands
 //  here, with the reasoning attached — not just what was chosen, but
 //  what was observed and why every other tier declined.
 //
@@ -48,7 +48,7 @@ export const MIGRATIONS = [
         duration_ms       INTEGER,
 
         --  completed | aborted | upstream_error | router_error
-        --  NULL means the row was never closed: shuntd died mid
+        --  NULL means the row was never closed: saxbyd died mid
         --  request, which is itself worth being able to count.
         outcome           TEXT,
 
@@ -111,7 +111,7 @@ export const MIGRATIONS = [
         --  ---- Prompt ------------------------------------------------
         --  The hash is always stored: it groups repeats and regenerates
         --  without retaining text. The text itself is config-gated
-        --  (log_prompts), because someone else running shuntd may not
+        --  (log_prompts), because someone else running Saxby may not
         --  want their whole working corpus on disk.
         prompt_sha256     TEXT    NOT NULL,
         prompt            TEXT

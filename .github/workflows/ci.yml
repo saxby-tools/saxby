@@ -58,5 +58,5 @@ jobs:
 
             - name: Smoke-test the binaries
               run: >-
-                  ./dist/shuntd-*-linux-x64/shunt --version &&
-                  ./dist/shuntd-*-linux-x64/shunt instance list
+                  ./dist/saxby-*-linux-x64/saxby --version &&
+                  ./dist/saxby-*-linux-x64/saxby instance list

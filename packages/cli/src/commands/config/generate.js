@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getInstanceDir, resolveInstanceName } from "@shuntd/core";
+import { getInstanceDir, resolveInstanceName } from "@saxby/core";
 import { ADAPTERS } from "../../adapters/index.js";
 import {
     isEmbeddingModel,
@@ -15,7 +15,7 @@ import {
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
 const INDENT = 4;
 
-//  Production keeps the port clients already point at. A named
+//  Instance 'default' keeps the port clients already point at. A named
 //  instance is suggested the next one so a dev config made by
 //  pressing Enter does not collide with the running service.
 const DEFAULT_PORT = 11435;
@@ -25,12 +25,12 @@ const DEFAULT_INSTANCE_PORT = 11436;
 // Keys absent here still render (see renderJsoncConfig) — they just render
 // without a comment, so this map never causes fields to be dropped.
 const HEADER_COMMENT = [
-    "shuntd configuration file.",
+    "Saxby configuration file.",
     "Edit directly to add capabilities, exemplars, or custom personas.",
 ];
 
 const CONFIG_COMMENTS = {
-    listen_port: ["The port shuntd will listen on (default: 11435)."],
+    listen_port: ["The port Saxby will listen on (default: 11435)."],
     upstream_url: ["Upstream OpenAI-compatible provider endpoint."],
     global_default_model: [
         "Fallback model used when no persona or capability matches.",
@@ -91,7 +91,7 @@ function renderJsoncConfig(payload) {
 }
 
 export const generateCommand = new Command()
-    .description("Interactively generate a shuntd configuration.")
+    .description("Interactively generate a Saxby configuration.")
     .option(
         "--stdout",
         "Print the generated config to standard output instead of saving.",
@@ -187,7 +187,7 @@ export const generateCommand = new Command()
         const defaultPort = instance ? DEFAULT_INSTANCE_PORT : DEFAULT_PORT;
 
         const listenPortInput = await Input.prompt({
-            message: "What port should the shuntd proxy listen on?",
+            message: "What port should the Saxby proxy listen on?",
             default: String(defaultPort),
             validate: (value) => {
                 const port = parseInt(value, 10);

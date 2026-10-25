@@ -11,7 +11,7 @@
 //    verbose  full lifecycle: ingest, extract, resolve, proxy, done
 //    trace    verbose plus abstention reasons and feature evidence
 //
-//  Enable with SHUNTD_VERBOSE=1 / SHUNTD_TRACE=1, or --verbose /
+//  Enable with SAXBY_VERBOSE=1 / SAXBY_TRACE=1, or --verbose /
 //  --trace on the daemon.
 
 const LEVEL_OFF = 0;
@@ -44,12 +44,12 @@ export function initTracing(args = []) {
         return currentLevel;
     }
 
-    if (Deno.env.get("SHUNTD_TRACE")) {
+    if (Deno.env.get("SAXBY_TRACE")) {
         currentLevel = LEVEL_TRACE;
         return currentLevel;
     }
 
-    if (Deno.env.get("SHUNTD_VERBOSE")) {
+    if (Deno.env.get("SAXBY_VERBOSE")) {
         currentLevel = LEVEL_VERBOSE;
         return currentLevel;
     }

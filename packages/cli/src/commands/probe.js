@@ -1,8 +1,8 @@
 //  =====================================================================
-//  shunt probe — Tier 3 scores without generating a token
+//  saxby probe — Tier 3 scores without generating a token
 //  =====================================================================
 //  Scores prompts against an instance's cached exemplars through
-//  /shuntd/v1/explain. Only the embedder runs: no completion, no chat
+//  /saxby/v1/explain. Only the embedder runs: no completion, no chat
 //  model loaded.
 //
 //  It reports scores and margins rather than asserting a model, so
@@ -20,10 +20,11 @@
 
 import { Command } from "@cliffy/command";
 import {
-    fetchShuntdStatus,
+    fetchSaxbyStatus,
+    instancePhrase,
     loadConfig,
     resolveInstanceName,
-} from "@shuntd/core";
+} from "@saxby/core";
 
 const PROBE_HOST = "127.0.0.1";
 const PROMPT_WIDTH = 40;
@@ -59,11 +60,11 @@ const PROMPTS = [
 ];
 
 async function explain(baseUrl, prompt) {
-    const response = await fetch(`${baseUrl}/shuntd/v1/explain`, {
+    const response = await fetch(`${baseUrl}/saxby/v1/explain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            model: "shuntd",
+            model: "saxby",
             messages: [{ role: "user", content: prompt }],
         }),
     });
@@ -128,24 +129,23 @@ export const probeCommand = new Command()
 
         //  One clear line instead of fifteen identical fetch errors,
         //  and never a probe of the wrong instance's exemplars.
-        const holder = await fetchShuntdStatus(port);
+        const holder = await fetchSaxbyStatus(port);
 
         if (!holder) {
-            console.error(`❌ No shuntd is answering on :${port}.`);
+            console.error(`❌ No saxbyd is answering on :${port}.`);
             Deno.exit(1);
         }
 
         if (holder.instance !== instance) {
             console.error(
-                `❌ :${port} is held by instance ` +
-                    `'${holder.instance ?? "default"}', not ` +
-                    `'${instance ?? "default"}'.`,
+                `❌ :${port} is held by ${instancePhrase(holder.instance)}, ` +
+                    `not ${instancePhrase(instance)}.`,
             );
             Deno.exit(1);
         }
         const prompts = custom.length > 0 ? custom : PROMPTS;
 
-        console.log(`\n🧭 Probing ${baseUrl}/shuntd/v1/explain`);
+        console.log(`\n🧭 Probing ${baseUrl}/saxby/v1/explain`);
         console.log("   (no tokens generated)\n");
 
         for (const prompt of prompts) {
