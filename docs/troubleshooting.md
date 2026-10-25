@@ -258,6 +258,13 @@ the default instance — already holds the port. Stop it, then install.
 blocks this.
 
 ```
+❌ :11435 is held by a process that is not shuntd. Stop it, or change listen_port in ~/.config/shuntd.
+```
+
+Another program owns the port. Stop it, or give this instance a
+different `listen_port`.
+
+```
 ❌ systemd --user is not available in this session: ...
 ```
 
@@ -299,7 +306,9 @@ install, then `shunt service restart`. See `docs/releasing.md`.
 ```
 
 See `docs/instances.md` for naming. A **blocked** state in
-`instance list` means another instance holds this one's port.
+`instance list` means something else holds this one's port: another
+instance, or a program that is not shuntd. The line under the table
+says which.
 
 ##  The shell and the system
 
