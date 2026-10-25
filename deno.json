@@ -22,7 +22,8 @@
         "test": "deno test --allow-net=127.0.0.1 packages/",
         "dev": "deno run -A --watch packages/llm-router/src/main.js --instance dev",
         "build": "deno run --allow-read --allow-write --allow-run=deno,tar scripts/build.js",
-        "package": "deno run --allow-read --allow-write scripts/package.js"
+        "package": "deno run --allow-read --allow-write scripts/package.js",
+        "deploy": "deno run --allow-read --allow-write --allow-env --allow-net=127.0.0.1 --allow-run scripts/deploy.js"
     },
     "fmt": {
         "useTabs": false,
