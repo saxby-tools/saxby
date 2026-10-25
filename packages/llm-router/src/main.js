@@ -12,8 +12,14 @@ import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
+import { inspectRequest } from "./security/guard.js";
 
 const INSTANCE_FLAGS = ["--instance", "-i"];
+
+//  Loopback only. shuntd checks no credentials, so nothing beyond this
+//  machine may reach it until keys exist (AGENTS.md). Docker Desktop's
+//  host.docker.internal and `tailscale serve` both reach loopback.
+const LISTEN_HOSTNAME = "127.0.0.1";
 
 //  Polled by `shunt` — every half second while a service starts — so
 //  logging them buries the lines that matter.
@@ -154,6 +160,37 @@ async function describePortClash(port, instance) {
         `shunt service, or a dev run left open.`;
 }
 
+/**
+ * First middleware on every route. Refuses proxied, browser and
+ * rebinding requests and Ollama's management paths, before the request
+ * logger or any route sees them (security/guard.js says why).
+ */
+async function guardRequests(c, next) {
+    const verdict = inspectRequest({
+        headers: c.req.raw.headers,
+        path: c.req.path,
+    });
+
+    if (!verdict) {
+        return await next();
+    }
+
+    const source = c.env?.remoteAddr?.hostname ?? "unknown";
+
+    console.warn(
+        `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
+            `from ${source}`,
+    );
+
+    return c.json({
+        error: {
+            message: verdict.message,
+            type: "invalid_request_error",
+            code: verdict.code,
+        },
+    }, verdict.status);
+}
+
 async function main() {
     console.log("🚀 Starting shuntd llm-router...");
 
@@ -223,6 +260,8 @@ async function main() {
 
     const app = new Hono();
 
+    app.use("*", guardRequests);
+
     if (!isVerbose()) {
         const requestLogger = logger();
 
@@ -282,7 +321,10 @@ async function main() {
     });
 
     try {
-        Deno.serve({ port: config.listen_port }, app.fetch);
+        Deno.serve(
+            { hostname: LISTEN_HOSTNAME, port: config.listen_port },
+            app.fetch,
+        );
     } catch (error) {
         if (!(error instanceof Deno.errors.AddrInUse)) {
             throw error;
