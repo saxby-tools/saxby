@@ -127,7 +127,7 @@ A request that sets `stream: false` is treated as background work —
 the titles, tags and follow-up questions chat apps generate — and
 gets `TAG_BACKGROUND`. Its structure is still recorded as evidence,
 but produces no tags. Image and audio
-requirements are kept. See `docs/configuration.md` for why, and how
+requirements are kept. See [Configuration](configuration.md) for why, and how
 to turn it off.
 
 ##  Fitting the context window
