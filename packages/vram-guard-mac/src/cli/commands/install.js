@@ -32,11 +32,7 @@ async function readScript() {
 
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
-    .option(
-        "-v, --verbose",
-        "Log raw `ollama ps` output on the daemon's first poll.",
-    )
-    .action(async (options) => {
+    .action(async () => {
         if (Deno.build.os !== "darwin") {
             console.error("❌ Error: vram-guard is only supported on macOS.");
             Deno.exit(1);
@@ -47,15 +43,9 @@ export const installCommand = new Command()
         // 1. Read the bash script
         const scriptContent = await readScript();
 
-        //  Same convention as SAXBY_VERBOSE on the router: any non-empty
-        //  value turns it on, so the variable is set only when asked for.
-        const environment = {};
-
-        if (options.verbose) {
-            environment.VRAM_GUARD_VERBOSE = "1";
-        }
-
         // 2. Generate the Plist targeting the physical libexec destination
+        //  KeepAlive off: the script sets the ceiling once and exits on
+        //  purpose, and launchd would otherwise relaunch it forever.
         const plistContent = generatePlist({
             Label: LABEL,
             ProgramArguments: [
@@ -63,7 +53,7 @@ export const installCommand = new Command()
                 "bash",
                 DAEMON_SCRIPT_DESTINATION,
             ],
-            EnvironmentVariables: environment,
+            KeepAlive: false,
             StandardErrorPath: LOG_ERROR,
             StandardOutPath: LOG_OUT,
         });
@@ -95,6 +85,13 @@ export const installCommand = new Command()
         try {
             await executeAsRoot(rootScript);
             console.log("✅ Successfully installed and loaded vram-guard-mac!");
+
+            //  Backends read the ceiling once, when they start. One that
+            //  is already running keeps the old value until restarted.
+            console.log(
+                "ℹ️  If your backend is already running, restart it once " +
+                    "so it reads the new ceiling.",
+            );
         } catch (error) {
             console.error("❌ Installation aborted or failed:", error.message);
         } finally {

@@ -1,43 +1,60 @@
 #!/usr/bin/env bash
 
+#  =====================================================================
+#  vram-guard-mac
+#  =====================================================================
+#  Sets the GPU wired-memory ceiling once, at boot, then exits.
+#
+#  The ceiling is a maximum, not a reservation: raising it takes
+#  nothing from macOS until a model is loaded. Backends read it once,
+#  when they start, so it must already be high by then and must never
+#  drop while they run. A LaunchDaemon starts before anyone logs in,
+#  so a backend started by a login agent reads the raised value.
+#
+#  The script knows nothing about any backend, on purpose.
+
+# ---------------------------------------------------------
+# CONSTANTS
+# ---------------------------------------------------------
 # Explicitly set PATH for the launchd root environment
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 # Must match LOG_OUT in src/constants.js
 LOG_FILE="/var/log/tools.saxby.vram-guard-mac.out.log"
 
+CONFIG_FILE="/usr/local/etc/saxby/vram-guard-mac.env"
+
+# Share of RAM the GPU may wire. macOS's own default is about 75%.
+DEFAULT_PERCENT=86
+
+log() {
+    echo "$(date) - $*" >>"$LOG_FILE"
+}
+
 # ---------------------------------------------------------
 # 1. ARCHITECTURE GUARDRAIL
 # ---------------------------------------------------------
-if [[ "$(uname -s)" != "Darwin" ]] || [[ "$(uname -m)" != "arm64" ]]; then
-    echo "$(date) - FATAL: vram-guard-mac requires macOS on Apple Silicon (arm64). Exiting." >>"$LOG_FILE"
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    log "FATAL: vram-guard-mac requires macOS. Exiting."
     exit 1
 fi
 
-# We explicitly inject HOME to satisfy Go-lang CLI requirements
-if ! HOME=/var/root command -v ollama >/dev/null 2>&1; then
-    echo "$(date) - FATAL: 'ollama' command not found in PATH. Exiting." >>"$LOG_FILE"
+if [[ "$(uname -m)" != "arm64" ]]; then
+    log "FATAL: vram-guard-mac requires Apple Silicon. Exiting."
     exit 1
 fi
 
 # ---------------------------------------------------------
-# 2. DYNAMIC MEMORY CALCULATION
+# 2. DEFAULT CEILING
 # ---------------------------------------------------------
-# Get total physical RAM in bytes and convert to MB
 TOTAL_RAM_BYTES=$(sysctl -n hw.memsize)
 TOTAL_RAM_MB=$((TOTAL_RAM_BYTES / 1024 / 1024))
 
-# Baseline Heuristics:
-# Safe is ~75% of total RAM (macOS default behavior)
-# Heavy is ~86% of total RAM (Aggressive ML workload ceiling)
-CALC_SAFE_MB=$((TOTAL_RAM_MB * 75 / 100))
-CALC_HEAVY_MB=$((TOTAL_RAM_MB * 86 / 100))
+LIMIT_MB=$((TOTAL_RAM_MB * DEFAULT_PERCENT / 100))
 
 # ---------------------------------------------------------
-# 3. ENVIRONMENT OVERRIDES
+# 3. ENVIRONMENT OVERRIDE
 # ---------------------------------------------------------
-CONFIG_FILE="/usr/local/etc/saxby/vram-guard-mac.env"
-
 # The override file is sourced AS ROOT, so it is trusted only when
 # root owns it and nobody else can write to it. /usr/local is
 # user-writable on some Homebrew setups. stat does not follow
@@ -48,14 +65,13 @@ load_overrides() {
     fi
 
     if [ "$(stat -f '%u' "$CONFIG_FILE")" != "0" ]; then
-        echo "$(date) - WARNING: $CONFIG_FILE is not owned by root." \
-            "Ignoring it." >>"$LOG_FILE"
+        log "WARNING: $CONFIG_FILE is not owned by root. Ignoring it."
         return
     fi
 
     if [ -n "$(find "$CONFIG_FILE" -perm +022)" ]; then
-        echo "$(date) - WARNING: $CONFIG_FILE is writable by" \
-            "non-root users. Ignoring it." >>"$LOG_FILE"
+        log "WARNING: $CONFIG_FILE is writable by non-root users." \
+            "Ignoring it."
         return
     fi
 
@@ -63,54 +79,38 @@ load_overrides() {
     source "$CONFIG_FILE"
 }
 
+# A ceiling above physical RAM means nothing, and a value that is not
+# a whole number would reach sysctl as garbage. Either one falls back
+# to the default rather than failing, so the guard still does its job.
+apply_override() {
+    if [ -z "$VRAM_GUARD_LIMIT_MB" ]; then
+        return
+    fi
+
+    if [[ ! "$VRAM_GUARD_LIMIT_MB" =~ ^[0-9]+$ ]]; then
+        log "WARNING: VRAM_GUARD_LIMIT_MB is not a whole number." \
+            "Using ${LIMIT_MB}MB."
+        return
+    fi
+
+    if [ "$VRAM_GUARD_LIMIT_MB" -gt "$TOTAL_RAM_MB" ]; then
+        log "WARNING: VRAM_GUARD_LIMIT_MB is more than total RAM." \
+            "Using ${LIMIT_MB}MB."
+        return
+    fi
+
+    LIMIT_MB=$VRAM_GUARD_LIMIT_MB
+}
+
 load_overrides
+apply_override
 
-SAFE_MB=${VRAM_GUARD_SAFE_MB:-$CALC_SAFE_MB}
-HEAVY_MB=${VRAM_GUARD_HEAVY_MB:-$CALC_HEAVY_MB}
-
-# Safety Clamp: Never let the script starve the macOS kernel
-if [ "$HEAVY_MB" -lt "$SAFE_MB" ]; then
-    HEAVY_MB=$SAFE_MB
+# ---------------------------------------------------------
+# 4. SET THE CEILING
+# ---------------------------------------------------------
+if ! sysctl iogpu.wired_limit_mb="$LIMIT_MB" >/dev/null; then
+    log "FATAL: could not set iogpu.wired_limit_mb to ${LIMIT_MB}MB."
+    exit 1
 fi
 
-echo "$(date) - vram-guard-mac started. Total RAM: ${TOTAL_RAM_MB}MB | Safe: ${SAFE_MB}MB | Heavy: ${HEAVY_MB}MB" >>"$LOG_FILE"
-
-LAST_STATE=""
-FIRST_RUN_LOGGED=0
-
-while true; do
-    # ---------------------------------------------------------
-    # DEBUG: CAPTURE STDERR INSTEAD OF SUPPRESSING IT
-    # ---------------------------------------------------------
-    RAW_OLLAMA_OUTPUT=$(HOME=/var/root OLLAMA_HOST=127.0.0.1:11434 ollama ps 2>&1)
-    LINE_COUNT=$(echo "$RAW_OLLAMA_OUTPUT" | grep -v "^$" | wc -l)
-
-    if [ "$FIRST_RUN_LOGGED" -eq 0 ]; then
-        if [ -n "$VRAM_GUARD_VERBOSE" ]; then
-            echo "--- OLLAMA RAW OUTPUT ---" >>"$LOG_FILE"
-            echo "$RAW_OLLAMA_OUTPUT" >>"$LOG_FILE"
-            echo "LINE COUNT: $LINE_COUNT" >>"$LOG_FILE"
-            echo "-------------------------" >>"$LOG_FILE"
-        fi
-        FIRST_RUN_LOGGED=1
-    fi
-
-    if [ "$LINE_COUNT" -gt 1 ]; then
-        STATE="heavy"
-    else
-        STATE="safe"
-    fi
-
-    if [ "$STATE" != "$LAST_STATE" ]; then
-        if [ "$STATE" = "heavy" ]; then
-            sysctl iogpu.wired_limit_mb="$HEAVY_MB"
-            echo "$(date) - Models detected. Raised limit to ${HEAVY_MB}MB" >>"$LOG_FILE"
-        else
-            sysctl iogpu.wired_limit_mb="$SAFE_MB"
-            echo "$(date) - Models idled. Lowered limit to ${SAFE_MB}MB" >>"$LOG_FILE"
-        fi
-        LAST_STATE="$STATE"
-    fi
-
-    sleep 5
-done
+log "Total RAM: ${TOTAL_RAM_MB}MB | Ceiling set to ${LIMIT_MB}MB"
