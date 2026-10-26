@@ -249,6 +249,16 @@ sources that file AS ROOT, so it refuses a file that root does not own
 or that anyone else can write; `/usr/local` is user-writable on some
 Homebrew setups. Uninstall leaves the config, as pacman does.
 
+**The guard sets the ceiling once, at boot, and reads no backend
+state.** Through v0.9.5 it polled `ollama ps` and dropped the ceiling to
+75% of RAM whenever nothing was loaded. Backends read the ceiling once,
+at startup, and nothing is loaded at startup, so Ollama always saw the
+low value and evicted models the raised ceiling had room for. Lowering
+it frees nothing: the ceiling is a maximum, not a reservation. A
+LaunchDaemon runs before login, so a backend started by a login agent
+reads the raised value with no restart. Knowing no backend also keeps
+the guard out of any adapter work.
+
 **The config schema and loader live in `@saxby/core`.** The config
 file is a contract between packages: `saxby config generate` writes
 it, the daemon reads it, `saxby probe` and `saxby instance list` read
