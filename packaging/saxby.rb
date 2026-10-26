@@ -5,12 +5,14 @@
 # Keeps a service block, as Homebrew formulae do. `brew services` and
 # `saxby service install` are two supervisors for one port; running
 # both is user error, and the second one to start says so loudly.
+#
+# No `version` line: brew reads the version from the download URLs,
+# and `brew audit --strict` flags one that repeats it.
 class Saxby < Formula
   BASE = "https://github.com/saxby-tools/saxby/releases/download".freeze
 
   desc "Local-first LLM routing daemon"
   homepage "https://github.com/saxby-tools/saxby"
-  version "@VERSION@"
   license "AGPL-3.0-or-later"
 
   on_macos do
