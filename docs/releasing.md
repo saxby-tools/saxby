@@ -160,10 +160,20 @@ The workflow opens a **draft** release with the four tarballs, their
 and [`saxby.rb`](../packaging/saxby.rb). Read it over, then click
 Publish. Nothing is public until then.
 
+**Publishing updates the packages.**
+[`.github/workflows/publish.yml`](../.github/workflows/publish.yml)
+runs when the release is published. It commits the release's
+`saxby.rb` to the `saxby-tools/homebrew-tap` tap and pushes its
+`PKGBUILD` to `saxby-bin` on the AUR, after building and installing
+that package in an Arch container. Plain `vX.Y.Z` tags publish,
+`v0.9.x` included. A tag with a suffix, such as `v1.0.0-rc.1`,
+publishes nothing. It needs two repository secrets:
+`HOMEBREW_TAP_DEPLOY_KEY`, a deploy key with write access to the tap,
+and `AUR_SSH_KEY`, the key registered with the AUR account.
+
 ##  Packaging
 
-The templates in `packaging/` are scaffolding, not maintained
-repositories. None of them is edited by hand per release.
+None of the templates in `packaging/` is edited by hand per release.
 
 [`PKGBUILD`](../packaging/PKGBUILD) (AUR `saxby-bin`) and
 [`saxby.rb`](../packaging/saxby.rb) (Homebrew) carry `@VERSION@` and
