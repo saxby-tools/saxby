@@ -3,7 +3,6 @@ import {
     executeAsRootMac as executeAsRoot,
     generatePlist,
 } from "@saxby/core";
-import { join } from "@std/path";
 import {
     DAEMON_DIR,
     DAEMON_SCRIPT_DESTINATION,
@@ -12,6 +11,24 @@ import {
     LOG_OUT,
     PLIST_DESTINATION,
 } from "../../constants.js";
+
+//  By URL, not by path, so one read works everywhere this code runs:
+//  a checkout (file:), a compiled binary (file:, embedded with
+//  --include by scripts/build.js) and JSR (https:). A path built from
+//  import.meta.dirname fails on JSR, where that is undefined.
+const SCRIPT_URL = new URL("../../vram-guard-mac.sh", import.meta.url);
+
+async function readScript() {
+    const response = await fetch(SCRIPT_URL);
+
+    if (!response.ok) {
+        throw new Error(
+            `Could not read ${SCRIPT_URL.href} (HTTP ${response.status}).`,
+        );
+    }
+
+    return await response.text();
+}
 
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
@@ -27,12 +44,8 @@ export const installCommand = new Command()
 
         console.log("🔧 Preparing vram-guard-mac script and plist...");
 
-        // 1. Read the bash script (Works locally AND from Deno compiled VFS)
-        const localScriptPath = join(
-            import.meta.dirname,
-            "../../vram-guard-mac.sh",
-        );
-        const scriptContent = await Deno.readTextFile(localScriptPath);
+        // 1. Read the bash script
+        const scriptContent = await readScript();
 
         //  Same convention as SAXBY_VERBOSE on the router: any non-empty
         //  value turns it on, so the variable is set only when asked for.
