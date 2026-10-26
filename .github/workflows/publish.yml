@@ -1,0 +1,183 @@
+#  =====================================================================
+#  Publish
+#  =====================================================================
+#  Runs when a human publishes the draft that release.yml opened, so
+#  the package channels move only after that same yes:
+#
+#    homebrew   the release's saxby.rb -> saxby-tools/homebrew-tap
+#    aur        the release's PKGBUILD -> saxby-bin on the AUR
+#
+#  Plain vX.Y.Z tags publish, v0.9.x included, so the path is proven
+#  before v1.0.0. A tag with a suffix (v1.0.0-rc.1) publishes nothing.
+#
+#  Both jobs download the rendered files from the published release
+#  rather than rendering again, so the channels get exactly what the
+#  release carries.
+#
+#  Neither job uses GITHUB_TOKEN: the release is public, and each push
+#  goes over SSH with a key that reaches one place. The private key is
+#  written under /tmp, which goes away with the runner. Host keys are
+#  pinned below rather than trusted on first contact; each was checked
+#  against its owner's published fingerprint:
+#
+#    github.com         docs.github.com, "GitHub's SSH key fingerprints"
+#    aur.archlinux.org  the fingerprint list on aur.archlinux.org
+
+name: publish
+
+on:
+    release:
+        types: [published]
+
+permissions: {}
+
+#  One release at a time, so two quick releases cannot race their
+#  pushes to the tap or the AUR.
+concurrency:
+    group: publish
+
+env:
+    TAG: ${{ github.event.release.tag_name }}
+    RELEASE_URL: >-
+        https://github.com/${{ github.repository }}/releases/download
+
+    GITHUB_HOST_KEY: >-
+        github.com ssh-ed25519
+        AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+    AUR_HOST_KEY: >-
+        aur.archlinux.org ssh-ed25519
+        AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+
+    #  git reads these for every commit, so no step sets an identity.
+    GIT_AUTHOR_NAME: github-actions[bot]
+    GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+    GIT_COMMITTER_NAME: github-actions[bot]
+    GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+jobs:
+    homebrew:
+        if: ${{ !contains(github.event.release.tag_name, '-') }}
+        runs-on: ubuntu-latest
+
+        env:
+            TAP: git@github.com:saxby-tools/homebrew-tap.git
+            SSH_DIR: /tmp/publish-ssh
+
+        steps:
+            - name: Download saxby.rb
+              run: curl -fsSL -o saxby.rb "$RELEASE_URL/$TAG/saxby.rb"
+
+            - name: Set up the deploy key
+              env:
+                  DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+              run: |
+                  install -m 700 -d "$SSH_DIR"
+                  printf '%s\n' "$DEPLOY_KEY" > "$SSH_DIR/key"
+                  chmod 600 "$SSH_DIR/key"
+                  printf '%s\n' "$GITHUB_HOST_KEY" > "$SSH_DIR/known_hosts"
+
+            #  The tap keeps formulae under Formula/, as brew expects.
+            #  Re-running a release that changed nothing commits nothing.
+            - name: Commit to the tap
+              run: |
+                  export GIT_SSH_COMMAND="ssh \
+                      -i $SSH_DIR/key \
+                      -o IdentitiesOnly=yes \
+                      -o StrictHostKeyChecking=yes \
+                      -o UserKnownHostsFile=$SSH_DIR/known_hosts"
+
+                  git clone --depth 1 "$TAP" tap
+                  mkdir -p tap/Formula
+                  cp saxby.rb tap/Formula/saxby.rb
+
+                  cd tap
+                  git add Formula/saxby.rb
+
+                  if git diff --cached --quiet; then
+                      echo "Formula unchanged; nothing to push."
+                      exit 0
+                  fi
+
+                  git commit -m "saxby ${TAG#v}"
+                  git push origin HEAD
+
+    #  Arch's own image, because makepkg is the only reliable way to
+    #  write .SRCINFO. Not pinned: Arch is rolling, and the -Syu below
+    #  updates everything anyway, so a pinned image would pin nothing.
+    aur:
+        if: ${{ !contains(github.event.release.tag_name, '-') }}
+        runs-on: ubuntu-latest
+        container: archlinux:base-devel
+
+        defaults:
+            run:
+                shell: bash
+
+        env:
+            AUR_REPO: ssh://aur@aur.archlinux.org/saxby-bin.git
+            SSH_DIR: /tmp/publish-ssh
+
+        steps:
+            - name: Install git and ssh
+              run: pacman -Syu --noconfirm --needed git openssh
+
+            #  makepkg refuses to run as root.
+            - name: Download PKGBUILD
+              run: |
+                  useradd -m builder
+                  install -o builder -d /build
+                  curl -fsSL -o /build/PKGBUILD "$RELEASE_URL/$TAG/PKGBUILD"
+                  chown builder /build/PKGBUILD
+
+            #  Builds and installs the x86_64 package before anything is
+            #  pushed, so a broken PKGBUILD never reaches the AUR. The
+            #  aarch64 source is not exercised here.
+            - name: Build and check the package
+              working-directory: /build
+              run: |
+                  sudo -u builder makepkg --noconfirm
+                  sudo -u builder makepkg --printsrcinfo > .SRCINFO
+                  pacman -U --noconfirm saxby-bin-*.pkg.tar.zst
+
+                  saxby --version
+                  saxbyd --version
+
+                  test -f /usr/share/bash-completion/completions/saxby
+                  test -f /usr/share/zsh/site-functions/_saxby
+                  test -f /usr/share/fish/vendor_completions.d/saxby.fish
+
+            - name: Set up the AUR key
+              env:
+                  AUR_KEY: ${{ secrets.AUR_SSH_KEY }}
+              run: |
+                  install -m 700 -d "$SSH_DIR"
+                  printf '%s\n' "$AUR_KEY" > "$SSH_DIR/key"
+                  chmod 600 "$SSH_DIR/key"
+                  printf '%s\n' "$AUR_HOST_KEY" > "$SSH_DIR/known_hosts"
+
+            #  The AUR creates saxby-bin on its first push, so the first
+            #  clone is empty and that is fine. The AUR only takes master,
+            #  and symbolic-ref names it even on an empty clone, where
+            #  checkout cannot.
+            - name: Push to the AUR
+              run: |
+                  export GIT_SSH_COMMAND="ssh \
+                      -i $SSH_DIR/key \
+                      -o IdentitiesOnly=yes \
+                      -o StrictHostKeyChecking=yes \
+                      -o UserKnownHostsFile=$SSH_DIR/known_hosts"
+
+                  git clone "$AUR_REPO" aur
+                  cp /build/PKGBUILD /build/.SRCINFO aur/
+
+                  cd aur
+                  git symbolic-ref HEAD refs/heads/master
+                  git add PKGBUILD .SRCINFO
+
+                  if git diff --cached --quiet; then
+                      echo "PKGBUILD unchanged; nothing to push."
+                      exit 0
+                  fi
+
+                  git commit -m "saxby-bin ${TAG#v}"
+                  git push origin master
