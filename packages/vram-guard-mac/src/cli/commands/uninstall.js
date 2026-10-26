@@ -14,6 +14,10 @@ export const uninstallCommand = new Command()
             # 2. Delete the plist file and the script directory
             rm -f ${PLIST_DESTINATION}
             rm -rf ${DAEMON_DIR}
+
+            # 3. Hand the ceiling back to macOS. 0 means its own default;
+            #    otherwise the raised value lasts until the next reboot.
+            sysctl iogpu.wired_limit_mb=0
         `;
 
         console.log("🔐 Requesting system permissions to remove daemon...");
