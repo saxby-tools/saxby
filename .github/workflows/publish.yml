@@ -6,19 +6,23 @@
 #
 #    homebrew   the release's saxby.rb -> saxby-tools/homebrew-tap
 #    aur        the release's PKGBUILD -> saxby-bin on the AUR
+#    jsr        the tagged workspace   -> the four @saxby packages
 #
 #  Plain vX.Y.Z tags publish, v0.9.x included, so the path is proven
 #  before v1.0.0. A tag with a suffix (v1.0.0-rc.1) publishes nothing.
 #
-#  Both jobs download the rendered files from the published release
-#  rather than rendering again, so the channels get exactly what the
-#  release carries.
+#  homebrew and aur download the rendered files from the published
+#  release rather than rendering again, so the channels get exactly
+#  what the release carries. jsr publishes source, from the tagged
+#  commit.
 #
-#  Neither job uses GITHUB_TOKEN: the release is public, and each push
-#  goes over SSH with a key that reaches one place. The private key is
-#  written under /tmp, which goes away with the runner. Host keys are
-#  pinned below rather than trusted on first contact; each was checked
-#  against its owner's published fingerprint:
+#  homebrew and aur use no GITHUB_TOKEN: the release is public, and
+#  each push goes over SSH with a key that reaches one place. The
+#  private key is written under /tmp, which goes away with the runner.
+#  jsr signs in with an OIDC token instead, so no JSR token is stored.
+#
+#  Host keys are pinned below rather than trusted on first contact;
+#  each was checked against its owner's published fingerprint:
 #
 #    github.com         docs.github.com, "GitHub's SSH key fingerprints"
 #    aur.archlinux.org  the fingerprint list on aur.archlinux.org
@@ -181,3 +185,29 @@ jobs:
 
                   git commit -m "saxby-bin ${TAG#v}"
                   git push origin master
+
+    #  JSR accepts the OIDC token only for packages linked to this
+    #  repository, and by default only when the person who published
+    #  the release is a member of the @saxby scope. A version already
+    #  on JSR is skipped, so a re-run is safe.
+    jsr:
+        if: ${{ !contains(github.event.release.tag_name, '-') }}
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            #  actions/checkout v7.0.1
+            - name: Check out
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+            #  denoland/setup-deno v2.0.5
+            - name: Set up Deno
+              uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+              with:
+                  deno-version: 2.9.6
+
+            - name: Publish
+              run: deno publish
