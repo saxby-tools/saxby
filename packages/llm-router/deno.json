@@ -1,5 +1,6 @@
 {
     "name": "@saxby/llm-router",
     "version": "0.9.4",
+    "license": "AGPL-3.0-or-later",
     "exports": "./src/main.js"
 }
