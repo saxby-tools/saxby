@@ -66,7 +66,12 @@ export const installCommand = new Command()
         await Deno.writeTextFile(tempPlistPath, plistContent);
 
         // 4. The Single Root Transaction: Move, permission, and load everything at once
+        //  Unload first: launchctl load on a job that is already loaded
+        //  prints "Load failed" yet exits 0, so a reinstall would report
+        //  success while the old daemon kept running.
         const rootScript = `
+            launchctl unload -w ${PLIST_DESTINATION} 2>/dev/null || true
+
             mkdir -p ${DAEMON_DIR}
             cp ${tempScriptPath} ${DAEMON_SCRIPT_DESTINATION}
             chmod +x ${DAEMON_SCRIPT_DESTINATION}
