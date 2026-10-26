@@ -99,9 +99,9 @@ a project invariant.
 M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
-**M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs and the
-rename (v0.9.4) are done. What remains is one GitHub milestone each:
-packaging and publishing (v0.9.5), the JSDoc sweep (v0.9.6), then the
+**M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs, the rename
+(v0.9.4) and packaging and publishing (v0.9.5) are done. What remains
+is one GitHub milestone each: the JSDoc sweep (v0.9.6), then the
 v1.0.0 tag ([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `saxby instance list`, the dev
