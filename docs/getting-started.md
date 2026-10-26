@@ -18,6 +18,71 @@ ollama pull bge-m3
 
 ##  Install
 
+Pick one. Each way installs both programs, `saxby` and `saxbyd`.
+
+###  With Homebrew
+
+On macOS or Linux:
+
+```bash
+brew install saxby-tools/tap/saxby
+```
+
+Shell completions for zsh, bash and fish come with it. The formula
+also offers `brew services start saxby`, but this guide runs Saxby
+with `saxby service install` instead. Use one or the other, never
+both: they would fight over the same port. After `brew upgrade
+saxby`, run `saxby service restart` so the service picks up the new
+build.
+
+###  From the AUR
+
+On Arch Linux, with an AUR helper such as `yay`:
+
+```bash
+yay -S saxby-bin
+```
+
+Or by hand:
+
+```bash
+git clone https://aur.archlinux.org/saxby-bin.git && cd saxby-bin
+```
+
+```bash
+makepkg -si
+```
+
+Shell completions come with it. After an upgrade, run `saxby service
+restart`.
+
+###  From JSR
+
+With Deno 2.9 or newer. These commands give each program the same
+permissions the release binaries have:
+
+```bash
+deno install -g -n saxby \
+    --allow-net --allow-env --allow-read --allow-write \
+    --allow-run --allow-sys=uid jsr:@saxby/cli
+```
+
+```bash
+deno install -g -n saxbyd \
+    --allow-net --allow-env --allow-read --allow-write \
+    jsr:@saxby/llm-router
+```
+
+The daemon gets no `--allow-run`, so a bug in request handling cannot
+start a program. Deno will not install a version published in the
+last 24 hours, so right after a release, wait a day. Completions do
+not come with it; `saxby completions --help` shows how to load them.
+
+To run Saxby as a service, use one of the other ways instead. The
+`deno install` wrapper finds `deno` through `PATH`, and a service may
+start with a `PATH` that does not include it
+([#31](https://github.com/saxby-tools/saxby/issues/31)).
+
 ###  From a release
 
 Pick your platform — `darwin-arm64`, `darwin-x64`, `linux-x64` or
@@ -61,8 +126,6 @@ Make sure `~/.local/bin` is on your `PATH`; `saxby --version` should
 answer. Downloading with `curl` avoids the macOS quarantine flag that
 a browser download gets. If you did use a browser, see
 [Troubleshooting](troubleshooting.md).
-
-Homebrew and Arch packages exist only as templates for now.
 
 ###  From source
 
