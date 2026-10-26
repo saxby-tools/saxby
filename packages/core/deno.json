@@ -1,5 +1,6 @@
 {
     "name": "@saxby/core",
     "version": "0.9.4",
+    "license": "AGPL-3.0-or-later",
     "exports": "./src/index.js"
 }
