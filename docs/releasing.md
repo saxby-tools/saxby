@@ -165,9 +165,14 @@ Publish. Nothing is public until then.
 runs when the release is published. It commits the release's
 `saxby.rb` to the `saxby-tools/homebrew-tap` tap and pushes its
 `PKGBUILD` to `saxby-bin` on the AUR, after building and installing
-that package in an Arch container. Plain `vX.Y.Z` tags publish,
-`v0.9.x` included. A tag with a suffix, such as `v1.0.0-rc.1`,
-publishes nothing. It needs two repository secrets:
+that package in an Arch container. It also publishes the four
+`@saxby` packages to JSR from the tagged commit, signing in with
+GitHub's OIDC token, which works only for packages linked to this
+repository on jsr.io.
+
+Plain `vX.Y.Z` tags publish, `v0.9.x` included. A tag with a suffix,
+such as `v1.0.0-rc.1`, publishes nothing. It needs two repository
+secrets:
 `HOMEBREW_TAP_DEPLOY_KEY`, a deploy key with write access to the tap,
 and `AUR_SSH_KEY`, the key registered with the AUR account.
 
