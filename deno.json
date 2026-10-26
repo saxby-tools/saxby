@@ -31,6 +31,9 @@
         "proseWrap": "preserve",
         "exclude": ["**/node_modules/", "**/*.sh"]
     },
+    "publish": {
+        "exclude": ["**/*.test.js"]
+    },
     "lint": {
         "rules": {
             "tags": ["recommended"]
