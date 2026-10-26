@@ -124,10 +124,10 @@ known gaps are issues labelled
   - [ ] **Phase 5 — Publishing** *(tracked by the
         [v1.0.0 milestone](https://github.com/saxby-tools/saxby/milestone/1);
         v1.0.0 ships when it is empty)*
-    - [ ] `v0.9.0` pre-release: proves the tag path of the release
+    - [x] `v0.9.0` pre-release: proves the tag path of the release
           workflow (#4) and gives the packages real artifacts.
-    - [ ] Homebrew tap, published from the release workflow (#23).
-    - [ ] `saxby-bin` on the AUR, published from the release
+    - [x] Homebrew tap, published from the release workflow (#23).
+    - [x] `saxby-bin` on the AUR, published from the release
           workflow (#24).
-    - [ ] JSR packages under `@saxby`, published from CI (#25).
-    - [ ] Quick gaps: #5, #6, #10, #11, #13.
+    - [x] JSR packages under `@saxby`, published from CI (#25).
+    - [x] Quick gaps: #5, #6, #10, #11, #13.
