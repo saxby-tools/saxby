@@ -14,9 +14,43 @@
 //  Saxby never touches the filesystem. `src/main.js` is a
 //  path-SHAPED token, matched by string structure alone. Nothing is
 //  resolved, opened, or read.
+//
+//  It reads the `model` field the way the chat route does. Only
+//  `saxby` runs the tiers; `saxby/<model>` and any other name are
+//  reported as `bypass` and `raw`, exactly as the decision log
+//  records them.
 
 import { extractIntent } from "../../../pipeline/extract.js";
 import { resolvePipeline } from "../../../pipeline/resolve.js";
+import { classifyModel } from "../../../pipeline/model-name.js";
+
+/**
+ * Explains a request that skips routing. Nothing is extracted and no
+ * embedding is made, because the chat route does neither for it.
+ */
+function explainPassthrough(body, requested) {
+    return {
+        requested_model: body.model || null,
+        decision: {
+            tier: requested.mode,
+            route: requested.mode,
+            selected_model: requested.target,
+            candidates: [requested.target],
+            scores: [],
+            exhausted: false,
+            refusal: null,
+        },
+        intent: {
+            override: null,
+            tags: [],
+            clean_prompt: null,
+        },
+        evidence: null,
+        abstentions: [],
+        semantic: null,
+        skipped: [],
+    };
+}
 
 export function registerExplainRoutes(app) {
     app.post("/saxby/v1/explain", async (c) => {
@@ -43,6 +77,12 @@ export function registerExplainRoutes(app) {
                 },
                 400,
             );
+        }
+
+        const requested = classifyModel(body.model);
+
+        if (requested.mode !== "route") {
+            return c.json(explainPassthrough(body, requested));
         }
 
         const semantic = c.get("semantic");
