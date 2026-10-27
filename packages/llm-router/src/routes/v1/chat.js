@@ -1,11 +1,9 @@
 import { extractIntent } from "../../pipeline/extract.js";
 import { resolvePipeline } from "../../pipeline/resolve.js";
+import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
 import { hashPrompt, identifyClient } from "../../log/client.js";
-
-const SAXBY_MODEL = "saxby";
-const SAXBY_PREFIX = "saxby/";
 
 //  ---------------------------------------------------------------------
 //  Header construction
@@ -108,6 +106,7 @@ export function registerChatRoutes(app) {
 
         const body = await c.req.json();
         const rawModel = body.model || "";
+        const requested = classifyModel(rawModel);
 
         const startedAt = performance.now();
         const receivedAt = new Date().toISOString();
@@ -127,14 +126,14 @@ export function registerChatRoutes(app) {
         let systemPrefix = null;
 
         //  ---- Direct hardware bypass: saxby/<model> -----------------
-        if (rawModel.startsWith(SAXBY_PREFIX)) {
-            targetModel = rawModel.slice(SAXBY_PREFIX.length);
+        if (requested.mode === "bypass") {
+            targetModel = requested.target;
             body.model = targetModel;
             tracer.proxy(`bypass ${targetModel}`);
         }
 
         //  ---- Smart routing: model === "saxby" ----------------------
-        if (rawModel === SAXBY_MODEL) {
+        if (requested.mode === "route") {
             const extracted = extractIntent(body, config);
             tracer.extract(extracted);
 
@@ -231,12 +230,15 @@ export function registerChatRoutes(app) {
         //  ---- Bypass and raw passthrough ----------------------------
         //  Not routing decisions, but they ARE traffic. Excluding them
         //  makes client mix and latency stats silently wrong.
-        if (!logId) {
+        //
+        //  Gated on the request's mode, never on logId. With no
+        //  decision log, logId stays empty for a routed request too,
+        //  and this block once ran a second time: the system_prefix
+        //  went in twice and the trace called the request raw.
+        if (requested.mode !== "route") {
             systemPrefix = applySystemPrefix(body, targetModel, config);
 
-            const passthroughTier = rawModel.startsWith(SAXBY_PREFIX)
-                ? "bypass"
-                : "raw";
+            const passthroughTier = requested.mode;
 
             if (passthroughTier === "raw") {
                 tracer.proxy(`raw ${targetModel}`);
