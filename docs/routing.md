@@ -154,6 +154,11 @@ its size.
 returns the whole decision as JSON. It never calls the upstream: no
 tokens, no model load. It is the safe way to test routing.
 
+It reads `model` the way a chat request does. Send `saxby` to see
+the tiers at work. A `saxby/<model>` or any other name comes back as
+tier `bypass` or `raw` with that model selected, the same way the
+decision log records it.
+
 ```bash
 curl -s http://127.0.0.1:11435/saxby/v1/explain \
     -H "Content-Type: application/json" \
