@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getInstanceDir, resolveInstanceName } from "@saxby/core";
+import { getInstanceDir, resolveInstanceName, TAGS } from "@saxby/core";
 import { ADAPTERS } from "../../adapters/index.js";
 import {
     isEmbeddingModel,
@@ -264,21 +264,31 @@ export const generateCommand = new Command()
                 );
 
                 const suggested = suggestCapabilities(model);
+                const tags = [...suggested.tags];
+
+                //  Requirements come from the backend, not the name.
+                if (details.vision) {
+                    tags.push(TAGS.VISION);
+                }
+
+                if (details.audio) {
+                    tags.push(TAGS.AUDIO);
+                }
 
                 catalog[model] = {
                     name: model,
                     max_context: details.max_context,
-                    capabilities: suggested.tags,
+                    capabilities: tags,
                 };
 
-                if (suggested.tags.length > 0) {
+                if (tags.length > 0) {
                     console.log(
-                        `   ${model}: ${suggested.tags.join(", ")}` +
+                        `   ${model}: ${tags.join(", ")}` +
                             (suggested.why ? `  (${suggested.why})` : ""),
                     );
                 }
 
-                if (suggested.tags.length === 0) {
+                if (tags.length === 0) {
                     console.log(
                         `   ${model}: no capability match — tag it by ` +
                             `hand in config.jsonc if it should route.`,

@@ -17,6 +17,11 @@
 //  TAG_LONG_CONTEXT are reserved — nothing emits them yet — and
 //  seeding them wrote routing rules into every generated config that
 //  could never fire.
+//
+//  TAG_VISION and TAG_AUDIO never appear here. They are requirements,
+//  and a family name says nothing about one size: "gemma" covers
+//  text-only gemma3:1b and audio-less gemma4:31b. `config generate`
+//  sets them from what the backend reports instead.
 
 import { TAGS } from "@saxby/core";
 
@@ -74,14 +79,14 @@ const PATTERNS = [
     //  ---- Data -------------------------------------------------------
     {
         match: "mistral-small",
-        tags: [TAGS.DATA, TAGS.VISION],
+        tags: [TAGS.DATA],
         why: "large context window, good for bulk data tasks",
     },
 
     //  ---- Generalists -----------------------------------------------
     {
         match: "gemma",
-        tags: [TAGS.REASONING, TAGS.VISION, TAGS.AUDIO],
+        tags: [TAGS.REASONING],
         why: "general-purpose generalist",
     },
     {

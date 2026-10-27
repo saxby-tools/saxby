@@ -58,18 +58,27 @@ export class OllamaAdapter {
     }
 
     /**
-     * Inspects a specific model via /api/show to pull its real context length.
+     * Inspects a specific model via /api/show to pull its real context length
+     * and whether it accepts images and audio.
      *
      * Degrades gracefully to a default rather than throwing — one model that
      * fails to introspect shouldn't abort config generation. Warns on fallback
      * (to stderr, so it's pipe-safe with `--stdout`) so the user knows that
-     * entry's max_context is a guess, not a measurement.
+     * entry's max_context is a guess, not a measurement. A model that cannot
+     * be inspected is reported as taking neither images nor audio: those are
+     * requirements, and an unclaimed requirement is refused, not misrouted.
      *
      * @param {string} modelName
      * @param {string} [url=this.defaultUrl]
-     * @returns {Promise<{ max_context: number }>}
+     * @returns {Promise<import("../index.js").ModelDetails>}
      */
     static async fetchModelDetails(modelName, url = this.defaultUrl) {
+        const fallback = {
+            max_context: DEFAULT_MAX_CONTEXT,
+            vision: false,
+            audio: false,
+        };
+
         try {
             const res = await fetch(`${url}/api/show`, {
                 method: "POST",
@@ -83,11 +92,20 @@ export class OllamaAdapter {
                     `⚠️  Could not inspect '${modelName}' (HTTP ${res.status}); ` +
                         `defaulting max_context to ${DEFAULT_MAX_CONTEXT}.`,
                 );
-                return { max_context: DEFAULT_MAX_CONTEXT };
+                return fallback;
             }
 
             const data = await res.json();
             const modelInfo = data.model_info || {};
+
+            // What the model accepts comes from what Ollama reports, never
+            // from its name: one family can ship sizes with and without
+            // vision or audio.
+            const capabilities = data.capabilities ?? [];
+            const inputs = {
+                vision: capabilities.includes("vision"),
+                audio: capabilities.includes("audio"),
+            };
 
             // Context length is arch-prefixed (e.g. 'qwen2.context_length'),
             // so match by suffix rather than a hardcoded key.
@@ -102,16 +120,16 @@ export class OllamaAdapter {
                     `⚠️  '${modelName}' did not report a context length; ` +
                         `defaulting max_context to ${DEFAULT_MAX_CONTEXT}.`,
                 );
-                return { max_context: DEFAULT_MAX_CONTEXT };
+                return { ...inputs, max_context: DEFAULT_MAX_CONTEXT };
             }
 
-            return { max_context: maxContext };
+            return { ...inputs, max_context: maxContext };
         } catch (err) {
             console.warn(
                 `⚠️  Failed to inspect '${modelName}' (${err.message}); ` +
                     `defaulting max_context to ${DEFAULT_MAX_CONTEXT}.`,
             );
-            return { max_context: DEFAULT_MAX_CONTEXT };
+            return fallback;
         }
     }
 }
