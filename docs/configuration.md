@@ -45,7 +45,7 @@ and start it after editing the dev instance's config.
         "gemma4:31b": {
             "name": "gemma4:31b",
             "max_context": 131072,
-            "capabilities": ["TAG_VISION", "TAG_AUDIO"]
+            "capabilities": ["TAG_REASONING", "TAG_VISION"]
         },
         "qwen3-coder-next:latest": {
             "name": "qwen3-coder-next:latest",
@@ -171,6 +171,13 @@ claim `TAG_VISION`, because a model that cannot see is not a worse
 choice for an image, it is a broken one. Claim them on every model
 that genuinely can, and on none that cannot. They are separate
 because a model may see without hearing.
+
+`config generate` sets these two from what the backend reports for
+each model, never from its name. One family can ship sizes with and
+without them: gemma4's small E2B and E4B take audio, and its 31B does
+not. If you add a model by hand, check what it accepts first. With
+Ollama, `ollama show <model>` lists `vision` or `audio` under
+Capabilities.
 
 If no model in the catalog claims a requirement, nothing can serve
 the request, and Saxby refuses it rather than guess. The client gets
