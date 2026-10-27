@@ -24,7 +24,11 @@ LOG_FILE="/var/log/tools.saxby.vram-guard-mac.out.log"
 
 CONFIG_FILE="/usr/local/etc/saxby/vram-guard-mac.env"
 
-# Share of RAM the GPU may wire. macOS's own default is about 75%.
+# Share of RAM the GPU may wire. macOS's own default varies by release
+# and machine: 107.5 GiB of 128 (about 84%) on macOS 26 on an M5 Max,
+# so 86% barely raises it there. Measure before relying on either
+# number; the override file can also LOWER the ceiling, which keeps
+# memory a runaway GPU job can never wire.
 DEFAULT_PERCENT=86
 
 log() {
