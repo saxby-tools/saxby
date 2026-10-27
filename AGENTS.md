@@ -414,13 +414,18 @@ requirement and not a constraint on contributions.** It is here
 because several decisions above were validated against it, and
 knowing the shape of that validation is useful context.
 
-Apple Silicon, 128 GB unified memory, with the VRAM ceiling raised to
-roughly 112 GB by `vram-guard-mac`. A second machine runs Arch Linux.
+Apple Silicon (M5 Max), 128 GB unified memory, macOS 26. The GPU
+wired ceiling is LOWERED to 96 GiB by `vram-guard-mac`'s override
+file, below macOS's own default of 107.5 GiB on this machine. An
+uncapped GPU job once wired 123.7 GiB and the kernel panicked; the
+lower ceiling keeps 32 GiB the GPU can never take. A second machine
+runs Arch Linux.
 
 Backend is Ollama. Catalog: a 31B multimodal generalist as the global
-default, a long-context coder, a multi-file coding specialist, a
-24B multimodal generalist, a 3.8B model for background tasks, and
-`bge-m3` as the embedder — deliberately outside the routing catalog.
+default and interim coder, a 27B coder kept out of routing until it
+clears a security test, a 3B model for background tasks, a 3B audio
+model, and `bge-m3` as the embedder — deliberately outside the
+routing catalog.
 
 Open WebUI runs in a container with `ENABLE_OLLAMA_API=false`, so all
 of its traffic goes through Saxby, and its Task Model is set to
