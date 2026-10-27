@@ -70,7 +70,7 @@ export class OllamaAdapter {
      *
      * @param {string} modelName
      * @param {string} [url=this.defaultUrl]
-     * @returns {Promise<import("../index.js").ModelDetails>}
+     * @returns {Promise<import("./index.js").ModelDetails>}
      */
     static async fetchModelDetails(modelName, url = this.defaultUrl) {
         const fallback = {

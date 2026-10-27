@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { OllamaAdapter } from "./adapter.js";
+import { OllamaAdapter } from "./ollama.js";
 
 //  =====================================================================
 //  fetchModelDetails

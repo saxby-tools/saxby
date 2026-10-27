@@ -1,4 +1,4 @@
-import { OllamaAdapter } from "./adapter.js";
+import { OllamaAdapter } from "@saxby/core";
 
 /**
  * Runs the Ollama interactive wizard.
