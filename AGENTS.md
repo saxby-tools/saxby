@@ -146,7 +146,10 @@ They filter the candidate set rather than contributing to a score — a
 model that cannot see is not a worse choice for an image prompt, it is
 a broken one. They are separate tags because a model may do one and
 not the other. This is the second concept in the tag vocabulary and
-the one most likely to be mistaken for the first.
+the one most likely to be mistaken for the first. Because they are
+facts, `config generate` takes them from what the backend reports,
+never from the model's name: the curated "gemma" pattern once gave
+TAG_AUDIO to gemma4:31b, which has no audio encoder.
 
 **Tag vocabulary lives in
 [`packages/core/src/tags/index.js`](packages/core/src/tags/index.js)**
@@ -395,8 +398,9 @@ vocabulary was designed to accept as a drop-in.
 
 **Discovery and UX:** user-defined custom tags, so specialised fields
 can adapt personas without forking; model capability auto-discovery
-for *measurable* facts only (context, params, quant) with capability
-tags staying curated; optional-dependency presets for third-party
+for *measurable* facts only (params, quant; context length and
+TAG_VISION / TAG_AUDIO are already discovered), with preference tags
+staying curated; optional-dependency presets for third-party
 SQLite viewers, delegating rather than vendoring; a hardware analyser
 and recommender; leaderboard ingestion at design time only, never in
 the hot path.
