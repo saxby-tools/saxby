@@ -1,3 +1,21 @@
+import {
+    classifyModel,
+    SAXBY_MODEL,
+    SAXBY_PREFIX,
+} from "../../pipeline/model-name.js";
+
+/**
+ * Builds one OpenAI-style model entry.
+ */
+function modelEntry(id) {
+    return {
+        id,
+        object: "model",
+        created: Math.floor(Date.now() / 1000),
+        owned_by: SAXBY_MODEL,
+    };
+}
+
 /**
  * Registers all /v1/models endpoints directly onto the Hono app.
  * @param {import("hono").Hono} app
@@ -7,59 +25,34 @@ export function registerModelsRoutes(app) {
         const config = c.get("config");
 
         // 1. The main smart router endpoint
-        const models = [
-            {
-                id: "saxby",
-                object: "model",
-                created: Math.floor(Date.now() / 1000),
-                owned_by: "saxby",
-            },
-        ];
+        const models = [modelEntry(SAXBY_MODEL)];
 
         // 2. The direct-access hardware models
         for (const modelId of Object.keys(config.catalog)) {
-            models.push({
-                id: `saxby/${modelId}`,
-                object: "model",
-                created: Math.floor(Date.now() / 1000),
-                owned_by: "saxby",
-            });
+            models.push(modelEntry(`${SAXBY_PREFIX}${modelId}`));
         }
 
         return c.json({ object: "list", data: models });
     });
 
+    //  Reads the name the way the chat route does: `saxby` is the
+    //  router, `saxby/<model>` and a bare name both look up <model>.
     app.get("/v1/models/:model{.*}", (c) => {
         const config = c.get("config");
-        let modelId = c.req.param("model");
+        const requested = classifyModel(c.req.param("model"));
 
-        // Strip the namespace prefix if they query a specific model
-        if (modelId.startsWith("saxby/")) {
-            modelId = modelId.replace("saxby/", "");
+        if (requested.mode === "route") {
+            return c.json(modelEntry(SAXBY_MODEL));
         }
 
-        // If they query the router itself
-        if (modelId === "saxby" || modelId === "saxby/") {
-            return c.json({
-                id: "saxby",
-                object: "model",
-                created: Math.floor(Date.now() / 1000),
-                owned_by: "saxby",
-            });
-        }
+        const modelId = requested.target;
 
-        const model = config.catalog[modelId];
-        if (!model) {
+        if (!config.catalog[modelId]) {
             return c.json({
                 error: { message: `Model '${modelId}' not found` },
             }, 404);
         }
 
-        return c.json({
-            id: `saxby/${modelId}`,
-            object: "model",
-            created: Math.floor(Date.now() / 1000),
-            owned_by: "saxby",
-        });
+        return c.json(modelEntry(`${SAXBY_PREFIX}${modelId}`));
     });
 }
