@@ -21,6 +21,12 @@ export { OllamaAdapter };
  */
 
 /**
+ * @typedef {Object} LoadedModel
+ * @property {string} name - Canonical name, as canonicalName returns it
+ * @property {number} bytes - GPU memory the loaded model holds
+ */
+
+/**
  * @typedef {Object} BackendAdapter
  * @property {string} id - Unique identifier for the backend (e.g., 'ollama', 'vllm')
  * @property {string} displayName - Human-readable name (e.g., 'Ollama', 'vLLM Engine')
@@ -28,6 +34,11 @@ export { OllamaAdapter };
  * @property {(url?: string) => Promise<boolean>} detect - Pings the endpoint to verify availability
  * @property {(url?: string) => Promise<string[]>} fetchInventory - Fetches installed model names
  * @property {(modelName: string, url?: string) => Promise<ModelDetails>} fetchModelDetails - Inspects model specs
+ * @property {(name: string) => string} canonicalName - The backend's
+ *     own spelling of a model name, for comparing names
+ * @property {(url?: string) => Promise<LoadedModel[]>} fetchResidency -
+ *     What is loaded now and how big. Throws when the backend cannot
+ *     be asked; an empty array means nothing is loaded.
  */
 
 /** @type {BackendAdapter[]} */
