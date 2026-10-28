@@ -1,4 +1,5 @@
 export * from "./utils/env.js";
+export * from "./utils/fetch-error.js";
 export * from "./utils/plist.js";
 export * from "./utils/probe.js";
 export * from "./utils/root.js";
