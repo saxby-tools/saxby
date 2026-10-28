@@ -44,6 +44,45 @@ Deno.test("config — a model missing from the catalog is named", () => {
 });
 
 //  =====================================================================
+//  Listening
+//  =====================================================================
+
+Deno.test("config — the bind defaults to loopback", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.listen_host, "127.0.0.1");
+    assertEquals(parsed.allowed_hosts, []);
+});
+
+Deno.test("config — any listen_host is accepted as written", () => {
+    for (const host of ["0.0.0.0", "::", "10.0.0.5", "localhost"]) {
+        const parsed = validateConfig(config({ listen_host: host }));
+
+        assertEquals(parsed.listen_host, host, host);
+    }
+});
+
+Deno.test("config — an empty listen_host is refused", () => {
+    const message = messageFor(config({ listen_host: "" }));
+
+    assert(message.includes("listen_host must not be empty"));
+});
+
+Deno.test("config — allowed_hosts is a list of names", () => {
+    const parsed = validateConfig(
+        config({ allowed_hosts: ["saxby", "host.containers.internal"] }),
+    );
+
+    assertEquals(parsed.allowed_hosts, ["saxby", "host.containers.internal"]);
+});
+
+Deno.test("config — a non-string in allowed_hosts is named", () => {
+    const message = messageFor(config({ allowed_hosts: ["saxby", 11435] }));
+
+    assert(message.includes("allowed_hosts.1"));
+});
+
+//  =====================================================================
 //  Memory broker fields
 //  =====================================================================
 
