@@ -304,21 +304,29 @@ step. **Support happens on GitHub issues only.** Package pages point
 there; nobody monitors AUR or Homebrew comment threads. If Saxby
 grows, others can maintain fancier packages or forks.
 
-**Saxby serves this machine only, until keys exist.** It checks no
-credentials, so it listens on `127.0.0.1` only — `Deno.serve` with no
-hostname listens on every interface, and until v0.9.2 that put Saxby,
-and through its catch-all Ollama's management API, on the LAN. A guard
+**Saxby serves this machine by default, and says so when it does
+not.** It checks no credentials, so it listens on `127.0.0.1` unless
+`listen_host` says otherwise — `Deno.serve` with no hostname listens on
+every interface, and until v0.9.2 that put Saxby, and through its
+catch-all Ollama's management API, on the LAN. v0.9.2 refused every
+other bind. The Docker image made that a config field: a container's
+loopback is unreachable from outside it, so a refusal meant no image.
+A wider bind is the operator's call, named by a warning at every boot
+rather than refused — their machine, their decision; Saxby's job is to
+say plainly what the setting means. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
-box makes strangers look local), any `Origin` (a browser), a non-local
-`Host` (DNS rebinding) and Ollama's management paths. It judges
-"browser" by `Origin` and `Host` only: Node's `fetch` sends
-`sec-fetch-mode: cors` from server code, and OpenClaw's real requests
-carry it. `host.docker.internal` is allowed because a Docker Desktop
-container reaches the host by that name. Serving other machines — keys,
-a trusted-proxy list, non-loopback binds — is the post-v1 exposure work;
-when it lands, "identified by `User-Agent`, never by API key" must be
-revisited, since its objection is to keys nobody verifies.
+box makes strangers look local), any `Origin` (a browser), a `Host`
+that is neither a local name nor in `allowed_hosts` (DNS rebinding; a
+browser cannot forge `Host`, so a listed name loosens nothing) and
+Ollama's management paths. It judges "browser" by `Origin` and `Host`
+only: Node's `fetch` sends `sec-fetch-mode: cors` from server code, and
+OpenClaw's real requests carry it. `host.docker.internal` is allowed
+because a Docker Desktop container reaches the host by that name; a
+Compose service name goes in `allowed_hosts`. Serving other machines
+on purpose — keys, a trusted-proxy list — is the post-v1 exposure
+work; when it lands, "identified by `User-Agent`, never by API key"
+must be revisited, since its objection is to keys nobody verifies.
 
 **The memory broker lives in Saxby, and fails closed.** On Oct. 27,
 2026, an uncapped PyTorch job grew to 122 GiB beside two loaded models
