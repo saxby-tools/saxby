@@ -1,11 +1,23 @@
 import * as v from "valibot";
 
+//  Memory broker defaults (docs/memory-broker.md says why each).
+export const DEFAULT_MARGIN_GIB = 8;
+export const DEFAULT_WAIT_TIMEOUT_S = 120;
+export const DEFAULT_HEARTBEAT_INTERVAL_S = 10;
+
 export const TagSchema = v.pipe(
     v.string(),
     v.regex(
         /^[A-Z0-9_]+$/,
         "Tags must be uppercase alphanumeric with underscores.",
     ),
+);
+
+//  A size in GiB, as people write it. Zero is refused: a model that
+//  takes no memory would hide its real size from the budget.
+const SizeGibSchema = v.pipe(
+    v.number("size_gib must be a number"),
+    v.check((gib) => gib > 0, "size_gib must be greater than 0"),
 );
 
 export const ModelSchema = v.strictObject({
@@ -20,6 +32,12 @@ export const ModelSchema = v.strictObject({
     //  model-specific behaviour at the cause (decoding) rather than
     //  rewriting the response after the fact.
     system_prefix: v.optional(v.string()),
+    //  The memory broker never lets a job take a pinned model's
+    //  space, whether the model is loaded or not.
+    pinned: v.optional(v.boolean(), false),
+    //  Used only until the backend is seen holding the model loaded;
+    //  a measured size always wins.
+    size_gib: v.optional(SizeGibSchema),
 });
 
 export const PersonaSchema = v.strictObject({
@@ -45,11 +63,46 @@ export const SemanticProfileSchema = v.strictObject({
         v.minValue(0, "Threshold must be >= 0.0"),
         v.maxValue(1, "Threshold must be <= 1.0"),
     ),
+    //  The active embedder is pinned without asking, since Tier 3
+    //  loads it for routed requests, and embedders never sit in the
+    //  catalog where `pinned` lives.
+    size_gib: v.optional(SizeGibSchema),
 });
 
 export const SemanticSchema = v.strictObject({
     active: v.string("Active semantic profile is required"),
     profiles: v.record(v.string(), SemanticProfileSchema),
+});
+
+export const MemorySchema = v.strictObject({
+    //  Kept free beyond every model and reservation.
+    margin_gib: v.optional(
+        v.pipe(
+            v.number("margin_gib must be a number"),
+            v.minValue(0, "margin_gib must be >= 0"),
+        ),
+        DEFAULT_MARGIN_GIB,
+    ),
+    //  How long a job or a model load waits for room before it is
+    //  refused. `saxby reserve --timeout` overrides it for one job.
+    wait_timeout_s: v.optional(
+        v.pipe(
+            v.number("wait_timeout_s must be a number"),
+            v.minValue(0, "wait_timeout_s must be >= 0"),
+        ),
+        DEFAULT_WAIT_TIMEOUT_S,
+    ),
+    //  How often `saxby reserve` checks in, and how often saxbyd looks
+    //  for reservations whose processes have died.
+    heartbeat_interval_s: v.optional(
+        v.pipe(
+            v.number("heartbeat_interval_s must be a number"),
+            v.minValue(1, "heartbeat_interval_s must be >= 1"),
+        ),
+        DEFAULT_HEARTBEAT_INTERVAL_S,
+    ),
+    //  Used only when the memory probe cannot measure the ceiling.
+    ceiling_gib: v.optional(SizeGibSchema),
 });
 
 export const SaxbyConfigSchema = v.strictObject({
@@ -75,6 +128,7 @@ export const SaxbyConfigSchema = v.strictObject({
     log_prompts: v.optional(v.boolean(), true),
     client_names: v.optional(v.record(v.string(), v.string()), {}),
     log_path: v.optional(v.string()),
+    memory: v.optional(MemorySchema, {}),
 });
 
 /**
