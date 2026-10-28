@@ -111,6 +111,10 @@ nothing is admitted. The refusal says which term:
 - the backend did not answer `/api/ps`
 - a pinned model has no known size
 
+The first and the third are config gaps: waiting cannot fill them, so
+a job is refused at once rather than after `wait_timeout_s`. The
+second may clear on the next poll, so a job waits for it.
+
 The current budget, in bytes:
 
 ```bash
@@ -140,8 +144,14 @@ where the `pinned` field lives. Its profile takes `size_gib` too.
 A pinned model's size comes from, in order:
 
 1. what the backend reports now, if it is loaded
-2. what the backend reported the last time it was loaded
+2. what the backend reported the last time it was loaded whole
 3. `size_gib` in the config
+
+Only a whole load is a measurement. When memory is tight, Ollama
+spills layers to the CPU, and the GPU part it reports then is less
+than the model needs to load whole; remembering it would undercount
+the pinned model from then on. Such a load still counts as loaded,
+at the GPU size it holds now, but it is not remembered.
 
 Sizes from the backend are kept in the decision log's file, so a
 saxbyd restart does not forget them. If none of the three exists, the
@@ -151,12 +161,13 @@ boot log says so:
 ```
 🧮 Memory broker: ceiling 96.0 GiB (iogpu.wired_limit_mb), margin 8.0 GiB
    pinned: gemma4:31b (size unknown), granite4:micro-h 4.5 GiB (size_gib)
-⚠️  Jobs will be refused until this is fixed: pinned model 'gemma4:31b' has no known size; load it once or give it size_gib
+⚠️  Jobs will be refused until this is fixed: pinned model 'gemma4:31b' has no known size; load it once, whole, or give it size_gib
 ```
 
-That fixes itself the first time the model loads. Set `size_gib` to
-skip the wait. A measured size always beats `size_gib`, since the
-real size changes with the context length the backend loads.
+That fixes itself the first time the model loads whole. Set
+`size_gib` to skip the wait. A measured size always beats `size_gib`,
+since the real size changes with the context length the backend
+loads.
 
 ##  Model loads
 
@@ -193,6 +204,11 @@ Once a load is let through, its size is held in the ledger until the
 response's first byte arrives. By then the backend lists the model,
 and its size counts as loaded. Without the hold, two different models
 could both be let through into the same free space.
+
+A second request for the same model, while it is still loading,
+joins that hold rather than adding one: the backend loads the model
+once, so its size counts once. The hold stays until the last request
+sharing it has its first byte.
 
 The decision-log row of a refused request has the outcome
 `memory_refused`. Its `request_id` matches a row in `memory_events`
@@ -246,6 +262,15 @@ Both are set because of two traps in PyTorch's allocator:
 
 Ratios round down, so the cap never lands above the reservation.
 
+**The cap is set only when the ceiling was measured.** PyTorch's
+ratio is a ratio of Metal's own number, which `iogpu.wired_limit_mb`
+equals when it is set. When it is 0, the macOS default, the broker's
+ceiling comes from `memory.ceiling_gib`, which may sit anywhere
+relative to Metal's default, and a ratio of it would land the cap
+above or below the reservation by the same error. `saxby reserve`
+then says the cap was not set and why; the reservation still stands.
+Set the ceiling with `saxby vram-guard-mac` to get the cap.
+
 **MLX jobs are not capped.** MLX reads neither variable. The ledger
 still counts an MLX job, so it cannot start beside models it would
 not fit with. It can still grow past its reservation once it runs.
@@ -260,8 +285,13 @@ exits 69, when:
 - saxbyd answers but has no broker (a saxbyd older than the CLI)
 
 `--no-broker` runs the job anyway. It prints a warning and still sets
-the PyTorch cap if it can read the ceiling itself. The job is
+the PyTorch cap if it can measure the ceiling itself. The job is
 invisible to saxbyd: model loads will not wait for it.
+
+If saxbyd restarts while a job runs, the wrapper registers the job
+again on its next heartbeat. Should saxbyd refuse that, the wrapper
+says so once, and the job runs on uncounted; saxbyd is not asked
+again.
 
 ##  Config
 
@@ -326,9 +356,13 @@ while saxbyd waits.
     },
     "heartbeat_interval_s": 10,
     "ceiling_bytes": 103079215104,
+    "ceiling_source": "iogpu.wired_limit_mb",
     "waited_ms": 0
 }
 ```
+
+`ceiling_source` says where the ceiling came from; the PyTorch cap
+is set only when it is `iogpu.wired_limit_mb`.
 
 503, refused, with `error.code` `memory_unavailable` and the whole
 `budget`. 400 for a bad body or a pid that is not this user's.
@@ -390,8 +424,9 @@ and backend adapters.
 `iogpu.wired_limit_mb`, which `saxby vram-guard-mac` sets. When it is
 0, macOS uses its own default, and only Metal reports that. Ollama
 logs it but has no API for it, so the broker calls the ceiling
-unknown and uses `memory.ceiling_gib`. Usage is wired pages from
-`vm_stat`.
+unknown and uses `memory.ceiling_gib`; the boot line says so, and
+the PyTorch cap is then not set (see [The cap inside a
+job](#the-cap-inside-a-job)). Usage is wired pages from `vm_stat`.
 
 saxbyd may start exactly three programs, by absolute path, for this:
 `/bin/kill`, `/usr/sbin/sysctl` and `/usr/bin/vm_stat`. It may start
