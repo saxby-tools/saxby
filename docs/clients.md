@@ -17,11 +17,14 @@ refuse to start without one. Clients are told apart by their
 `User-Agent`, never by their key.
 
 Because nothing is checked, Saxby only serves clients on the same
-machine. It listens on `127.0.0.1` only, and it refuses requests that
-came through a proxy, came from a web page, or name a host other than
-`localhost`, `127.0.0.1`, `[::1]` or `host.docker.internal`. Each
-refusal is a 403 explained in [Troubleshooting](troubleshooting.md). Serving
-other machines needs per-client keys, which are planned after v1.
+machine. It listens on `127.0.0.1` by default, and it refuses requests
+that came through a proxy, came from a web page, or name a host other
+than `localhost`, `127.0.0.1`, `[::1]`, `host.docker.internal` or a
+name in `allowed_hosts`. Each refusal is a 403 explained in
+[Troubleshooting](troubleshooting.md). A wider bind is yours to set and
+is warned about at boot; see [Listening](configuration.md#listening).
+Serving other machines with credentials needs per-client keys, which
+are planned after v1.
 
 Use `saxby/<model>` to skip routing and reach one model directly.
 See [Routing](routing.md).
@@ -59,9 +62,10 @@ HOST=127.0.0.1
 `HOST=127.0.0.1` keeps Open WebUI's own port (8080, under host
 networking) on loopback too. Without it, host networking puts Open
 WebUI on every network interface. That is Open WebUI's exposure, not
-Saxby's, but it is fixed in the same place. Podman's
-`host.containers.internal` is not accepted; use host networking there
-as well.
+Saxby's, but it is fixed in the same place. With Podman, add
+`host.containers.internal` to `allowed_hosts` instead
+([Listening](configuration.md#listening)); the bridge-network problem
+above still applies.
 
 **Turn off Open WebUI's own Ollama connection** with
 `ENABLE_OLLAMA_API=false`. Otherwise Open WebUI talks to Ollama
