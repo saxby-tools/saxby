@@ -420,11 +420,18 @@ Not built yet:
   (`/api/chat`, `/api/generate`, `/api/embed`, `/v1/embeddings`,
   `/v1/completions`), can still load a model while a job runs. Their
   models do count as loaded once they are.
+  [Issue #33](https://github.com/saxby-tools/saxby/issues/33).
+- **MLX jobs are not capped** once they run.
+  [Issue #34](https://github.com/saxby-tools/saxby/issues/34).
+- **Waiters are not in line.** Each waiting job or load checks again
+  once a second. A big job can be passed by smaller ones that fit
+  sooner. [Issue #35](https://github.com/saxby-tools/saxby/issues/35).
+- **Linux is minimal**, as described under Platforms.
+  [Issue #36](https://github.com/saxby-tools/saxby/issues/36).
 - **Instances do not share a ledger.** A job reserved through the dev
   instance is invisible to the default instance's gate. Reserve
   through the instance your clients use.
-- **Waiters are not in line.** Each waiting job or load checks again
-  once a second. A big job can be passed by smaller ones that fit
-  sooner.
+  [Issue #37](https://github.com/saxby-tools/saxby/issues/37).
 - **`explain` does not show the gate.** It never calls the backend,
   and the gate reads `/api/ps`.
+  [Issue #38](https://github.com/saxby-tools/saxby/issues/38).
