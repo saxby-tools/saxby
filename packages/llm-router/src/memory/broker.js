@@ -29,6 +29,11 @@ import { createLedger } from "./ledger.js";
 //  How often a waiting job or load looks again.
 const POLL_MS = 1000;
 
+//  One probe reading serves every waiter that polls within this long
+//  of it. The probe starts two programs, so N waiters would otherwise
+//  cost 2N processes a second; the ceiling does not change that fast.
+const PROBE_REUSE_MS = POLL_MS;
+
 //  A load hold normally ends at the request's first byte. This only
 //  catches a hold some path forgot to release.
 const HOLD_TTL_MS = 10 * 60 * 1000;
@@ -197,6 +202,9 @@ export function createBroker(options) {
     let sweeping = false;
     let livenessWarned = false;
 
+    /** @type {{ atMs: number, promise: Promise<Object> } | null} */
+    let probeReading = null;
+
     //  ---- Reading the machine ---------------------------------------
 
     function readProbe() {
@@ -204,7 +212,15 @@ export function createBroker(options) {
             return Promise.resolve(NO_PROBE_READING);
         }
 
-        return options.probe.read();
+        if (probeReading !== null) {
+            if (now() - probeReading.atMs < PROBE_REUSE_MS) {
+                return probeReading.promise;
+            }
+        }
+
+        probeReading = { atMs: now(), promise: options.probe.read() };
+
+        return probeReading.promise;
     }
 
     async function readResidency() {

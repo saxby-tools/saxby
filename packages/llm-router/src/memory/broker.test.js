@@ -71,6 +71,8 @@ function harness(options = {}) {
         },
     };
 
+    let probeReads = 0;
+
     const probe = {
         read: () =>
             Promise.resolve({
@@ -80,6 +82,8 @@ function harness(options = {}) {
                 ceilingSource: "fixture",
                 usedBytes: gibToBytes(24),
                 usedSource: "fixture wired",
+            }).finally(() => {
+                probeReads += 1;
             }),
     };
 
@@ -113,6 +117,10 @@ function harness(options = {}) {
         setLoaded: (models) => {
             residency = models;
         },
+        advance: (by) => {
+            ms += by;
+        },
+        probeReads: () => probeReads,
     };
 
     return control;
@@ -212,6 +220,20 @@ Deno.test("broker — the auto-pinned embedder takes its space", async () => {
     const got = await reserve(broker, 32.5, { timeoutMs: 0 });
 
     assertEquals(got.admitted, false);
+});
+
+Deno.test("broker — one probe reading serves a second of polls", async () => {
+    const control = harness();
+
+    await control.broker.snapshot();
+    await control.broker.snapshot();
+
+    assertEquals(control.probeReads(), 1);
+
+    control.advance(1000);
+    await control.broker.snapshot();
+
+    assertEquals(control.probeReads(), 2);
 });
 
 Deno.test("broker — a dead pid is refused before anything else", async () => {
