@@ -6,5 +6,7 @@ export * from "./config/instance.js";
 export * from "./config/schema.js";
 export * from "./config/loader.js";
 export * from "./backends/index.js";
+export * from "./memory/units.js";
+export * from "./memory/probes/index.js";
 export * from "./service/index.js";
 export * from "./tags/index.js";
