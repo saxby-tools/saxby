@@ -241,12 +241,13 @@ Deno.test("broker — a client that leaves stops its wait", async () => {
     assertEquals(kinds(events), ["job:wait", "job:abandon"]);
 });
 
-Deno.test("broker — an unknown ceiling refuses and says why", async () => {
-    const { broker } = harness({ ceilingBytes: null });
+Deno.test("broker — an unknown ceiling refuses at once", async () => {
+    const { broker, sleeps } = harness({ ceilingBytes: null });
     const got = await reserve(broker, 1);
 
     assertEquals(got.admitted, false);
     assertStringIncludes(got.reason, "ceiling is unknown");
+    assertEquals(sleeps, []);
 });
 
 Deno.test("broker — ceiling_gib fills an unknown ceiling", async () => {
@@ -269,7 +270,7 @@ Deno.test("broker — ceiling_gib fills an unknown ceiling", async () => {
 });
 
 Deno.test("broker — a backend that cannot answer refuses jobs", async () => {
-    const { broker, setLoaded } = harness();
+    const { broker, setLoaded, sleeps } = harness();
 
     setLoaded(new Error("Could not reach Ollama"));
 
@@ -277,6 +278,26 @@ Deno.test("broker — a backend that cannot answer refuses jobs", async () => {
 
     assertEquals(got.admitted, false);
     assertStringIncludes(got.reason, "Could not reach Ollama");
+
+    //  It may answer on the next poll, so the job waits for it.
+    assert(sleeps.length > 0);
+});
+
+Deno.test("broker — a job is admitted once the backend answers", async () => {
+    const control = harness({
+        onSleep: (count) => {
+            if (count === 2) {
+                control.setLoaded([QWEN]);
+            }
+        },
+    });
+
+    control.setLoaded(new Error("Could not reach Ollama"));
+
+    const got = await reserve(control.broker, 1);
+
+    assert(got.admitted);
+    assertEquals(control.sleeps.length, 2);
 });
 
 Deno.test("broker — a pinned model with no size blocks jobs", async () => {
