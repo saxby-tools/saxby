@@ -67,12 +67,25 @@ const NO_PROBE_READING = {
  */
 function sleepFor(ms, signal) {
     return new Promise((resolve) => {
-        const timer = setTimeout(resolve, ms);
+        let timer = null;
 
-        signal?.addEventListener("abort", () => {
+        //  Whichever comes first, the timer or the abort, clears the
+        //  other: a listener left on the signal after the timer won
+        //  would otherwise pile up, one per poll, for the request's life.
+        function finish() {
             clearTimeout(timer);
+            signal?.removeEventListener("abort", finish);
             resolve();
-        }, { once: true });
+        }
+
+        timer = setTimeout(finish, ms);
+
+        if (signal?.aborted) {
+            finish();
+            return;
+        }
+
+        signal?.addEventListener("abort", finish, { once: true });
     });
 }
 
