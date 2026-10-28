@@ -39,6 +39,8 @@ function app() {
         upstreamUrl: "http://ollama.test",
         isAlive: (pid) => Promise.resolve(pid === WRAPPER || pid === CHILD),
         sizes: createSizeCache(),
+        //  A still clock, so waited_ms is exact rather than a few ms.
+        now: () => 0,
     });
 
     const server = new Hono();
