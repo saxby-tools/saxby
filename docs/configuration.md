@@ -92,6 +92,8 @@ and start it after editing the dev instance's config.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `listen_port` | `11435` | Port Saxby listens on, 1024 to 65535 |
+| `listen_host` | `127.0.0.1` | Address Saxby binds; see [Listening](#listening) |
+| `allowed_hosts` | `[]` | Extra `Host` names the guard accepts; see [Listening](#listening) |
 | `upstream_url` | `http://127.0.0.1:11434` | The OpenAI-compatible backend |
 | `global_default_model` | required | Catalog key used when nothing matches |
 | `catalog` | required | The models Saxby may route to |
@@ -293,6 +295,45 @@ warns and keeps routing with Tiers 1 and 2.
 The active profile's model is pinned for the memory broker without
 being asked, since Tier 3 loads it. A profile may carry `size_gib`
 like a catalog entry.
+
+##  Listening
+
+Saxby listens on `127.0.0.1` by default and checks no credentials, so
+only programs on this machine can reach it. Two fields change that.
+Both are accepted as written, because the machine is yours; Saxby's
+part is to say plainly what each one means.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `listen_host` | `127.0.0.1` | The address saxbyd binds |
+| `allowed_hosts` | `[]` | `Host` names accepted besides the local ones |
+
+`listen_host` takes any address the system accepts. `0.0.0.0` binds
+every interface, and saxbyd then prints a warning at every boot:
+anyone who can reach the port can use your models and your hardware.
+The case that needs it is a container. A container's loopback is its
+own, so a loopback bind never answers on a published port, and saxbyd
+says so at boot when it finds itself in one. Publish the port to the
+host's loopback, `127.0.0.1:11435:11435`, and the reach is the same
+as a native install. Binding one interface, such as `10.0.0.5`, is
+accepted and warned about the same way.
+
+`allowed_hosts` adds names to the guard's `Host` check, which
+otherwise accepts `localhost`, `127.0.0.1`, `[::1]` and
+`host.docker.internal`. A client in the next container over reaches
+Saxby by its Compose service name and sends that as `Host`, so list
+it: `["saxby"]`. Podman's `host.containers.internal` goes here too.
+The check exists against DNS rebinding, where a web page points its
+own name at your machine. A browser cannot forge `Host`, so a name
+you list loosens nothing. It also means a wide bind alone opens
+little: a request to `http://192.168.1.20:11435` carries that address
+as `Host` and is refused unless you list it.
+
+Both can be written at generation time, without prompts:
+
+```bash
+saxby config generate --listen-host 0.0.0.0 --allowed-hosts saxby
+```
 
 ##  Logging
 
