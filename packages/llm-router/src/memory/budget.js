@@ -48,6 +48,17 @@ function sum(values) {
     return values.reduce((total, value) => total + value, 0);
 }
 
+/**
+ * The sentence for a pinned model with no size. Exported so the boot
+ * announcement says it the same way.
+ * @param {PinnedTerm} term
+ * @returns {string}
+ */
+export function describePinnedGap(term) {
+    return `pinned model '${term.model}' has no known size; load it ` +
+        `once, whole, or give it size_gib`;
+}
+
 //  Two kinds of unknown. A config gap (no ceiling, a pinned model with
 //  no size) stays until someone edits the config, so waiting on it
 //  only delays the refusal. A backend that did not answer may answer
@@ -64,10 +75,7 @@ function findConfigGaps(terms) {
             continue;
         }
 
-        gaps.push(
-            `pinned model '${term.model}' has no known size; load it ` +
-                `once or give it size_gib`,
-        );
+        gaps.push(describePinnedGap(term));
     }
 
     return gaps;
