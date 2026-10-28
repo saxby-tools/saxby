@@ -19,10 +19,13 @@
 //  on what the runner happens to be.
 //
 //  Permissions are baked in explicitly rather than -A. The daemon
-//  faces the network and never starts a process, so it gets no
-//  --allow-run: a bug in request handling cannot launch a program.
-//  The CLI runs osascript, launchctl, systemctl and sysctl, so it
-//  does, and reads the uid to address the user's launchd domain.
+//  faces the network, so it may start only the programs its memory
+//  broker needs, each by absolute path and per OS (SAXBYD_RUN below):
+//  a bug in request handling cannot launch anything else, and a
+//  changed PATH cannot swap one out. The CLI runs osascript,
+//  launchctl, systemctl, sysctl and the jobs `saxby reserve` wraps, so
+//  it gets --allow-run whole, and reads the uid to address the user's
+//  launchd domain.
 //
 //  `deno compile` IGNORES the "unstable" list in deno.json, and an
 //  explicit --unstable-no-legacy-abort is accepted but has no effect
@@ -73,6 +76,24 @@ const TARGETS = [
     },
 ];
 
+//  The only programs saxbyd may start. A closed list (AGENTS.md): a
+//  new entry needs a stated reason there.
+//
+//    kill      `kill -0 <pid>` tells whether a reservation's job is
+//              still alive, so a force-killed wrapper's job keeps its
+//              memory counted. Deno.kill(pid, 0) would need --allow-run
+//              with no list at all.
+//    sysctl    reads iogpu.wired_limit_mb, the GPU's memory ceiling
+//    vm_stat   reads wired memory, logged beside every decision
+//
+//  Linux reads /proc/meminfo instead, a file, so it needs only kill.
+//  The Linux path is util-linux's, also where merged-/usr distros put
+//  procps' kill; it has not been run on Linux yet.
+const SAXBYD_RUN = {
+    darwin: ["/bin/kill", "/usr/sbin/sysctl", "/usr/bin/vm_stat"],
+    linux: ["/usr/bin/kill"],
+};
+
 const BINARIES = [
     {
         name: "saxbyd",
@@ -83,6 +104,7 @@ const BINARIES = [
             "--allow-read",
             "--allow-write",
         ],
+        runByOs: SAXBYD_RUN,
         include: [],
     },
     {
@@ -177,6 +199,22 @@ async function run(command, args, env = {}) {
     }
 }
 
+//  A binary with a per-OS run list gets exactly that list for the
+//  target it is compiled for.
+function runPermission(binary, target) {
+    if (!binary.runByOs) {
+        return [];
+    }
+
+    const programs = binary.runByOs[target.os];
+
+    if (!programs) {
+        throw new Error(`${binary.name} has no run list for ${target.os}`);
+    }
+
+    return [`--allow-run=${programs.join(",")}`];
+}
+
 async function compile(binary, target, outDir) {
     const includes = binary.include.flatMap((path) => ["--include", path]);
 
@@ -186,6 +224,7 @@ async function compile(binary, target, outDir) {
         "--target",
         target.triple,
         ...binary.permissions,
+        ...runPermission(binary, target),
         ...includes,
         "--output",
         join(outDir, binary.name),
