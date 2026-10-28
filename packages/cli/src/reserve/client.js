@@ -5,6 +5,8 @@
 //  that cannot reach saxbyd throws BrokerUnreachable, so the wrapper
 //  can fail closed: no answer from the broker is never a yes.
 
+import { describeFetchError } from "@saxby/core";
+
 const HOST = "127.0.0.1";
 const BASE_PATH = "/saxby/v1/reservations";
 
@@ -18,7 +20,10 @@ const MS_PER_S = 1000;
 
 export class BrokerUnreachable extends Error {
     constructor(port, cause) {
-        super(`saxbyd did not answer on ${HOST}:${port}: ${cause.message}`);
+        super(
+            `saxbyd did not answer on ${HOST}:${port}: ` +
+                describeFetchError(cause),
+        );
         this.name = "BrokerUnreachable";
     }
 }
