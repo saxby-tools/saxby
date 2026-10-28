@@ -45,7 +45,10 @@ in order:
 6. **Memory broker.** Read the budget once and print it, with every
    unknown that will refuse jobs, then start the sweep that drops
    reservations whose processes have exited.
-7. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
+7. **Serve.** Listen on `listen_host`, which is `127.0.0.1` unless
+   the config says otherwise. A wider bind is named in a warning
+   first; a loopback bind inside a container gets a hint that the
+   published port will not answer.
    Saxby checks no credentials, so nothing beyond this machine may
    reach it until per-client keys exist. A port clash is explained by
    asking the holder who it is.
@@ -64,7 +67,8 @@ non-browser client:
 - **forwarding headers** (`X-Forwarded-*`, `Forwarded`, `Via` and
   similar): a proxy on this machine makes strangers look local;
 - **any `Origin` header**: a web page in a browser;
-- **a `Host` that is not a local name**: DNS rebinding;
+- **a `Host` that is not a local name**, or one the config's
+  `allowed_hosts` adds: DNS rebinding;
 - **Ollama's management paths** (`/api/pull`, `push`, `create`,
   `copy`, `delete`, `blobs`): nothing needs them through a router.
 
