@@ -6,10 +6,10 @@
 //  only. Filling a gap from the config, and deciding what an unknown
 //  means, belong to the broker that reads it.
 
-import { DarwinMemoryProbe } from "./darwin.js";
+import { DarwinMemoryProbe, WIRED_LIMIT_KEY } from "./darwin.js";
 import { LinuxMemoryProbe } from "./linux.js";
 
-export { DarwinMemoryProbe, LinuxMemoryProbe };
+export { DarwinMemoryProbe, LinuxMemoryProbe, WIRED_LIMIT_KEY };
 
 /**
  * @typedef {Object} MemoryReading

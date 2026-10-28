@@ -29,7 +29,11 @@ import { BYTES_PER_MIB } from "../units.js";
 const SYSCTL_PATH = "/usr/sbin/sysctl";
 const VM_STAT_PATH = "/usr/bin/vm_stat";
 
-const WIRED_LIMIT_KEY = "iogpu.wired_limit_mb";
+//  Exported because it is also the `ceilingSource` a reading carries
+//  when the ceiling was measured. The PyTorch cap in `saxby reserve`
+//  is a ratio of Metal's own number, which this key equals when set,
+//  so the limiter compares the source against it before capping.
+export const WIRED_LIMIT_KEY = "iogpu.wired_limit_mb";
 
 const PAGE_SIZE_PATTERN = /page size of (\d+) bytes/;
 const WIRED_PAGES_PATTERN = /^Pages wired down:\s+(\d+)\./m;
