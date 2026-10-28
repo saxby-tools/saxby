@@ -101,6 +101,7 @@ and start it after editing the dev instance's config.
 | `log_prompts` | `true` | Store prompt text in the decision log |
 | `client_names` | `{}` | Friendly names for client signatures |
 | `log_path` | instance folder | Where the decision log lives |
+| `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
 
 Unknown fields are an error, not a warning. A misspelled key such as
 `listen_prot` stops the boot instead of being ignored.
@@ -118,6 +119,8 @@ what Saxby sends upstream, and what `global_default_model`,
 | `capabilities` | Tags this model should win, default none |
 | `system_prefix` | Optional text sent as a system message to this model only |
 | `description` | Optional note for humans |
+| `pinned` | `true` keeps this model's space safe from heavy jobs, default `false` |
+| `size_gib` | Optional size in GiB, used until the backend reports one |
 
 `max_context` matters. Saxby estimates the size of the whole
 request, every message and not just the last one, and skips any model
@@ -134,6 +137,11 @@ invisible.
 catalog can be picked as a chat target, and an embedder cannot answer
 a chat request. Embedders belong only in `semantic.profiles`.
 `config generate` keeps them out of the chat pickers.
+
+`pinned` and `size_gib` belong to the memory broker. A pinned model's
+space counts as taken whether it is loaded or not, so a job started
+with `saxby reserve` can never displace it. Pin the models you keep
+loaded. See [Memory broker](memory-broker.md).
 
 ##  Capability tags
 
@@ -282,6 +290,10 @@ comparing two embedders a one-line change.
 Tier 3 is optional. If the embedder cannot be reached at boot, Saxby
 warns and keeps routing with Tiers 1 and 2.
 
+The active profile's model is pinned for the memory broker without
+being asked, since Tier 3 loads it. A profile may carry `size_gib`
+like a catalog entry.
+
 ##  Logging
 
 `log_prompts: false` stores a hash of each prompt instead of its
@@ -302,6 +314,31 @@ later still applies to old traffic.
 `log_path` moves the decision log. Leave it unset in a named instance:
 its log then stays in the instance's folder. See
 [Instances](instances.md).
+
+##  Memory
+
+```jsonc
+"memory": {
+    "margin_gib": 8,
+    "wait_timeout_s": 120,
+    "heartbeat_interval_s": 10
+}
+```
+
+Settings for the memory broker, which keeps heavy GPU jobs and model
+loads from overfilling GPU memory. The section is optional and the
+broker is always on.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `margin_gib` | `8` | Kept free beyond every model and job |
+| `wait_timeout_s` | `120` | How long a job or model load waits for room |
+| `heartbeat_interval_s` | `10` | How often jobs check in and dead ones are dropped |
+| `ceiling_gib` | none | The GPU's maximum, used only when it can't be measured |
+
+On Linux, set `ceiling_gib`: the Linux probe measures no ceiling yet,
+and without one every job is refused. See
+[Memory broker](memory-broker.md).
 
 ##  When the file is wrong
 
