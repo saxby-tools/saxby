@@ -16,6 +16,7 @@ import {
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
 import { createBroker } from "./memory/broker.js";
+import { describePinnedGap } from "./memory/budget.js";
 import { isProcessAlive } from "./memory/liveness.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
@@ -166,18 +167,24 @@ function describePinned(term) {
 }
 
 /**
- * Prints the budget at boot, and every unknown that will refuse jobs,
- * so a missing size is found now rather than at the first job.
+ * Prints the budget at boot. A pinned model with no size is warned
+ * about: pinning it was a choice, and every job is refused until it
+ * is fixed, so it is better found now than at the first job. An
+ * unmeasured ceiling is only noted, because on a Mac at the macOS
+ * default and on every Linux box it is the normal state, and it only
+ * matters to someone about to run `saxby reserve`. A backend that did
+ * not answer is noted too; it is read again at every request.
  */
 async function announceBroker(broker) {
     const { budget } = await broker.snapshot();
 
     const ceiling = budget.ceilingBytes === null
-        ? "unknown"
-        : formatGib(budget.ceilingBytes);
+        ? `unknown (${budget.ceilingSource}); set memory.ceiling_gib ` +
+            `before using saxby reserve`
+        : `${formatGib(budget.ceilingBytes)} (${budget.ceilingSource})`;
 
     console.log(
-        `🧮 Memory broker: ceiling ${ceiling} (${budget.ceilingSource}), ` +
+        `🧮 Memory broker: ceiling ${ceiling}, ` +
             `margin ${formatGib(budget.marginBytes)}`,
     );
 
@@ -187,9 +194,18 @@ async function announceBroker(broker) {
         );
     }
 
-    for (const unknown of budget.unknowns) {
+    if (budget.residencyError !== null) {
+        console.log(`   backend not answering yet: ${budget.residencyError}`);
+    }
+
+    for (const term of budget.pinned) {
+        if (term.bytes !== null) {
+            continue;
+        }
+
         console.warn(
-            `⚠️  Jobs will be refused until this is fixed: ${unknown}`,
+            `⚠️  Jobs will be refused until this is fixed: ` +
+                describePinnedGap(term),
         );
     }
 }
