@@ -5,6 +5,9 @@ export const DEFAULT_MARGIN_GIB = 8;
 export const DEFAULT_WAIT_TIMEOUT_S = 120;
 export const DEFAULT_HEARTBEAT_INTERVAL_S = 10;
 
+//  Loopback: Saxby checks no credentials (AGENTS.md).
+export const DEFAULT_LISTEN_HOST = "127.0.0.1";
+
 export const TagSchema = v.pipe(
     v.string(),
     v.regex(
@@ -113,6 +116,30 @@ export const SaxbyConfigSchema = v.strictObject({
             v.maxValue(65535, "Port must be < 65536"),
         ),
         11435,
+    ),
+    //  Any address Deno.serve accepts. Loopback is unreachable from
+    //  outside a container, and a lab box binds one interface on
+    //  purpose, so nothing is refused here: saxbyd warns at boot when
+    //  the bind is not loopback, and the exposure is the operator's
+    //  call.
+    listen_host: v.optional(
+        v.pipe(
+            v.string("listen_host must be a string"),
+            v.minLength(1, "listen_host must not be empty"),
+        ),
+        DEFAULT_LISTEN_HOST,
+    ),
+    //  Names the guard accepts in Host besides the local ones, such
+    //  as a Compose service name. A browser cannot forge Host, so a
+    //  name here loosens nothing against DNS rebinding.
+    allowed_hosts: v.optional(
+        v.array(
+            v.pipe(
+                v.string("allowed_hosts entries must be strings"),
+                v.minLength(1, "allowed_hosts entries must not be empty"),
+            ),
+        ),
+        [],
     ),
     upstream_url: v.optional(v.string(), "http://127.0.0.1:11434"),
     //  When true, a request that sets `stream: false` is tagged
