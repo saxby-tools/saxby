@@ -7,9 +7,11 @@ behind each decision lives in [`AGENTS.md`](../AGENTS.md); this page is the map.
 
 ```
 packages/core            shared contracts: tags, config, instances,
-                         service naming, the status probe
+                         service naming, the status probe, backend
+                         adapters, memory probes
 packages/llm-router      saxbyd — the daemon
-packages/cli             saxby — config, instances, services, probe
+packages/cli             saxby — config, instances, services, probe,
+                         reserve
 packages/vram-guard-mac  Apple Silicon VRAM ceiling LaunchDaemon
 ```
 
@@ -40,7 +42,10 @@ in order:
 5. **Tier 3.** Check the embedder answers, then embed any exemplars
    not already cached and prune stale ones. A failure here costs
    Tier 3, not routing.
-6. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
+6. **Memory broker.** Read the budget once and print it, with every
+   unknown that will refuse jobs, then start the sweep that drops
+   reservations whose processes have exited.
+7. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
    Saxby checks no credentials, so nothing beyond this machine may
    reach it until per-client keys exist. A port clash is explained by
    asking the holder who it is.
@@ -87,14 +92,19 @@ once the guard has let it through:
    Requests nothing can serve are refused with a 400 here, without
    touching the backend.
 5. **Record.** The decision is queued for the log.
-6. **Proxy.** The request goes upstream with only `Content-Type` and
+6. **Gate** ([`memory/broker.js`](../packages/llm-router/src/memory/broker.js)).
+   Only while a `saxby reserve` job holds memory, and only for a model
+   that is not loaded: wait until it fits, or answer 503. With no job
+   held this is one synchronous check. See
+   [Memory broker](memory-broker.md).
+7. **Proxy.** The request goes upstream with only `Content-Type` and
    `Authorization`, asking the backend to report token usage.
-7. **Observe**
+8. **Observe**
    ([`observability/stream.js`](../packages/llm-router/src/observability/stream.js)).
    Each chunk is passed to the client first and inspected second, so
    watching the stream never delays it. Time to first byte and token
    counts are read on the way past.
-8. **Complete.** When the stream ends, the log row is updated with
+9. **Complete.** When the stream ends, the log row is updated with
    the outcome and timings.
 
 `saxby/<model>` and other model names skip steps 2 to 4 but are still
@@ -107,6 +117,7 @@ recorded, as `bypass` and `raw`.
 | `GET /v1/models` | Lists `saxby` and `saxby/<model>` |
 | `POST /saxby/v1/explain` | Runs steps 2 to 4 only; returns the decision |
 | `GET /saxby/v1/status` | Instance, port, pid and version |
+| `/saxby/v1/reservations` | The memory broker's API, for `saxby reserve` |
 | anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
@@ -139,12 +150,42 @@ numbered. The file runs in WAL mode so a reader can open it while
 Saxby writes.
 
 **Views** for the questions asked most: `v_routing_funnel`,
-`v_client_mix`, `v_unclaimed_tags`, `v_incomplete` and
-`v_exemplar_cache`.
+`v_client_mix`, `v_unclaimed_tags`, `v_incomplete`,
+`v_exemplar_cache` and `v_memory_events`.
 
 The log also holds Tier 3's exemplar vectors, keyed by embedding
 model, which is why switching embedders back and forth re-embeds
-nothing.
+nothing. The memory broker writes its events to `memory_events` and
+caches each model's last measured size in `model_sizes`, through the
+same queue.
+
+##  The memory broker
+
+How heavy GPU jobs and model loads share memory; the guide is
+[Memory broker](memory-broker.md).
+
+```
+core/src/memory/probes/       ceiling and usage, one adapter per OS
+core/src/backends/ollama.js   fetchResidency: what is loaded, how big
+llm-router/src/memory/
+  budget.js                   the one formula, pure
+  ledger.js                   jobs and load holds, synchronous
+  broker.js                   waits, the load gate, reaping, logging
+  liveness.js                 kill -0
+  sizes.js                    each model's last measured size
+llm-router/src/routes/saxby/v1/reservations.js
+cli/src/reserve/              the wrapper: client and run
+cli/src/limiters/             caps set in the job's environment
+```
+
+The broker reads the machine, then decides and changes the ledger in
+one synchronous step, so two requests can never be admitted against
+the same free memory. Every outside effect is passed in, so its tests
+need no backend, no processes and no real time.
+
+`saxbyd` may start exactly the programs the broker needs, by absolute
+path: `kill`, plus `sysctl` and `vm_stat` on macOS. `scripts/build.js`
+holds the list.
 
 ##  Instances and services
 
