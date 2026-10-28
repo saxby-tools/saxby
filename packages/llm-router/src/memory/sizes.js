@@ -5,6 +5,13 @@
 //  the broker has to remember how big it was when last loaded. Every
 //  read of the backend records each loaded model's size here.
 //
+//  Only a whole load is a measurement. When memory is tight the
+//  backend spills layers to the CPU, and the GPU part it reports then
+//  is less than the model needs to load whole: remembering it would
+//  undercount a pinned model from then on, exactly when the budget
+//  matters most. A size of zero is refused for the same reason the
+//  config refuses size_gib 0.
+//
 //  Kept in the decision-log file (table model_sizes), like the
 //  exemplar vectors, so a saxbyd restart does not forget them. A cache
 //  only ever makes the broker less careful than it needs to be, never
@@ -29,12 +36,21 @@ export function createSizeCache(options = {}) {
     }
 
     /**
-     * Records what the backend reports as loaded. Only a change is
-     * saved, so a steady state writes nothing.
-     * @param {{ name: string, bytes: number }[]} loaded
+     * Records what the backend reports as loaded, skipping partial
+     * loads and empty sizes. Only a change is saved, so a steady state
+     * writes nothing.
+     * @param {import("@saxby/core").LoadedModel[]} loaded
      */
     function record(loaded) {
         for (const model of loaded) {
+            if (model.partial) {
+                continue;
+            }
+
+            if (model.bytes <= 0) {
+                continue;
+            }
+
             const known = sizes.get(model.name);
 
             if (known?.bytes === model.bytes) {

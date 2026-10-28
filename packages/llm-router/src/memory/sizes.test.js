@@ -42,6 +42,23 @@ Deno.test("sizes — only a change is saved", () => {
     ]);
 });
 
+Deno.test("sizes — a partial load is not a measurement", () => {
+    const cache = createSizeCache({ now: () => 0 });
+
+    cache.record([{ name: "gemma4:31b-128k", bytes: 26 * GIB }]);
+    cache.record([{ name: "gemma4:31b-128k", bytes: 16 * GIB, partial: true }]);
+
+    assertEquals(cache.get("gemma4:31b-128k")?.bytes, 26 * GIB);
+});
+
+Deno.test("sizes — a model wholly on the CPU is not measured", () => {
+    const cache = createSizeCache();
+
+    cache.record([{ name: "granite4:micro-h", bytes: 0 }]);
+
+    assertEquals(cache.get("granite4:micro-h"), null);
+});
+
 Deno.test("sizes — a model never seen is null", () => {
     assertEquals(createSizeCache().get("ghost:latest"), null);
 });
