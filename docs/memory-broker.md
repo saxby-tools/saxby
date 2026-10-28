@@ -474,3 +474,8 @@ Not built yet:
   held, chat requests take no hold, so a job that starts while one of
   their models is still loading can be admitted into that model's
   space. [Issue #40](https://github.com/saxby-tools/saxby/issues/40).
+- **A model's remembered size is its last whole load.** A load at a
+  smaller context, such as one from a client that sets `num_ctx` on
+  Ollama's `/api` paths, replaces a bigger size. Once the model
+  unloads, the broker counts less than Saxby's own load of it needs.
+  [Issue #41](https://github.com/saxby-tools/saxby/issues/41).
