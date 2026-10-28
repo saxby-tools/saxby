@@ -1,0 +1,74 @@
+//  =====================================================================
+//  saxby status — is this instance's saxbyd answering?
+//  =====================================================================
+//  One line and an exit code, so a container HEALTHCHECK or a shell
+//  script can ask without curl. Reads the instance's config for the
+//  port and bind, then GET /saxby/v1/status, which saxbyd answers from
+//  memory: no upstream call, no model load.
+//
+//    0   saxbyd is serving this instance on its port
+//    1   nothing answers, something else holds the port, or the
+//        config cannot be read
+
+import { Command } from "@cliffy/command";
+import {
+    fetchSaxbyStatus,
+    instancePhrase,
+    isPortHeld,
+    loadConfig,
+    probeHostFor,
+    resolveInstanceName,
+} from "@saxby/core";
+
+const EXIT_DOWN = 1;
+
+function describeDown(port, probeHost) {
+    if (isPortHeld(port, probeHost)) {
+        return `port ${port} is held by a process that is not saxbyd`;
+    }
+
+    return `nothing is listening on ${probeHost}:${port}`;
+}
+
+export const statusCommand = new Command()
+    .description(
+        "Say whether this instance's saxbyd is answering; exit 1 if not.",
+    )
+    .action(async (options) => {
+        let instance;
+        let config;
+
+        try {
+            instance = resolveInstanceName(options.instance);
+            config = await loadConfig(instance);
+        } catch (err) {
+            console.error(`❌ ${err.message}`);
+            Deno.exit(EXIT_DOWN);
+        }
+
+        const port = config.listen_port;
+        const probeHost = probeHostFor(config.listen_host);
+        const holder = await fetchSaxbyStatus(port, probeHost);
+
+        if (!holder) {
+            console.error(
+                `❌ ${instancePhrase(instance)}: ` +
+                    describeDown(port, probeHost),
+            );
+            Deno.exit(EXIT_DOWN);
+        }
+
+        if (holder.instance !== instance) {
+            console.error(
+                `❌ port ${port} is held by ` +
+                    `${instancePhrase(holder.instance)} (pid ${holder.pid})`,
+            );
+            Deno.exit(EXIT_DOWN);
+        }
+
+        console.log(
+            `✅ saxbyd ${holder.version ?? "?"} is serving ` +
+                `${instancePhrase(instance)} on ${probeHost}:${port} ` +
+                `(pid ${holder.pid})`,
+        );
+    });
