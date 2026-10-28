@@ -31,6 +31,19 @@ function canonicalOllamaName(name) {
 //  layers spilled to the CPU. A missing or negative size is refused
 //  rather than read as zero: the broker treats an unreadable answer
 //  as unknown, never as free memory.
+//
+//  `partial` says the two differ: some of the model sits in CPU
+//  memory, so size_vram is what it holds on the GPU now, not what it
+//  needs when it loads whole. A missing `size` counts as partial, since
+//  nothing then says the load was whole.
+function isPartialLoad(entry) {
+    if (!Number.isFinite(entry.size)) {
+        return true;
+    }
+
+    return entry.size_vram < entry.size;
+}
+
 function readLoadedModel(entry) {
     if (typeof entry?.name !== "string") {
         throw new Error("Ollama's /api/ps listed a model with no name.");
@@ -52,6 +65,7 @@ function readLoadedModel(entry) {
     return {
         name: canonicalOllamaName(entry.name),
         bytes: entry.size_vram,
+        partial: isPartialLoad(entry),
     };
 }
 

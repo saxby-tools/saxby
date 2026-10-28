@@ -24,6 +24,8 @@ export { OllamaAdapter };
  * @typedef {Object} LoadedModel
  * @property {string} name - Canonical name, as canonicalName returns it
  * @property {number} bytes - GPU memory the loaded model holds
+ * @property {boolean} partial - True when part of the model sits in
+ *     CPU memory, so `bytes` is less than a whole load needs
  */
 
 /**

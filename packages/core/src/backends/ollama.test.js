@@ -139,15 +139,42 @@ async function residency(response) {
 Deno.test("residency reads each model's GPU size", async () => {
     const got = await residency({ body: { models: [PS_QWEN] } });
 
-    assertEquals(got, [{ name: "qwen3.8:27b", bytes: 27490963176 }]);
+    assertEquals(got, [{
+        name: "qwen3.8:27b",
+        bytes: 27490963176,
+        partial: false,
+    }]);
+});
+
+Deno.test("residency marks a model Ollama spilled to the CPU", async () => {
+    const got = await residency({
+        body: { models: [{ ...PS_QWEN, size_vram: 20000000000 }] },
+    });
+
+    assertEquals(got[0].bytes, 20000000000);
+    assertEquals(got[0].partial, true);
+});
+
+Deno.test("residency treats a missing size as a partial load", async () => {
+    const got = await residency({
+        body: { models: [{ name: "qwen3.8:27b", size_vram: 27490963176 }] },
+    });
+
+    assertEquals(got[0].partial, true);
 });
 
 Deno.test("residency spells an untagged name as Ollama does", async () => {
     const got = await residency({
-        body: { models: [{ name: "bge-m3", size_vram: 689000000 }] },
+        body: {
+            models: [{ name: "bge-m3", size: 689000000, size_vram: 689000000 }],
+        },
     });
 
-    assertEquals(got, [{ name: "bge-m3:latest", bytes: 689000000 }]);
+    assertEquals(got, [{
+        name: "bge-m3:latest",
+        bytes: 689000000,
+        partial: false,
+    }]);
 });
 
 Deno.test("nothing loaded is an empty list, not an error", async () => {
