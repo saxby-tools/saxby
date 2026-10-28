@@ -23,6 +23,16 @@
 //  Ratios are rounded DOWN, so the cap never lands above the
 //  reservation. MLX jobs read neither variable; the ledger still
 //  counts them.
+//
+//  The cap is set only when the ceiling was measured from
+//  iogpu.wired_limit_mb, because that is the number PyTorch's ratio
+//  is a ratio OF. When the limit is 0, the macOS default, the broker's
+//  ceiling comes from memory.ceiling_gib, which may sit anywhere
+//  relative to Metal's own default; a ratio of it would land the cap
+//  above or below the reservation by the same error. No cap, said
+//  plainly, beats a cap that is wrong.
+
+import { WIRED_LIMIT_KEY } from "@saxby/core";
 
 const HIGH_WATERMARK_VAR = "PYTORCH_MPS_HIGH_WATERMARK_RATIO";
 const LOW_WATERMARK_VAR = "PYTORCH_MPS_LOW_WATERMARK_RATIO";
@@ -54,7 +64,8 @@ export class MpsWatermarkLimiter {
 
     /**
      * The environment that caps PyTorch at the reservation.
-     * @param {{ reservedBytes: number, ceilingBytes: number | null }} plan
+     * @param {{ reservedBytes: number, ceilingBytes: number | null,
+     *     ceilingSource: string | null }} plan
      * @returns {{ env: Record<string, string> } | { problem: string }}
      */
     static environment(plan) {
@@ -62,6 +73,17 @@ export class MpsWatermarkLimiter {
             return {
                 problem: "the GPU's maximum is unknown, so PyTorch's cap " +
                     "has nothing to divide by",
+            };
+        }
+
+        //  The ratio is of Metal's number. A ceiling from
+        //  memory.ceiling_gib may be anything, and a ratio of it lands
+        //  the cap above or below the reservation by the same error.
+        if (plan.ceilingSource !== WIRED_LIMIT_KEY) {
+            return {
+                problem: `the ceiling came from ${plan.ceilingSource}, ` +
+                    `and PyTorch's cap is a ratio of ${WIRED_LIMIT_KEY} ` +
+                    `only; set it with saxby vram-guard-mac`,
             };
         }
 

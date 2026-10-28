@@ -47,12 +47,18 @@ function errorMessage(reply) {
 /**
  * Each supported limiter's environment, merged. A limiter that can't
  * apply says why and is skipped; the reservation still stands.
+ * @param {number} reservedBytes
+ * @param {{ bytes: number | null, source: string | null }} ceiling
  */
-function buildLimitEnv(reservedBytes, ceilingBytes, deps) {
+function buildLimitEnv(reservedBytes, ceiling, deps) {
     const env = {};
 
     for (const limiter of deps.limiters) {
-        const result = limiter.environment({ reservedBytes, ceilingBytes });
+        const result = limiter.environment({
+            reservedBytes,
+            ceilingBytes: ceiling.bytes,
+            ceilingSource: ceiling.source,
+        });
 
         if (result.problem) {
             deps.say(
@@ -258,8 +264,13 @@ async function runWithoutBroker(plan, deps, signals) {
     );
 
     const reading = deps.probe ? await deps.probe.read() : null;
-    const ceilingBytes = reading?.ceilingBytes ?? null;
-    const env = buildLimitEnv(gibToBytes(plan.gib), ceilingBytes, deps);
+
+    const ceiling = {
+        bytes: reading?.ceilingBytes ?? null,
+        source: reading?.ceilingSource ?? null,
+    };
+
+    const env = buildLimitEnv(gibToBytes(plan.gib), ceiling, deps);
 
     return await runChild(plan, env, deps, signals, null);
 }
@@ -348,7 +359,7 @@ async function runWithBroker(plan, deps, signals) {
 
     const env = buildLimitEnv(
         body.reservation.bytes,
-        body.ceiling_bytes,
+        { bytes: body.ceiling_bytes, source: body.ceiling_source ?? null },
         deps,
     );
 

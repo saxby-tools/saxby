@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { WIRED_LIMIT_KEY } from "@saxby/core";
 import { MpsWatermarkLimiter } from "./mps.js";
 
 const GIB = 2 ** 30;
@@ -6,8 +7,16 @@ const GIB = 2 ** 30;
 //  98,304 MiB: the M5 Max's ceiling and Metal's working-set size.
 const CEILING = 96 * GIB;
 
-function environment(reservedBytes, ceilingBytes = CEILING) {
-    return MpsWatermarkLimiter.environment({ reservedBytes, ceilingBytes });
+function environment(
+    reservedBytes,
+    ceilingBytes = CEILING,
+    ceilingSource = WIRED_LIMIT_KEY,
+) {
+    return MpsWatermarkLimiter.environment({
+        reservedBytes,
+        ceilingBytes,
+        ceilingSource,
+    });
 }
 
 Deno.test("mps — the cap is the reservation's share of the ceiling", () => {
@@ -44,6 +53,18 @@ Deno.test("mps — no ceiling, no cap", () => {
     const got = environment(GIB, null);
 
     assertStringIncludes(got.problem, "unknown");
+});
+
+Deno.test("mps — a ceiling from the config is not Metal's, no cap", () => {
+    //  memory.ceiling_gib may be anything; a ratio of it misses.
+    const got = environment(
+        12 * GIB,
+        80 * GIB,
+        "memory.ceiling_gib, because iogpu.wired_limit_mb is 0",
+    );
+
+    assertStringIncludes(got.problem, "memory.ceiling_gib");
+    assertStringIncludes(got.problem, "vram-guard-mac");
 });
 
 Deno.test("mps — a ratio above PyTorch's bound is refused", () => {

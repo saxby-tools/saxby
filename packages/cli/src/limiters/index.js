@@ -22,7 +22,7 @@ export { MpsWatermarkLimiter };
  * @property {string} displayName
  * @property {() => boolean} isSupported - True on this limiter's OS.
  * @property {(plan: { reservedBytes: number,
- *     ceilingBytes: number | null }) =>
+ *     ceilingBytes: number | null, ceilingSource: string | null }) =>
  *     { env: Record<string, string> } | { problem: string }} environment
  */
 

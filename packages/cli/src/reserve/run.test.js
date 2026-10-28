@@ -29,6 +29,7 @@ const ADMITTED = {
         reservation: RESERVATION,
         heartbeat_interval_s: 10,
         ceiling_bytes: 96 * GIB,
+        ceiling_source: "iogpu.wired_limit_mb",
         waited_ms: 0,
     },
 };
@@ -47,8 +48,11 @@ function plan(overrides = {}) {
 
 const FAKE_LIMITER = {
     displayName: "Fake cap",
-    environment: ({ reservedBytes, ceilingBytes }) => ({
-        env: { FAKE_RATIO: String(reservedBytes / ceilingBytes) },
+    environment: ({ reservedBytes, ceilingBytes, ceilingSource }) => ({
+        env: {
+            FAKE_RATIO: String(reservedBytes / ceilingBytes),
+            FAKE_SOURCE: ceilingSource,
+        },
     }),
 };
 
@@ -85,7 +89,11 @@ function harness(options = {}) {
     const deps = {
         client,
         probe: {
-            read: () => Promise.resolve({ ceilingBytes: 96 * GIB }),
+            read: () =>
+                Promise.resolve({
+                    ceilingBytes: 96 * GIB,
+                    ceilingSource: "probe fixture",
+                }),
         },
         limiters: [FAKE_LIMITER],
         pid: WRAPPER,
@@ -222,7 +230,10 @@ Deno.test("reserve — an admitted job runs capped, then frees", async () => {
         label: "sleep",
         timeout_s: 120,
     });
-    assertEquals(control.calls.spawn[0].env, { FAKE_RATIO: String(1 / 96) });
+    assertEquals(control.calls.spawn[0].env, {
+        FAKE_RATIO: String(1 / 96),
+        FAKE_SOURCE: "iogpu.wired_limit_mb",
+    });
     assertEquals(control.calls.heartbeat[0].childPid, CHILD);
 
     control.exit(3);
@@ -292,6 +303,9 @@ Deno.test("reserve — --no-broker runs loudly and still caps", async () => {
 
     assertEquals(await running, 0);
     assertEquals(control.calls.create, []);
-    assertEquals(control.calls.spawn[0].env, { FAKE_RATIO: String(1 / 96) });
+    assertEquals(control.calls.spawn[0].env, {
+        FAKE_RATIO: String(1 / 96),
+        FAKE_SOURCE: "probe fixture",
+    });
     assertStringIncludes(control.output(), "NOT told about this job");
 });
