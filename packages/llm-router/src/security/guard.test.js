@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { inspectRequest } from "./guard.js";
+import { buildAllowedHosts, inspectRequest } from "./guard.js";
 
 //  Header names and Host values captured from real clients on
 //  2026-10-25 (tcpdump on lo0). Personal values are replaced. These
@@ -37,13 +37,19 @@ const OPENCLAW = {
 
 const CURL = { "host": "127.0.0.1:11435", "user-agent": "curl/8.7.1" };
 
-function inspect(headers, path = "/v1/chat/completions") {
-    return inspectRequest({ headers: new Headers(headers), path });
+function inspect(headers, path = "/v1/chat/completions", allowedHosts) {
+    return inspectRequest({
+        headers: new Headers(headers),
+        path,
+        allowedHosts,
+    });
 }
 
-function codeFor(headers, path) {
-    return inspect(headers, path)?.code ?? null;
+function codeFor(headers, path, allowedHosts) {
+    return inspect(headers, path, allowedHosts)?.code ?? null;
 }
+
+const CHAT = "/v1/chat/completions";
 
 Deno.test("guard — Niko's Open WebUI passes", () => {
     assertEquals(inspect(OPEN_WEBUI), null);
@@ -98,6 +104,56 @@ Deno.test("guard — a foreign Host means DNS rebinding: refused", () => {
 
 Deno.test("guard — a missing Host is refused", () => {
     assertEquals(codeFor({ "user-agent": "x" }), "host_not_allowed");
+});
+
+Deno.test("guard — the Host refusal says where to allow a name", () => {
+    const verdict = inspect({ host: "saxby:11435" });
+
+    assertEquals(verdict.code, "host_not_allowed");
+    assertEquals(verdict.message.includes("allowed_hosts"), true);
+});
+
+//  A Compose service name, as Open WebUI sends it from the next
+//  container over, and Podman's name for the host.
+const COMPOSE_HOSTS = buildAllowedHosts([
+    "saxby",
+    "Host.Containers.Internal:9999",
+]);
+
+Deno.test("guard — allowed_hosts names pass, any case, any port", () => {
+    const hosts = [
+        "saxby",
+        "saxby:11435",
+        "SAXBY:11435",
+        "host.containers.internal:11435",
+    ];
+
+    for (const host of hosts) {
+        assertEquals(inspect({ host }, CHAT, COMPOSE_HOSTS), null, host);
+    }
+});
+
+Deno.test("guard — allowed_hosts adds to the local names", () => {
+    for (const host of ["127.0.0.1:11435", "host.docker.internal:11435"]) {
+        assertEquals(inspect({ host }, CHAT, COMPOSE_HOSTS), null, host);
+    }
+});
+
+Deno.test("guard — allowed_hosts leaves foreign names refused", () => {
+    for (const host of ["attacker.example", "saxby.example"]) {
+        assertEquals(
+            codeFor({ host }, CHAT, COMPOSE_HOSTS),
+            "host_not_allowed",
+            host,
+        );
+    }
+});
+
+Deno.test("guard — an empty allowed_hosts is the local names alone", () => {
+    const local = buildAllowedHosts();
+
+    assertEquals(buildAllowedHosts([]), local);
+    assertEquals(codeFor({ host: "saxby" }, CHAT, local), "host_not_allowed");
 });
 
 Deno.test("guard — Ollama's management paths are refused", () => {
