@@ -470,3 +470,7 @@ Not built yet:
 - **`explain` does not show the gate.** It never calls the backend,
   and the gate reads `/api/ps`.
   [Issue #38](https://github.com/saxby-tools/saxby/issues/38).
+- **A load Ollama has not listed yet reads as free.** With no job
+  held, chat requests take no hold, so a job that starts while one of
+  their models is still loading can be admitted into that model's
+  space. [Issue #40](https://github.com/saxby-tools/saxby/issues/40).
