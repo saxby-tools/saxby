@@ -120,7 +120,7 @@ what Saxby sends upstream, and what `global_default_model`,
 | `system_prefix` | Optional text sent as a system message to this model only |
 | `description` | Optional note for humans |
 | `pinned` | `true` keeps this model's space safe from heavy jobs, default `false` |
-| `size_gib` | Optional size in GiB, used until the backend reports one |
+| `size_gib` | Optional size in GiB, used until the backend reports a whole load |
 
 `max_context` matters. Saxby estimates the size of the whole
 request, every message and not just the last one, and skips any model
