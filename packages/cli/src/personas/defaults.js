@@ -46,22 +46,25 @@ export const PERSONA_DEFAULTS = {
         tags: [TAGS.CODER, TAGS.MULTI_FILE, TAGS.DEBUG],
 
         exemplars: [
-            //  Requests
+            //  Requests — each carries a noun writer and general
+            //  never use, and three mirror frames those personas
+            //  own ("what do you think", "how do I", "rewrite
+            //  this") so the noun breaks the tie.
             "Refactor this function",
             "Write a unit test",
             "add error handling to this",
-            "is there a better pattern for this",
-            "walk me through what this does",
-            "how can I make this DRY",
+            "walk me through what this code does",
+            "what do you think of this code",
+            "how do I do this in Python",
+            "rewrite this in Rust",
 
             //  Symptoms — no request verb, and the half most often
             //  lost to other personas without these.
             "why is this returning undefined",
             "fix the off by one",
-            "this is throwing but I can't tell where",
+            "it throws but the stack trace doesn't say where",
             "it fails in CI but passes locally",
-            "this gets slow with large inputs",
-            "it crashes on the second run",
+            "why won't this compile",
         ],
     },
 
