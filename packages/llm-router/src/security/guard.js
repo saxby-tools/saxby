@@ -41,8 +41,10 @@ const PROXY_HEADER_PREFIX = "x-forwarded-";
 
 //  Names a local client uses to reach Saxby. host.docker.internal is
 //  how a Docker Desktop container reaches the host; Niko's Open WebUI
-//  sends it. Ports are ignored: the listener decides the port.
-const ALLOWED_HOSTS = new Set([
+//  sends it. Ports are ignored: the listener decides the port. The
+//  config's allowed_hosts adds to this set (buildAllowedHosts), for a
+//  Compose service name or Podman's host.containers.internal.
+const LOCAL_HOSTS = new Set([
     "localhost",
     "127.0.0.1",
     "[::1]",
@@ -89,6 +91,17 @@ function hostnameOf(host) {
     return value.split(":")[0];
 }
 
+/**
+ * The Host names the guard accepts: the local names plus the config's
+ * allowed_hosts, read the same way a Host header is, so "Saxby:11435"
+ * in the config matches "saxby" on the wire.
+ * @param {string[]} [extra] - config.allowed_hosts
+ * @returns {Set<string>}
+ */
+export function buildAllowedHosts(extra = []) {
+    return new Set([...LOCAL_HOSTS, ...extra.map(hostnameOf)]);
+}
+
 function isManagementPath(path) {
     return MANAGEMENT_PATHS.some((prefix) =>
         path === prefix || path.startsWith(`${prefix}/`)
@@ -101,11 +114,13 @@ function refusal(status, code, message) {
 
 /**
  * Decides whether a request may proceed.
- * @param {{ headers: Headers, path: string }} request
+ * @param {{ headers: Headers, path: string,
+ *     allowedHosts?: Set<string> }} request - allowedHosts from
+ *     buildAllowedHosts; the local names alone when omitted.
  * @returns {{ status: number, code: string, message: string } | null}
  *     null to allow; otherwise what to refuse with.
  */
-export function inspectRequest({ headers, path }) {
+export function inspectRequest({ headers, path, allowedHosts = LOCAL_HOSTS }) {
     const proxyHeader = findProxyHeader(headers);
 
     if (proxyHeader) {
@@ -140,12 +155,13 @@ export function inspectRequest({ headers, path }) {
         );
     }
 
-    if (!ALLOWED_HOSTS.has(hostnameOf(host))) {
+    if (!allowedHosts.has(hostnameOf(host))) {
         return refusal(
             403,
             "host_not_allowed",
             `Refused: Host '${host}' is not a local name. Use ` +
-                `127.0.0.1 or localhost. ${DOCS_HINT}`,
+                `127.0.0.1 or localhost, or add it to allowed_hosts ` +
+                `in config.jsonc. ${DOCS_HINT}`,
         );
     }
 
