@@ -142,8 +142,26 @@ Deno.test("reserve — a pinned model's space is held while unloaded", () => {
     assert(got.neverFits);
 });
 
-Deno.test("reserve — an unknown budget admits nothing", () => {
+Deno.test("reserve — a config gap refuses without waiting", () => {
     const budget = computeBudget(terms({ ceilingBytes: null }));
+    const got = decideReservation(budget, gibToBytes(1));
+
+    assert(!got.fits);
+    assert(got.neverFits);
+});
+
+Deno.test("reserve — a pinned model with no size is a config gap", () => {
+    const budget = computeBudget(terms({
+        pinned: [{ model: "gemma4:31b-128k", bytes: null, source: "unknown" }],
+    }));
+    const got = decideReservation(budget, gibToBytes(1));
+
+    assert(!got.fits);
+    assert(got.neverFits);
+});
+
+Deno.test("reserve — a backend that did not answer is waited on", () => {
+    const budget = computeBudget(terms({ residencyError: "timed out" }));
     const got = decideReservation(budget, gibToBytes(1));
 
     assert(!got.fits);
@@ -177,6 +195,14 @@ Deno.test("load — a model bigger than free waits", () => {
     assert(!got.fits);
     assert(!got.neverFits);
     assertStringIncludes(got.reason, "'voxtral:32k' needs 10.0 GiB");
+});
+
+Deno.test("load — a config gap refuses a load without waiting", () => {
+    const budget = computeBudget(terms({ ceilingBytes: null }));
+    const got = decideLoad(budget, target());
+
+    assert(!got.fits);
+    assert(got.neverFits);
 });
 
 Deno.test("load — a pinned model fits even with no budget", () => {

@@ -48,18 +48,15 @@ function sum(values) {
     return values.reduce((total, value) => total + value, 0);
 }
 
-function findUnknowns(terms) {
-    const unknowns = [];
+//  Two kinds of unknown. A config gap (no ceiling, a pinned model with
+//  no size) stays until someone edits the config, so waiting on it
+//  only delays the refusal. A backend that did not answer may answer
+//  on the next poll, so that one is waited on.
+function findConfigGaps(terms) {
+    const gaps = [];
 
     if (terms.ceilingBytes === null) {
-        unknowns.push(`the memory ceiling is unknown: ${terms.ceilingSource}`);
-    }
-
-    if (terms.residencyError !== null) {
-        unknowns.push(
-            `the backend could not say what is loaded: ` +
-                terms.residencyError,
-        );
+        gaps.push(`the memory ceiling is unknown: ${terms.ceilingSource}`);
     }
 
     for (const term of terms.pinned) {
@@ -67,9 +64,22 @@ function findUnknowns(terms) {
             continue;
         }
 
-        unknowns.push(
+        gaps.push(
             `pinned model '${term.model}' has no known size; load it ` +
                 `once or give it size_gib`,
+        );
+    }
+
+    return gaps;
+}
+
+function findUnknowns(terms, configGaps) {
+    const unknowns = [...configGaps];
+
+    if (terms.residencyError !== null) {
+        unknowns.push(
+            `the backend could not say what is loaded: ` +
+                terms.residencyError,
         );
     }
 
@@ -81,7 +91,8 @@ function findUnknowns(terms) {
  * @param {BudgetTerms} terms
  */
 export function computeBudget(terms) {
-    const unknowns = findUnknowns(terms);
+    const configGaps = findConfigGaps(terms);
+    const unknowns = findUnknowns(terms, configGaps);
 
     const knownPinned = terms.pinned
         .map((term) => term.bytes)
@@ -108,6 +119,9 @@ export function computeBudget(terms) {
         freeBytes,
         roomBytes,
         unknowns,
+        //  True when an unknown is a config gap: nothing admitted now
+        //  will be admitted by waiting, so the refusal is immediate.
+        configGap: configGaps.length > 0,
     };
 }
 
@@ -151,6 +165,7 @@ export function decideReservation(budget, bytes) {
         return verdict(
             false,
             `${wanted} wanted, but ${describeBudget(budget)}`,
+            budget.configGap,
         );
     }
 
@@ -189,6 +204,7 @@ export function decideLoad(budget, target) {
         return verdict(
             false,
             `loading ${name} needs a budget, but ${describeBudget(budget)}`,
+            budget.configGap,
         );
     }
 
