@@ -199,22 +199,35 @@ export function createBroker(options) {
 
     //  ---- Reading the machine ---------------------------------------
 
-    async function readMachine() {
-        const reading = options.probe
-            ? await options.probe.read()
-            : NO_PROBE_READING;
-
-        let loaded = null;
-        let residencyError = null;
-
-        try {
-            loaded = await backend.fetchResidency(options.upstreamUrl);
-            options.sizes.record(loaded);
-        } catch (err) {
-            residencyError = err.message;
+    function readProbe() {
+        if (!options.probe) {
+            return Promise.resolve(NO_PROBE_READING);
         }
 
-        return { reading, loaded, residencyError };
+        return options.probe.read();
+    }
+
+    async function readResidency() {
+        try {
+            const loaded = await backend.fetchResidency(options.upstreamUrl);
+
+            options.sizes.record(loaded);
+
+            return { loaded, residencyError: null };
+        } catch (err) {
+            return { loaded: null, residencyError: err.message };
+        }
+    }
+
+    //  The probe starts two programs and the backend is one HTTP call;
+    //  run side by side they cost one wait instead of two.
+    async function readMachine() {
+        const [reading, residency] = await Promise.all([
+            readProbe(),
+            readResidency(),
+        ]);
+
+        return { reading, ...residency };
     }
 
     function loadedMap(machine) {
@@ -564,12 +577,17 @@ export function createBroker(options) {
                 };
             }
 
-            const machine = await readMachine();
-            const loadedByName = loadedMap(machine);
+            //  Most requests while a job runs are for a model already
+            //  loaded. One call to the backend settles those; the
+            //  probe runs only when there is a load to judge.
+            const residency = await readResidency();
+            const loadedByName = loadedMap(residency);
 
             if (loadedByName.has(name)) {
                 return admitUnchecked(`'${name}' is loaded now`);
             }
+
+            const machine = { reading: await readProbe(), ...residency };
 
             if (!ledger.hasJobs()) {
                 continue;
