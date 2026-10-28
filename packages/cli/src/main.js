@@ -4,6 +4,7 @@ import { vramGuardMacCommand } from "@saxby/vram-guard-mac";
 import { configCommand } from "./commands/config/index.js";
 import { instanceCommand } from "./commands/instance/index.js";
 import { probeCommand } from "./commands/probe.js";
+import { reserveCommand } from "./commands/reserve.js";
 import { serviceCommand } from "./commands/service/index.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
@@ -22,6 +23,7 @@ await new Command()
     .command("config", configCommand)
     .command("instance", instanceCommand)
     .command("probe", probeCommand)
+    .command("reserve", reserveCommand)
     .command("service", serviceCommand)
     .command("vram-guard-mac", vramGuardMacCommand)
     .command("completions", new CompletionsCommand())
