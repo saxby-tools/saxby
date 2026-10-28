@@ -70,13 +70,21 @@ deno install -g -n saxby \
 ```bash
 deno install -g -n saxbyd \
     --allow-net --allow-env --allow-read --allow-write \
+    --allow-run=/bin/kill,/usr/sbin/sysctl,/usr/bin/vm_stat \
     jsr:@saxby/llm-router
 ```
 
-The daemon gets no `--allow-run`, so a bug in request handling cannot
-start a program. Deno will not install a version published in the
-last 24 hours, so right after a release, wait a day. Completions do
-not come with it; `saxby completions --help` shows how to load them.
+On Linux, use `--allow-run=/usr/bin/kill` instead.
+
+The daemon may start only the programs the
+[memory broker](memory-broker.md) needs, each by its full path, so a
+bug in request handling cannot start anything else. Without the list,
+Deno stops to ask for each program the first time it runs, and where
+nothing can answer, the broker refuses every `saxby reserve`.
+
+Deno will not install a version published in the last 24 hours, so
+right after a release, wait a day. Completions do not come with it;
+`saxby completions --help` shows how to load them.
 
 To run Saxby as a service, use one of the other ways instead. The
 `deno install` wrapper finds `deno` through `PATH`, and a service may
