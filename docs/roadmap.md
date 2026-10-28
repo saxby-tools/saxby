@@ -102,9 +102,15 @@ known gaps are issues labelled
           [`packaging/PKGBUILD`](../packaging/PKGBUILD) template,
           [`packaging/saxby.rb`](../packaging/saxby.rb) Homebrew
           formula template.
+  - [x] **Memory broker** *(not in the original plan: added after a
+        kernel panic on Oct. 27, 2026; ships in v0.9.6)*
+    - [x] `saxby reserve --gib N -- <command>`, and model loads that
+          wait for room while a job holds memory
+          ([Memory broker](memory-broker.md), #39). Known gaps: #33
+          through #38, #40 and #41.
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
-    - [ ] JSDoc sweep (#26), consistent across the repo. Mechanical and
+    - [ ] JSDoc sweep (#26, v0.9.7), consistent across the repo. Mechanical and
           verifiable with `deno check` — safe to start any time, and
           independent of the phases above.
     - [x] Create `docs/` — [Getting started](getting-started.md),
