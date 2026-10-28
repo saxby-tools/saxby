@@ -368,6 +368,10 @@ sqlite3 -header -column ~/.config/saxby/decision-log.db \
 `refuse`, `abandon` (the client left while waiting), `reregister`,
 `release` and `reap`.
 
+`wait_ms` runs from the request to the decision, including the time
+to read the probe and the backend. On an M5 Max that is about 50 ms,
+so an admission with no wait still shows a small number.
+
 Chat requests that were refused, with their reasons:
 
 ```bash
