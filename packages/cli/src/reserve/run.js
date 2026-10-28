@@ -162,10 +162,18 @@ function createSession(plan, deps, reservation, intervalS) {
             return;
         }
 
+        //  A refusal here is a 400 or a 503 that the next heartbeat
+        //  would only meet again, as a 404 and the same refusal, every
+        //  interval for the life of the job. Say it once and stop
+        //  checking in; release at the end still runs and is harmless.
         deps.say(
             `⚠️  ${PREFIX} saxbyd would not take the job back: ` +
-                errorMessage(reply),
+                `${errorMessage(reply)}\n` +
+                `   The job keeps running, but saxbyd no longer counts ` +
+                `its memory, and it will not be asked again.`,
         );
+
+        stopBeats?.();
     }
 
     async function beat() {

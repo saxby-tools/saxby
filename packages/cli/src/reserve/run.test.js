@@ -107,7 +107,9 @@ function harness(options = {}) {
         every: (_ms, fn) => {
             timers.push(fn);
 
-            return () => {};
+            return () => {
+                timers.splice(timers.indexOf(fn), 1);
+            };
         },
         spawn: (command, args, env) => {
             calls.spawn.push({ command, args, env });
@@ -281,6 +283,42 @@ Deno.test("reserve — a heartbeat 404 registers the job again", async () => {
 
     control.exit(0);
     await running;
+});
+
+Deno.test("reserve — a refused re-registration is said once", async () => {
+    const control = harness({
+        heartbeatReply: { status: 404 },
+        onCreate: (request) => {
+            if (!request.reregister) {
+                return Promise.resolve(ADMITTED);
+            }
+
+            return Promise.resolve({
+                status: 400,
+                body: { error: { message: "pid 4242 is not running" } },
+            });
+        },
+    });
+
+    const running = runReserved(plan(), control.deps);
+
+    await settle();
+
+    //  The interval is gone, so later ticks ask nothing more.
+    assertEquals(control.timers, []);
+
+    const refusals = control.lines.filter((line) =>
+        line.includes("would not take the job back")
+    );
+
+    assertEquals(refusals.length, 1);
+    assertStringIncludes(refusals[0], "will not be asked again");
+    assertEquals(control.calls.create.length, 2);
+
+    control.exit(0);
+
+    assertEquals(await running, 0);
+    assertEquals(control.calls.release, [RESERVATION.id]);
 });
 
 Deno.test("reserve — a command that can't start is released", async () => {
