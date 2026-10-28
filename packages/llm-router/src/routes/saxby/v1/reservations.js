@@ -219,6 +219,10 @@ function admittedBody(broker, result) {
         reservation: jobView(result.reservation),
         heartbeat_interval_s: broker.heartbeatIntervalS,
         ceiling_bytes: result.budget?.ceilingBytes ?? null,
+        //  Where the ceiling came from. `saxby reserve` caps PyTorch
+        //  only when it was measured, since the cap is a ratio of the
+        //  measured value, not of memory.ceiling_gib.
+        ceiling_source: result.budget?.ceilingSource ?? null,
         waited_ms: result.waitedMs ?? 0,
     };
 }

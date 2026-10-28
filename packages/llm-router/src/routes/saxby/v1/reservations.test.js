@@ -81,6 +81,7 @@ Deno.test("reservations — an admitted job gets what it needs", async () => {
     assertEquals(got.body.reservation.label, "sleep");
     assertEquals(got.body.heartbeat_interval_s, 10);
     assertEquals(got.body.ceiling_bytes, gibToBytes(96));
+    assertEquals(got.body.ceiling_source, "fixture");
     assertEquals(got.body.waited_ms, 0);
 });
 
