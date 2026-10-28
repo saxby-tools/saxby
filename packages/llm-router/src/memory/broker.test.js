@@ -482,6 +482,33 @@ Deno.test("load — a model that fits is held until released", async () => {
     assertEquals(freed.budget.reservedBytes, gibToBytes(1));
 });
 
+Deno.test("load — two requests for one model share its hold", async () => {
+    const { broker, events, sleeps } = harness();
+
+    //  32 free - 20 reserved = 12; voxtral takes 10 of it, once.
+    await reserve(broker, 20);
+
+    const first = await gate(broker, "voxtral:32k");
+    const second = await gate(broker, "voxtral:32k");
+
+    async function reserved() {
+        return (await broker.snapshot()).budget.reservedBytes;
+    }
+
+    assert(second.admitted);
+    assertEquals(sleeps, []);
+    assertStringIncludes(events[2].reason, "sharing its hold");
+    assertEquals(await reserved(), gibToBytes(30));
+
+    first.hold.release();
+
+    assertEquals(await reserved(), gibToBytes(30));
+
+    second.hold.release();
+
+    assertEquals(await reserved(), gibToBytes(20));
+});
+
 Deno.test("load — a hold keeps a second model off its space", async () => {
     const { broker } = harness();
 

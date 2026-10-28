@@ -517,7 +517,7 @@ export function createBroker(options) {
 
         return {
             release: () => {
-                ledger.remove(entry.id);
+                ledger.releaseHold(entry.id);
             },
         };
     }
@@ -585,6 +585,32 @@ export function createBroker(options) {
 
             if (loadedByName.has(name)) {
                 return admitUnchecked(`'${name}' is loaded now`);
+            }
+
+            //  Another request is loading this same model. The backend
+            //  loads it once, so its hold counts the size once; this
+            //  request joins the hold instead of being charged again.
+            const shared = ledger.findHold(name);
+
+            if (shared) {
+                ledger.retainHold(shared.id);
+
+                const waitMs = now() - startedMs;
+
+                log({
+                    ...subject,
+                    event: "admit",
+                    reason: `'${name}' is loading for request ` +
+                        `${shared.requestId}; sharing its hold`,
+                    bytes: shared.bytes,
+                    waitMs,
+                });
+
+                return {
+                    admitted: true,
+                    hold: holdHandle(shared),
+                    waitedMs: waitMs,
+                };
             }
 
             const machine = { reading: await readProbe(), ...residency };
