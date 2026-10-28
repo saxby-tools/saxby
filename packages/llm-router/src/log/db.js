@@ -18,6 +18,9 @@
 //
 //  Both go through ONE FIFO queue. That ordering is load-bearing — an
 //  UPDATE flushed before its INSERT would silently match no rows.
+//
+//  The memory broker's events and measured model sizes ride the same
+//  queue (memory, saveModelSize), so they never write inline either.
 
 import { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS, SCHEMA_VERSION, VIEWS } from "./schema.js";
@@ -87,6 +90,47 @@ const COMPLETE_SQL = `
         prompt_tokens     = ?,
         completion_tokens = ?
     WHERE log_id = ?
+`;
+
+//  Memory broker events. Generated the same way as INSERT_SQL, for the
+//  same reason.
+const MEMORY_COLUMNS = [
+    "at",
+    "subject",
+    "event",
+    "reason",
+    "reservation_id",
+    "request_id",
+    "model",
+    "label",
+    "pid",
+    "child_pid",
+    "bytes",
+    "wait_ms",
+    "ceiling_bytes",
+    "margin_bytes",
+    "pinned_bytes",
+    "loaded_bytes",
+    "reserved_bytes",
+    "free_bytes",
+    "used_bytes",
+    "budget",
+];
+
+const MEMORY_SQL = `
+    INSERT INTO memory_events (${MEMORY_COLUMNS.join(", ")})
+    VALUES (${MEMORY_COLUMNS.map(() => "?").join(", ")})
+`;
+
+const SIZE_UPSERT_SQL = `
+    INSERT INTO model_sizes (model, bytes, measured_at) VALUES (?, ?, ?)
+    ON CONFLICT(model) DO UPDATE SET
+        bytes       = excluded.bytes,
+        measured_at = excluded.measured_at
+`;
+
+const SIZE_SELECT_SQL = `
+    SELECT model, bytes, measured_at FROM model_sizes
 `;
 
 //  ---------------------------------------------------------------------
@@ -211,6 +255,15 @@ export function openDecisionLog(path, config) {
 
     const insertStmt = db.prepare(INSERT_SQL);
     const completeStmt = db.prepare(COMPLETE_SQL);
+    const memoryStmt = db.prepare(MEMORY_SQL);
+    const sizeStmt = db.prepare(SIZE_UPSERT_SQL);
+
+    const statements = {
+        insert: insertStmt,
+        complete: completeStmt,
+        memory: memoryStmt,
+        size: sizeStmt,
+    };
 
     const queue = [];
 
@@ -237,12 +290,7 @@ export function openDecisionLog(path, config) {
 
         try {
             for (const op of batch) {
-                if (op.kind === "insert") {
-                    insertStmt.run(...op.values);
-                    continue;
-                }
-
-                completeStmt.run(...op.values);
+                statements[op.kind].run(...op.values);
             }
 
             db.exec("COMMIT");
@@ -374,6 +422,72 @@ export function openDecisionLog(path, config) {
         });
     }
 
+    //  ---- Memory broker ----------------------------------------------
+
+    //  The parts of a budget no column holds, kept so a row can be
+    //  checked by hand: where each pinned size came from, and why a
+    //  term was unknown.
+    function budgetDetail(budget) {
+        return {
+            ceiling_source: budget.ceilingSource,
+            pinned: budget.pinned,
+            loaded: budget.loaded,
+            unknowns: budget.unknowns,
+            used_source: budget.usedSource,
+        };
+    }
+
+    /**
+     * Records one memory broker event (memory/broker.js shapes it).
+     */
+    function memory(event) {
+        const budget = event.budget ?? null;
+
+        const row = {
+            at: event.at,
+            subject: event.subject,
+            event: event.event,
+            reason: event.reason,
+            reservation_id: event.reservationId,
+            request_id: event.requestId,
+            model: event.model,
+            label: event.label,
+            pid: event.pid,
+            child_pid: event.childPid,
+            bytes: event.bytes,
+            wait_ms: event.waitMs,
+            ceiling_bytes: budget?.ceilingBytes,
+            margin_bytes: budget?.marginBytes,
+            pinned_bytes: budget?.pinnedBytes,
+            loaded_bytes: budget?.loadedBytes,
+            reserved_bytes: budget?.reservedBytes,
+            free_bytes: budget?.freeBytes,
+            used_bytes: budget?.usedBytes,
+            budget: budget ? toJson(budgetDetail(budget)) : null,
+        };
+
+        enqueue({
+            kind: "memory",
+            values: MEMORY_COLUMNS.map((column) => row[column] ?? null),
+        });
+    }
+
+    function saveModelSize(model, bytes, measuredAt) {
+        enqueue({ kind: "size", values: [model, bytes, measuredAt] });
+    }
+
+    /**
+     * Every remembered model size, read once at boot. Synchronous, like
+     * the exemplar cache's read.
+     */
+    function loadModelSizes() {
+        return db.prepare(SIZE_SELECT_SQL).all().map((row) => ({
+            model: row.model,
+            bytes: row.bytes,
+            measuredAt: row.measured_at,
+        }));
+    }
+
     //  ---- Lifecycle --------------------------------------------------
 
     function close() {
@@ -408,5 +522,16 @@ export function openDecisionLog(path, config) {
 
     //  The exemplar vector cache lives in this same file and shares
     //  this connection rather than opening a second one.
-    return { record, complete, flush, close, stats, migration, db };
+    return {
+        record,
+        complete,
+        memory,
+        saveModelSize,
+        loadModelSizes,
+        flush,
+        close,
+        stats,
+        migration,
+        db,
+    };
 }
