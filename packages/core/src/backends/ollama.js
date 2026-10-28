@@ -1,3 +1,5 @@
+import { describeFetchError } from "../utils/fetch-error.js";
+
 const DEFAULT_MAX_CONTEXT = 4096;
 
 //  /api/ps answers from the scheduler's memory and never loads a
@@ -215,7 +217,9 @@ export class OllamaAdapter {
                 signal: AbortSignal.timeout(RESIDENCY_TIMEOUT_MS),
             });
         } catch (err) {
-            throw new Error(`Could not reach Ollama at ${url}: ${err.message}`);
+            throw new Error(
+                `Could not reach Ollama at ${url}: ${describeFetchError(err)}`,
+            );
         }
 
         if (!res.ok) {
