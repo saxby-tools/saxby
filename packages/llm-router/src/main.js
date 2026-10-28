@@ -10,6 +10,7 @@ import {
     instancePhrase,
     loadConfig,
     OllamaAdapter,
+    probeHostFor,
     resolveInstanceName,
     validateTagContract,
 } from "@saxby/core";
@@ -21,14 +22,10 @@ import { isProcessAlive } from "./memory/liveness.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
-import { inspectRequest } from "./security/guard.js";
+import { buildAllowedHosts, inspectRequest } from "./security/guard.js";
+import { isInContainer, isLoopbackHost } from "./security/listen.js";
 import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
-
-//  Loopback only. Saxby checks no credentials, so nothing beyond this
-//  machine may reach it until keys exist (AGENTS.md). Docker Desktop's
-//  host.docker.internal and `tailscale serve` both reach loopback.
-const LISTEN_HOSTNAME = "127.0.0.1";
 
 //  Polled by `saxby` — every half second while a service starts — so
 //  logging them buries the lines that matter. Every running
@@ -217,9 +214,13 @@ async function announceBroker(broker) {
  * Under launchd KeepAlive this message repeats every respawn, which
  * is the loudness a second supervisor deserves.
  */
-async function describePortClash(port, instance) {
+async function describePortClash(config, instance) {
+    const port = config.listen_port;
     const header = `❌ Port ${port} is already in use.`;
-    const holder = await fetchSaxbyStatus(port);
+    const holder = await fetchSaxbyStatus(
+        port,
+        probeHostFor(config.listen_host),
+    );
 
     if (!holder) {
         return `${header}\n` +
@@ -241,34 +242,69 @@ async function describePortClash(port, instance) {
 }
 
 /**
+ * Says what the bind means, once, before listening. A bind beyond
+ * loopback is the operator's call (AGENTS.md), so it is named, not
+ * refused. A loopback bind inside a container is the usual first-run
+ * mistake: the published port never answers.
+ */
+async function announceListen(config) {
+    const where = `${config.listen_host}:${config.listen_port}`;
+
+    if (!isLoopbackHost(config.listen_host)) {
+        console.warn(
+            `⚠️  Listening on ${where}, beyond loopback. Saxby checks ` +
+                `no credentials: anyone who can reach this port can ` +
+                `use your models and your hardware. In a container, ` +
+                `publish the port to 127.0.0.1 on the host ` +
+                `(docs/configuration.md).`,
+        );
+
+        return;
+    }
+
+    if (await isInContainer()) {
+        console.log(
+            `ℹ️  Running in a container with listen_host ` +
+                `${config.listen_host}: a published port will not ` +
+                `answer. Set listen_host to 0.0.0.0 ` +
+                `(docs/configuration.md).`,
+        );
+    }
+}
+
+/**
  * First middleware on every route. Refuses proxied, browser and
  * rebinding requests and Ollama's management paths, before the request
  * logger or any route sees them (security/guard.js says why).
+ * @param {Set<string>} allowedHosts - from buildAllowedHosts
  */
-async function guardRequests(c, next) {
-    const verdict = inspectRequest({
-        headers: c.req.raw.headers,
-        path: c.req.path,
-    });
+function createGuard(allowedHosts) {
+    return async function guardRequests(c, next) {
+        const verdict = inspectRequest({
+            headers: c.req.raw.headers,
+            path: c.req.path,
+            allowedHosts,
+        });
 
-    if (!verdict) {
-        return await next();
-    }
+        if (!verdict) {
+            return await next();
+        }
 
-    const source = c.env?.remoteAddr?.hostname ?? "unknown";
+        const source = c.env?.remoteAddr?.hostname ?? "unknown";
 
-    console.warn(
-        `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
-            `from ${source}`,
-    );
+        console.warn(
+            `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
+                `from ${source}`,
+        );
 
-    return c.json({
-        error: {
-            message: verdict.message,
-            type: "invalid_request_error",
-            code: verdict.code,
-        },
-    }, verdict.status);
+        return c.json({
+            error: {
+                message: verdict.message,
+                type: "invalid_request_error",
+                code: verdict.code,
+            },
+        }, verdict.status);
+    };
 }
 
 /**
@@ -376,7 +412,13 @@ async function main() {
 
     const app = new Hono();
 
-    app.use("*", guardRequests);
+    app.use("*", createGuard(buildAllowedHosts(config.allowed_hosts)));
+
+    if (config.allowed_hosts.length > 0) {
+        const names = config.allowed_hosts.join(", ");
+
+        console.log(`🛡️  Host names also accepted: ${names}`);
+    }
 
     if (!isVerbose()) {
         const requestLogger = logger();
@@ -441,9 +483,11 @@ async function main() {
         });
     });
 
+    await announceListen(config);
+
     try {
         Deno.serve(
-            { hostname: LISTEN_HOSTNAME, port: config.listen_port },
+            { hostname: config.listen_host, port: config.listen_port },
             app.fetch,
         );
     } catch (error) {
@@ -451,7 +495,7 @@ async function main() {
             throw error;
         }
 
-        console.error(await describePortClash(config.listen_port, instance));
+        console.error(await describePortClash(config, instance));
         Deno.exit(1);
     }
 }
