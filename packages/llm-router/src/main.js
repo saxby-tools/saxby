@@ -3,15 +3,22 @@ import { logger } from "@hono/hono/logger";
 import { registerRoutes } from "./routes/index.js";
 import {
     fetchSaxbyStatus,
+    findMemoryProbe,
+    formatGib,
     getInstanceDir,
     instanceLabel,
     instancePhrase,
     loadConfig,
+    OllamaAdapter,
     resolveInstanceName,
     validateTagContract,
 } from "@saxby/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
 import { openDecisionLog } from "./log/db.js";
+import { createBroker } from "./memory/broker.js";
+import { describePinnedGap } from "./memory/budget.js";
+import { isProcessAlive } from "./memory/liveness.js";
+import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
 import { inspectRequest } from "./security/guard.js";
@@ -24,8 +31,10 @@ import packageConfig from "../deno.json" with { type: "json" };
 const LISTEN_HOSTNAME = "127.0.0.1";
 
 //  Polled by `saxby` — every half second while a service starts — so
-//  logging them buries the lines that matter.
+//  logging them buries the lines that matter. Every running
+//  `saxby reserve` heartbeats too.
 const QUIET_PATHS = new Set(["/saxby/v1/status"]);
+const HEARTBEAT_PATH = /^\/saxby\/v1\/reservations\/[^/]+\/heartbeat$/;
 
 //  The usual exit code for a command-line usage error.
 const EXIT_USAGE = 2;
@@ -99,6 +108,105 @@ async function warmSemantic(config, log) {
         );
 
         return null;
+    }
+}
+
+/**
+ * Measured sizes from the decision log, or none. Losing them only
+ * makes the broker more careful, so a failed read never stops a boot.
+ */
+function readModelSizes(log) {
+    if (!log) {
+        return [];
+    }
+
+    try {
+        return log.loadModelSizes();
+    } catch (error) {
+        console.warn(`⚠️  Model sizes unavailable: ${error.message}`);
+        return [];
+    }
+}
+
+/**
+ * Builds the memory broker (docs/memory-broker.md).
+ *
+ * The backend is Ollama: it is Saxby's only backend adapter, and the
+ * catch-all already speaks Ollama's native API. When a second adapter
+ * exists the config must name one, since detecting at boot races the
+ * backend's own start.
+ */
+function startBroker(config, log) {
+    const sizes = createSizeCache({
+        rows: readModelSizes(log),
+        save: (model, bytes, measuredAt) =>
+            log?.saveModelSize(model, bytes, measuredAt),
+    });
+
+    const broker = createBroker({
+        config,
+        probe: findMemoryProbe(),
+        backend: OllamaAdapter,
+        upstreamUrl: config.upstream_url,
+        isAlive: isProcessAlive,
+        sizes,
+        record: (event) => log?.memory(event),
+    });
+
+    broker.start();
+
+    return broker;
+}
+
+function describePinned(term) {
+    if (term.bytes === null) {
+        return `${term.model} (size unknown)`;
+    }
+
+    return `${term.model} ${formatGib(term.bytes)} (${term.source})`;
+}
+
+/**
+ * Prints the budget at boot. A pinned model with no size is warned
+ * about: pinning it was a choice, and every job is refused until it
+ * is fixed, so it is better found now than at the first job. An
+ * unmeasured ceiling is only noted, because on a Mac at the macOS
+ * default and on every Linux box it is the normal state, and it only
+ * matters to someone about to run `saxby reserve`. A backend that did
+ * not answer is noted too; it is read again at every request.
+ */
+async function announceBroker(broker) {
+    const { budget } = await broker.snapshot();
+
+    const ceiling = budget.ceilingBytes === null
+        ? `unknown (${budget.ceilingSource}); set memory.ceiling_gib ` +
+            `before using saxby reserve`
+        : `${formatGib(budget.ceilingBytes)} (${budget.ceilingSource})`;
+
+    console.log(
+        `🧮 Memory broker: ceiling ${ceiling}, ` +
+            `margin ${formatGib(budget.marginBytes)}`,
+    );
+
+    if (budget.pinned.length > 0) {
+        console.log(
+            `   pinned: ${budget.pinned.map(describePinned).join(", ")}`,
+        );
+    }
+
+    if (budget.residencyError !== null) {
+        console.log(`   backend not answering yet: ${budget.residencyError}`);
+    }
+
+    for (const term of budget.pinned) {
+        if (term.bytes !== null) {
+            continue;
+        }
+
+        console.warn(
+            `⚠️  Jobs will be refused until this is fixed: ` +
+                describePinnedGap(term),
+        );
     }
 }
 
@@ -261,6 +369,11 @@ async function main() {
 
     const semantic = await warmSemantic(config, log);
 
+    //  After Tier 3 warms, so the embedder it just loaded is measured.
+    const broker = startBroker(config, log);
+
+    await announceBroker(broker);
+
     const app = new Hono();
 
     app.use("*", guardRequests);
@@ -273,6 +386,10 @@ async function main() {
                 return next();
             }
 
+            if (HEARTBEAT_PATH.test(c.req.path)) {
+                return next();
+            }
+
             return requestLogger(c, next);
         });
     }
@@ -282,6 +399,7 @@ async function main() {
         c.set("instance", instance);
         c.set("log", log);
         c.set("semantic", semantic);
+        c.set("broker", broker);
         await next();
     });
 

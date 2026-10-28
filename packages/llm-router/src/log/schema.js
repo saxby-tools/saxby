@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -170,6 +170,75 @@ export const MIGRATIONS = [
     `
     ALTER TABLE decision_log ADD COLUMN system_prefix TEXT;
     `,
+    //  ---- v4 --------------------------------------------------------
+    //  The memory broker (docs/memory-broker.md). Every decision about
+    //  GPU memory lands here with the budget it was judged by, so the
+    //  margin can be tuned against evidence rather than a feeling.
+    //
+    //  One phase, unlike decision_log: each row is one event in a
+    //  reservation's life, joined by reservation_id. Load rows carry
+    //  request_id, which ties them to the decision_log row of the chat
+    //  request that was gated.
+    //
+    //  Budget terms are whole bytes. used_bytes is what the probe
+    //  observed (wired pages on macOS); it is never part of the budget
+    //  and is stored as the evidence a margin gets tuned against.
+    //
+    //  label is the command's name only. Its arguments are never
+    //  stored: they can hold paths and secrets.
+    //
+    //  model_sizes is a cache, like exemplar_vectors: the last size
+    //  the backend reported for each model, so a pinned model keeps
+    //  counting at full size after it unloads and after a restart.
+    `
+    CREATE TABLE memory_events (
+        id              INTEGER PRIMARY KEY,
+        at              TEXT    NOT NULL,
+
+        --  job | load
+        subject         TEXT    NOT NULL,
+
+        --  wait | admit | refuse | abandon | reregister | release | reap
+        event           TEXT    NOT NULL,
+        reason          TEXT    NOT NULL,
+
+        reservation_id  TEXT,
+        request_id      TEXT,
+        model           TEXT,
+        label           TEXT,
+        pid             INTEGER,
+        child_pid       INTEGER,
+
+        --  Asked for (jobs) or needed (loads). NULL when unknown.
+        bytes           INTEGER,
+        wait_ms         INTEGER,
+
+        --  ---- The budget it was judged by ---------------------------
+        --  NULL on release and reap rows, which judge nothing, and
+        --  free_bytes is NULL whenever a term was unknown.
+        ceiling_bytes   INTEGER,
+        margin_bytes    INTEGER,
+        pinned_bytes    INTEGER,
+        loaded_bytes    INTEGER,
+        reserved_bytes  INTEGER,
+        free_bytes      INTEGER,
+        used_bytes      INTEGER,
+
+        --  JSON: each pinned model's size and source, the other loaded
+        --  models, the ceiling's source and every unknown.
+        budget          TEXT
+    ) STRICT;
+
+    CREATE INDEX idx_memory_at          ON memory_events (at);
+    CREATE INDEX idx_memory_reservation ON memory_events (reservation_id);
+    CREATE INDEX idx_memory_request     ON memory_events (request_id);
+
+    CREATE TABLE model_sizes (
+        model        TEXT    PRIMARY KEY,
+        bytes        INTEGER NOT NULL,
+        measured_at  TEXT    NOT NULL
+    ) STRICT;
+    `,
 ];
 
 //  ---------------------------------------------------------------------
@@ -241,4 +310,23 @@ export const VIEWS = `
         MAX(created_at)           AS last_cached
     FROM exemplar_vectors
     GROUP BY embedding_model, dim;
+
+    --  The memory broker's events in GiB, newest first, readable by
+    --  eye. used_gib is observed wired memory, not a budget term.
+    DROP VIEW IF EXISTS v_memory_events;
+    CREATE VIEW v_memory_events AS
+    SELECT
+        at,
+        subject,
+        event,
+        COALESCE(label, model)                  AS what,
+        ROUND(bytes / 1073741824.0, 1)          AS gib,
+        ROUND(free_bytes / 1073741824.0, 1)     AS free_gib,
+        ROUND(used_bytes / 1073741824.0, 1)     AS used_gib,
+        wait_ms,
+        reason,
+        reservation_id,
+        request_id
+    FROM memory_events
+    ORDER BY id DESC;
 `;

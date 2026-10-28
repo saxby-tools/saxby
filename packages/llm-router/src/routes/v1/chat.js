@@ -4,6 +4,7 @@ import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
 import { hashPrompt, identifyClient } from "../../log/client.js";
+import { CODE_ABANDONED } from "../../memory/broker.js";
 
 //  ---------------------------------------------------------------------
 //  Header construction
@@ -103,6 +104,7 @@ export function registerChatRoutes(app) {
         const config = c.get("config");
         const log = c.get("log");
         const semantic = c.get("semantic");
+        const broker = c.get("broker");
 
         const body = await c.req.json();
         const rawModel = body.model || "";
@@ -283,7 +285,23 @@ export function registerChatRoutes(app) {
 
         //  ---- Closing the row ---------------------------------------
 
+        //  Set when the memory broker let a model load through. Freed
+        //  at the first byte, when the backend lists the model and its
+        //  size counts as loaded instead, or when the request ends.
+        let loadHold = null;
+
+        function releaseLoadHold() {
+            if (!loadHold) {
+                return;
+            }
+
+            loadHold.release();
+            loadHold = null;
+        }
+
         function closeRow(outcome) {
+            releaseLoadHold();
+
             if (!logId) {
                 return;
             }
@@ -297,6 +315,45 @@ export function registerChatRoutes(app) {
             });
 
             logId = null;
+        }
+
+        //  ---- Memory gate -------------------------------------------
+        //  A model that is not loaded loads when this request reaches
+        //  the backend. While a job holds a reservation, that load must
+        //  fit first (docs/memory-broker.md). Bypass and raw requests
+        //  are gated too: they load models just the same. With no job
+        //  held, the check is one synchronous call and no await.
+        if (broker.hasJobs()) {
+            const gate = await broker.gateLoad(targetModel, {
+                requestId: tracer.id,
+                signal: c.req.raw.signal,
+            });
+
+            if (gate.code === CODE_ABANDONED) {
+                tracer.aborted();
+                closeRow("aborted");
+
+                return c.body(null, 499);
+            }
+
+            //  A new decision-log outcome beside 'refused': routing
+            //  found a model, but memory could not hold it. The
+            //  memory_events row with this request_id says why.
+            if (!gate.admitted) {
+                tracer.warn(gate.reason);
+                closeRow("memory_refused");
+
+                return c.json({
+                    error: {
+                        message: `Saxby is holding GPU memory for a ` +
+                            `running job: ${gate.reason}`,
+                        type: "server_error",
+                        code: gate.code,
+                    },
+                }, 503);
+            }
+
+            loadHold = gate.hold;
         }
 
         const upstreamUrl = `${config.upstream_url}/v1/chat/completions`;
@@ -339,6 +396,7 @@ export function registerChatRoutes(app) {
             onFirstByte: () => {
                 tracer.firstByte();
                 ttfbMs = Math.round(performance.now() - startedAt);
+                releaseLoadHold();
             },
 
             onUsage: (reported) => {

@@ -21,8 +21,10 @@ migration.
 ##  Packages
 
 ```
-packages/core            shared contracts: tags, config, plist, root
-packages/cli             `saxby` — config generation, vram-guard-mac
+packages/core            shared contracts: tags, config, plist, root,
+                         backend adapters, memory probes
+packages/cli             `saxby` — config generation, vram-guard-mac,
+                         reserve
 packages/llm-router      `saxbyd` — the daemon
 packages/vram-guard-mac  Apple Silicon VRAM ceiling LaunchDaemon
 ```
@@ -88,6 +90,11 @@ deno check packages/cli/src/main.js
 returns the full routing decision as JSON with **no upstream call** —
 no tokens, no model load. Use it to verify routing rather than
 generating completions.
+
+`GET /saxby/v1/reservations` shows the memory broker's budget, also
+without loading anything. Test the broker with tiny reservations and
+harmless children (`saxby -i dev reserve --gib 1 -- sleep 5`), never a
+real GPU job.
 
 Tests are colocated (`*.test.js`), use fixture catalogs, and need no
 daemon and no user config. Assertions naming real model ids belong in
@@ -312,6 +319,35 @@ a trusted-proxy list, non-loopback binds — is the post-v1 exposure work;
 when it lands, "identified by `User-Agent`, never by API key" must be
 revisited, since its objection is to keys nobody verifies.
 
+**The memory broker lives in Saxby, and fails closed.** On Oct. 27,
+2026, an uncapped PyTorch job grew to 122 GiB beside two loaded models
+and the kernel panicked ([Memory broker](docs/memory-broker.md)).
+`saxby reserve --gib N -- <command>` asks saxbyd for N before the job
+starts. It lives in Saxby because Ollama sizes a load from the memory
+it sees free, and a reservation not yet used looks free: only
+something in front of the loads can make them wait, and Saxby already
+proxies them. vram-guard-mac stays a boot-time script that reads no
+backend state. One formula judges jobs and loads: `ceiling − margin −
+pinned − loaded − reserved`, with pinned models counted at full size
+loaded or not, and every other loaded model counted because a job
+cannot evict it. Any unknown term admits nothing. If saxbyd can't be
+asked, the job does not run: no answer from the broker is never a
+yes. `--no-broker` runs anyway, loudly. The gate runs only while a job
+holds a reservation, so the chat fast path stays one synchronous check.
+The gate is load-bearing; its log rows are not.
+
+**saxbyd may start exactly `kill`, `sysctl` and `vm_stat`, by absolute
+path.** It used to start nothing, so a bug in request handling could
+launch no program. The broker needs `kill -0` so that a job whose
+wrapper was force-killed stays counted until the job itself exits —
+the panic above is the case — plus `sysctl` and `vm_stat` to read the
+ceiling and wired memory. `Deno.kill(pid, 0)` would need unrestricted
+`--allow-run`, which is why a program list is used instead. Absolute
+paths, so a changed PATH can't swap one out; Linux needs only `kill`.
+**The list is closed**: adding a program needs a stated reason here.
+It lives in `SAXBYD_RUN` in [`scripts/build.js`](scripts/build.js),
+and `deno task dev` takes the same flags.
+
 **Rejected and why:** a hosted router model (opaque dispatcher —
 Saxby's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
@@ -345,6 +381,23 @@ sizing would need an optional Ollama capability layer. Deferred.
 
 `OLLAMA_MAX_LOADED_MODELS` is a ceiling, not a reservation — models
 load concurrently only if they also fit in available memory.
+
+Ollama has no API that reports the GPU's total memory; `total=` exists
+only in its log. `/api/ps` reports each loaded model's `size_vram`.
+
+On Apple Silicon, `iogpu.wired_limit_mb`, when above 0, equals Metal's
+`recommendedMaxWorkingSetSize`: 98,304 MiB read as 103,079,215,104
+bytes on an M5 Max. When it is 0, only Metal knows the default.
+
+PyTorch's MPS cap is `PYTORCH_MPS_HIGH_WATERMARK_RATIO` times
+`recommendedMaxWorkingSetSize`, default 1.7, which is no cap on
+unified memory. A ratio of 0 DISABLES it. The low watermark, default
+1.4, may not exceed the high one, so setting only the high one below
+1.4 makes PyTorch fail at startup. Set both.
+
+`Deno.kill(pid, 0)` needs unrestricted `--allow-run`; a list such as
+`--allow-run=/bin/kill` is not enough (Deno 2.9.8). `deno compile`
+with such a list still lets the binary run each listed program.
 
 On macOS, `launchctl setenv` does not survive a reboot, and a
 LaunchAgent that re-runs it at login races the backend's own agent —

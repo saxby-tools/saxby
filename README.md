@@ -70,6 +70,8 @@ Then point your apps at `http://127.0.0.1:11435/v1` with the model
   personas, Tier 3
 - [Clients](docs/clients.md) — Open WebUI, OpenClaw, scripts
 - [Instances](docs/instances.md) — the dev instance, with its own log
+- [Memory broker](docs/memory-broker.md) — `saxby reserve` for heavy
+  GPU jobs, and model loads that wait for room
 - [Services](docs/services.md) — launchd and systemd, the default
   instance and the dev instance
 - [Troubleshooting](docs/troubleshooting.md) — messages and what to
