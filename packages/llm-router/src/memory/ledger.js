@@ -31,7 +31,9 @@ const KIND_HOLD = "hold";
  * @property {number | null} pid - Jobs: the wrapper.
  * @property {number | null} childPid - Jobs: the command it runs.
  * @property {string | null} model - Holds: the model being loaded.
- * @property {string | null} requestId - Holds: the chat request.
+ * @property {string | null} requestId - Holds: the request that
+ *     opened it.
+ * @property {number | null} holders - Holds: requests sharing it.
  * @property {string} createdAt - ISO8601.
  * @property {number} createdMs
  * @property {string} lastHeartbeatAt - ISO8601.
@@ -93,6 +95,7 @@ export function createLedger(now = () => Date.now()) {
             childPid: null,
             model: hold.model,
             requestId: hold.requestId,
+            holders: 1,
             createdAt: at.iso,
             createdMs: at.ms,
             lastHeartbeatAt: at.iso,
@@ -105,6 +108,72 @@ export function createLedger(now = () => Date.now()) {
 
     function get(id) {
         return entries.get(id) ?? null;
+    }
+
+    /**
+     * The hold for a model that is loading now, if there is one.
+     * @returns {LedgerEntry | null}
+     */
+    function findHold(model) {
+        for (const entry of entries.values()) {
+            if (entry.kind !== KIND_HOLD) {
+                continue;
+            }
+
+            if (entry.model === model) {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A second request for a model that is loading joins its hold
+     * rather than adding one: the backend loads the model once, so its
+     * size counts once. The hold stays until every holder releases it.
+     * @returns {LedgerEntry | null}
+     */
+    function retainHold(id) {
+        const entry = get(id);
+
+        if (!entry) {
+            return null;
+        }
+
+        if (entry.kind !== KIND_HOLD) {
+            return null;
+        }
+
+        entry.holders += 1;
+
+        return entry;
+    }
+
+    /**
+     * @returns {LedgerEntry | null} The hold once the last holder
+     *     lets go, else null.
+     */
+    function releaseHold(id) {
+        const entry = get(id);
+
+        if (!entry) {
+            return null;
+        }
+
+        if (entry.kind !== KIND_HOLD) {
+            return null;
+        }
+
+        entry.holders -= 1;
+
+        if (entry.holders > 0) {
+            return null;
+        }
+
+        entries.delete(id);
+
+        return entry;
     }
 
     /**
@@ -182,6 +251,9 @@ export function createLedger(now = () => Date.now()) {
         addJob,
         addHold,
         get,
+        findHold,
+        retainHold,
+        releaseHold,
         remove,
         heartbeat,
         list,

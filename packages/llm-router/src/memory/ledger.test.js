@@ -81,6 +81,31 @@ Deno.test("ledger — a hold cannot be heartbeated", () => {
     assertEquals(ledger.heartbeat(hold.id), null);
 });
 
+Deno.test("ledger — a shared hold counts once, outlives one release", () => {
+    const ledger = createLedger();
+    const hold = ledger.addHold({ bytes: GIB, model: "m", requestId: "r1" });
+
+    assertEquals(ledger.findHold("m")?.id, hold.id);
+    assertEquals(ledger.retainHold(hold.id)?.holders, 2);
+    assertEquals(ledger.reservedBytes(), GIB);
+
+    assertEquals(ledger.releaseHold(hold.id), null);
+    assertEquals(ledger.reservedBytes(), GIB);
+
+    assertEquals(ledger.releaseHold(hold.id)?.id, hold.id);
+    assertEquals(ledger.reservedBytes(), 0);
+    assertEquals(ledger.findHold("m"), null);
+});
+
+Deno.test("ledger — only holds can be shared", () => {
+    const ledger = createLedger();
+    const entry = ledger.addJob(job());
+
+    assertEquals(ledger.retainHold(entry.id), null);
+    assertEquals(ledger.releaseHold(entry.id), null);
+    assertEquals(ledger.findHold("sleep"), null);
+});
+
 Deno.test("ledger — a re-registered job keeps its id", () => {
     const ledger = createLedger();
     const entry = ledger.addJob(job({ id: "kept-id" }));
