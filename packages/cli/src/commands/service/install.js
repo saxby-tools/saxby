@@ -5,6 +5,7 @@ import {
     getInstanceDir,
     instancePhrase,
     isPortHeld,
+    probeHostFor,
 } from "@saxby/core";
 import {
     fail,
@@ -111,12 +112,13 @@ export const installCommand = new Command()
         const { instance, adapter, config } = await prepare(options.instance);
         const binary = await resolveBinary(options.bin);
         const port = config.listen_port;
+        const probeHost = probeHostFor(config.listen_host);
 
         //  A saxbyd already on this port outside the service — a dev
         //  run, a terminal left open — would put the new service into
         //  a crash loop. Reinstalling over our own service is fine.
         const service = await adapter.status(instance);
-        const holder = await fetchSaxbyStatus(port);
+        const holder = await fetchSaxbyStatus(port, probeHost);
 
         if (holder && holder.pid !== service.pid) {
             fail(
@@ -128,7 +130,7 @@ export const installCommand = new Command()
 
         //  The same crash loop, against a program that is not saxbyd.
         //  Skipped while our own service runs: it holds the port too.
-        if (!holder && !service.pid && isPortHeld(port)) {
+        if (!holder && !service.pid && isPortHeld(port, probeHost)) {
             fail(
                 `:${port} is held by a process that is not saxbyd. ` +
                     `Stop it, or change listen_port in ` +
@@ -150,7 +152,12 @@ export const installCommand = new Command()
             fail(err.message);
         }
 
-        const answer = await waitForAnswer(port, instance, service.pid);
+        const answer = await waitForAnswer(
+            port,
+            instance,
+            service.pid,
+            probeHost,
+        );
 
         reportAnswer(answer, adapter, instance);
     });
