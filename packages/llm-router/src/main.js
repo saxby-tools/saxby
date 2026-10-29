@@ -1,5 +1,6 @@
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
+import { join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
 import {
     fetchSaxbyStatus,
@@ -38,6 +39,10 @@ const HEARTBEAT_PATH = /^\/saxby\/v1\/reservations\/[^/]+\/heartbeat$/;
 
 //  The usual exit code for a command-line usage error.
 const EXIT_USAGE = 2;
+
+//  The prompt hash key lives beside the config, not beside the log:
+//  it belongs to the instance, wherever log_path points.
+const KEY_FILE = "prompt-hash.key";
 
 /**
  * Prepares Tier 3: resolves the active profile, confirms the embedder
@@ -345,7 +350,11 @@ async function main() {
     let log = null;
 
     try {
-        log = openDecisionLog(config.log_path, config);
+        log = await openDecisionLog(
+            config.log_path,
+            config,
+            join(getInstanceDir(instance), KEY_FILE),
+        );
 
         console.log(`📓 Decision log: ${config.log_path}`);
 

@@ -3,7 +3,7 @@ import { resolvePipeline } from "../../pipeline/resolve.js";
 import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
-import { hashPrompt, identifyClient } from "../../log/client.js";
+import { identifyClient } from "../../log/client.js";
 import { CODE_ABANDONED } from "../../memory/broker.js";
 
 //  ---------------------------------------------------------------------
@@ -188,7 +188,7 @@ export function registerChatRoutes(app) {
                 decision,
                 intent: extracted,
                 prompt: extracted.cleanPrompt,
-                promptHash: await hashPrompt(extracted.cleanPrompt),
+                promptHash: await log?.hashPrompt(extracted.cleanPrompt),
 
                 //  Written whether or not Tier 3 won. A rejected score
                 //  is what the threshold gets tuned against.
@@ -275,7 +275,7 @@ export function registerChatRoutes(app) {
                     },
                 },
                 prompt: null,
-                promptHash: await hashPrompt(""),
+                promptHash: await log?.hashPrompt(""),
                 semantic: null,
                 systemPrefix,
             });

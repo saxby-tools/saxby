@@ -25,6 +25,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { dirname } from "@std/path";
 import { MIGRATIONS, SCHEMA_VERSION, VIEWS } from "./schema.js";
+import { createPromptHasher, PROMPT_HASH_SCHEME } from "./client.js";
 
 //  Flush when either threshold trips, whichever comes first.
 const FLUSH_MAX_ROWS = 50;
@@ -54,6 +55,12 @@ const MODE_FILE = 0o600;
 const MODE_DIR = 0o700;
 const MODE_MASK = 0o777;
 const IN_MEMORY = ":memory:";
+
+//  The prompt hash key: 32 random bytes as 64 hex characters, made on
+//  first open and never rotated by Saxby. Deleting the file starts a
+//  new key, and grouping starts over from there.
+const KEY_BYTES = 32;
+const KEY_HEX = /^[0-9a-f]{64}$/;
 
 //  Single source of truth for the INSERT. The SQL and the value array
 //  are both generated from this list, so they cannot drift — the
@@ -87,7 +94,8 @@ const INSERT_COLUMNS = [
     "confidence",
     "embedding_model",
     "embedding_dim",
-    "prompt_sha256",
+    "prompt_hash",
+    "prompt_hash_scheme",
     "prompt",
     "system_prefix",
 ];
@@ -246,6 +254,64 @@ function tightenModes(path) {
 }
 
 //  ---------------------------------------------------------------------
+//  Prompt hash key
+//  ---------------------------------------------------------------------
+
+function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+
+    return bytes;
+}
+
+/**
+ * Reads the instance's key, creating it owner-only on first open.
+ * With no path (tests, in-memory logs) the key lives for this process
+ * only. A key that cannot be read or written stops the open: a folder
+ * that cannot hold a key cannot hold a WAL file either.
+ */
+function readOrCreateKey(keyPath) {
+    if (!keyPath) {
+        return crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+    }
+
+    let hex = null;
+
+    try {
+        hex = Deno.readTextFileSync(keyPath).trim();
+    } catch (err) {
+        if (!(err instanceof Deno.errors.NotFound)) {
+            throw err;
+        }
+    }
+
+    if (hex === null) {
+        const bytes = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+        const fresh = [...bytes]
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
+        Deno.writeTextFileSync(keyPath, `${fresh}\n`, { mode: MODE_FILE });
+
+        return bytes;
+    }
+
+    if (!KEY_HEX.test(hex)) {
+        throw new Error(
+            `${keyPath} is not a prompt hash key (64 hex characters). ` +
+                `Move it aside to start a new key.`,
+        );
+    }
+
+    tightenMode(keyPath, MODE_FILE);
+
+    return hexToBytes(hex);
+}
+
+//  ---------------------------------------------------------------------
 //  Schema management
 //  ---------------------------------------------------------------------
 
@@ -321,8 +387,12 @@ export function openDecisionLogReadOnly(path) {
  *
  * @param {string} path
  * @param {Object} config - reads config.log_prompts
+ * @param {string | null} keyPath - the instance's prompt-hash.key;
+ *   null keeps a key for this process only
  */
-export function openDecisionLog(path, config) {
+export async function openDecisionLog(path, config, keyPath = null) {
+    const hashPrompt = await createPromptHasher(readOrCreateKey(keyPath));
+
     const db = new DatabaseSync(path);
 
     for (const pragma of PRAGMAS) {
@@ -466,7 +536,8 @@ export function openDecisionLog(path, config) {
             embedding_model: entry.semantic?.model ?? null,
             embedding_dim: entry.semantic?.dim ?? null,
 
-            prompt_sha256: entry.promptHash,
+            prompt_hash: entry.promptHash,
+            prompt_hash_scheme: PROMPT_HASH_SCHEME,
             prompt: config.log_prompts ? entry.prompt : null,
 
             system_prefix: entry.systemPrefix ?? null,
@@ -606,6 +677,7 @@ export function openDecisionLog(path, config) {
     //  The exemplar vector cache lives in this same file and shares
     //  this connection rather than opening a second one.
     return {
+        hashPrompt,
         record,
         complete,
         memory,
