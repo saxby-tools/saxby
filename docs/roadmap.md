@@ -108,9 +108,15 @@ known gaps are issues labelled
           wait for room while a job holds memory
           ([Memory broker](memory-broker.md), #39). Known gaps: #33
           through #38, #40 and #41.
+  - [x] **Decision log privacy** *(not in the original plan: added
+        when the question of other people's prompts came up; ships
+        in v0.9.7)*
+    - [x] Prompt text opt-in, detector evidence without user text, a
+          keyed prompt hash, owner-only files, `secure_delete`
+          ([Logging](configuration.md#logging)).
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
-    - [ ] JSDoc sweep (#26, v0.9.7), consistent across the repo. Mechanical and
+    - [ ] JSDoc sweep (#26, v0.9.8), consistent across the repo. Mechanical and
           verifiable with `deno check` — safe to start any time, and
           independent of the phases above.
     - [x] Create `docs/` — [Getting started](getting-started.md),
