@@ -153,6 +153,15 @@ Saxby writes.
 `v_client_mix`, `v_unclaimed_tags`, `v_incomplete`,
 `v_exemplar_cache` and `v_memory_events`.
 
+**Stores no user text by default.** Prompt text is opt-in
+(`log_prompts`), and detector evidence is counts, booleans and names
+from a fixed vocabulary, never what was matched. The prompt hash is
+an HMAC with a per-instance key (`prompt-hash.key`), and every row
+names its hash scheme. The file, its WAL files and the folder are
+made owner-only on every open, and `secure_delete` is on so a blanked
+prompt does not survive in free pages. The reasoning is in
+[Configuration](configuration.md#logging).
+
 The log also holds Tier 3's exemplar vectors, keyed by embedding
 model, which is why switching embedders back and forth re-embeds
 nothing. The memory broker writes its events to `memory_events` and
