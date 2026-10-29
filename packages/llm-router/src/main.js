@@ -357,8 +357,14 @@ async function main() {
             );
         }
 
+        //  Printed either way. With text off by default, the quiet
+        //  case is the one storing prompts, so neither may be silent.
+        if (config.log_prompts) {
+            console.log("   prompt text: logged (log_prompts: true)");
+        }
+
         if (!config.log_prompts) {
-            console.log("   prompt text disabled (hashes only)");
+            console.log("   prompt text: hashes only (log_prompts: false)");
         }
     } catch (error) {
         console.warn(
