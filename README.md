@@ -13,6 +13,15 @@ you can tune routing against evidence instead of guesses.
 
 Saxby was called shuntd through v0.9.3.
 
+ > [!NOTE]
+ > **How Saxby is built.** Saxby is written with help from frontier
+ > AI models, including Anthropic's Claude Opus and Fable, which
+ > handled much of the routine work in the v0.9 releases. A person
+ > reviews and merges every change and is responsible for it, and
+ > AI-written commits are labeled as AI-written. The goal is open,
+ > local AI that can stand on its own. Getting there faster means
+ > using the best tools available today.
+
 ##  How it picks
 
 | Tier | Looks at | Sends to |
