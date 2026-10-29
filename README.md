@@ -106,7 +106,8 @@ them. Read it before changing behavior.
 Saxby is tested on a real homelab, and we share what we find.
 [The MacBook bake-off](https://claude.ai/artifact/Xam1N1vWQxPNydXpnvUQkW)
 put six local coding models through hidden tests to pick which one
-gets the coding job.
+gets the coding job. The tasks, answers and grades behind it are in
+[saxby-tools/lab](https://github.com/saxby-tools/lab).
 
 ## Development
 
