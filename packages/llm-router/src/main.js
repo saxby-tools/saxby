@@ -357,6 +357,12 @@ async function main() {
             );
         }
 
+        if (log.tightened.length > 0) {
+            console.log(
+                `   made owner-only: ${log.tightened.join(", ")}`,
+            );
+        }
+
         //  Printed either way. With text off by default, the quiet
         //  case is the one storing prompts, so neither may be silent.
         if (config.log_prompts) {

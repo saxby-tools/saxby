@@ -23,6 +23,7 @@
 //  queue (memory, saveModelSize), so they never write inline either.
 
 import { DatabaseSync } from "node:sqlite";
+import { dirname } from "@std/path";
 import { MIGRATIONS, SCHEMA_VERSION, VIEWS } from "./schema.js";
 
 //  Flush when either threshold trips, whichever comes first.
@@ -33,11 +34,26 @@ const FLUSH_INTERVAL_MS = 500;
 //  synchronous is the standard WAL pairing: a crash can lose the last
 //  transaction, which for an observability log is an acceptable trade
 //  against an fsync per batch.
+//
+//  secure_delete zero-fills what a DELETE or UPDATE frees. Without it
+//  a prompt blanked with `SET prompt = NULL` stays in the file's free
+//  pages until a VACUUM. Deno's bundled SQLite ships with it off.
 const PRAGMAS = [
     "PRAGMA journal_mode = WAL",
     "PRAGMA synchronous = NORMAL",
     "PRAGMA busy_timeout = 5000",
+    "PRAGMA secure_delete = ON",
 ];
+
+//  Owner-only. The log holds prompts whenever log_prompts is on, and
+//  the -wal file holds the latest batches either way. SQLite gives
+//  -wal and -shm the main file's mode, so fixing the main file once
+//  covers every later open; both are fixed here too for the open
+//  that finds them already there.
+const MODE_FILE = 0o600;
+const MODE_DIR = 0o700;
+const MODE_MASK = 0o777;
+const IN_MEMORY = ":memory:";
 
 //  Single source of truth for the INSERT. The SQL and the value array
 //  are both generated from this list, so they cannot drift — the
@@ -165,6 +181,71 @@ function toBool(value) {
 }
 
 //  ---------------------------------------------------------------------
+//  File modes
+//  ---------------------------------------------------------------------
+
+/**
+ * Sets one path to the mode, if it exists and differs. Returns
+ * whether anything changed. A platform that reports no mode (Windows)
+ * is left alone.
+ */
+function tightenMode(target, mode) {
+    let current;
+
+    try {
+        current = Deno.statSync(target).mode;
+    } catch {
+        return false;
+    }
+
+    if (current === null) {
+        return false;
+    }
+
+    if ((current & MODE_MASK) === mode) {
+        return false;
+    }
+
+    Deno.chmodSync(target, mode);
+
+    return true;
+}
+
+/**
+ * Makes the log, its WAL files and the folder holding them owner-only.
+ * Returns the paths it changed. Never throws: a mode that cannot be
+ * set costs a warning, not the log.
+ */
+function tightenModes(path) {
+    if (path === IN_MEMORY) {
+        return [];
+    }
+
+    const targets = [
+        [dirname(path), MODE_DIR],
+        [path, MODE_FILE],
+        [`${path}-wal`, MODE_FILE],
+        [`${path}-shm`, MODE_FILE],
+    ];
+
+    const changed = [];
+
+    for (const [target, mode] of targets) {
+        try {
+            if (tightenMode(target, mode)) {
+                changed.push(target);
+            }
+        } catch (err) {
+            console.warn(
+                `⚠️  could not make ${target} owner-only: ${err.message}`,
+            );
+        }
+    }
+
+    return changed;
+}
+
+//  ---------------------------------------------------------------------
 //  Schema management
 //  ---------------------------------------------------------------------
 
@@ -247,6 +328,8 @@ export function openDecisionLog(path, config) {
     for (const pragma of PRAGMAS) {
         db.exec(pragma);
     }
+
+    const tightened = tightenModes(path);
 
     const migration = migrate(db);
 
@@ -532,6 +615,7 @@ export function openDecisionLog(path, config) {
         close,
         stats,
         migration,
+        tightened,
         db,
     };
 }
