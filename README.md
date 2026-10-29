@@ -101,6 +101,13 @@ questions and ideas past v1 are in
 [`AGENTS.md`](AGENTS.md) records the design decisions and the reasoning behind
 them. Read it before changing behavior.
 
+## From the lab
+
+Saxby is tested on a real homelab, and we share what we find.
+[The MacBook bake-off](https://claude.ai/artifact/Xam1N1vWQxPNydXpnvUQkW)
+put six local coding models through hidden tests to pick which one
+gets the coding job.
+
 ## Development
 
 ```bash
