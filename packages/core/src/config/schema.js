@@ -125,7 +125,10 @@ export const SaxbyConfigSchema = v.strictObject({
     semantic: v.optional(SemanticSchema),
     personas: v.record(v.string(), PersonaSchema),
     catalog: v.record(v.string(), ModelSchema),
-    log_prompts: v.optional(v.boolean(), true),
+    //  Off unless the operator says so. The decision log is a plain
+    //  SQLite file: anyone who can read it reads every prompt, and
+    //  the operator always can. Hashes group repeats without text.
+    log_prompts: v.optional(v.boolean(), false),
     client_names: v.optional(v.record(v.string(), v.string()), {}),
     log_path: v.optional(v.string()),
     memory: v.optional(MemorySchema, {}),
