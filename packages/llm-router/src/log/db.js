@@ -23,7 +23,9 @@
 //  queue (memory, saveModelSize), so they never write inline either.
 
 import { DatabaseSync } from "node:sqlite";
+import { dirname } from "@std/path";
 import { MIGRATIONS, SCHEMA_VERSION, VIEWS } from "./schema.js";
+import { createPromptHasher, PROMPT_HASH_SCHEME } from "./client.js";
 
 //  Flush when either threshold trips, whichever comes first.
 const FLUSH_MAX_ROWS = 50;
@@ -33,11 +35,32 @@ const FLUSH_INTERVAL_MS = 500;
 //  synchronous is the standard WAL pairing: a crash can lose the last
 //  transaction, which for an observability log is an acceptable trade
 //  against an fsync per batch.
+//
+//  secure_delete zero-fills what a DELETE or UPDATE frees. Without it
+//  a prompt blanked with `SET prompt = NULL` stays in the file's free
+//  pages until a VACUUM. Deno's bundled SQLite ships with it off.
 const PRAGMAS = [
     "PRAGMA journal_mode = WAL",
     "PRAGMA synchronous = NORMAL",
     "PRAGMA busy_timeout = 5000",
+    "PRAGMA secure_delete = ON",
 ];
+
+//  Owner-only. The log holds prompts whenever log_prompts is on, and
+//  the -wal file holds the latest batches either way. SQLite gives
+//  -wal and -shm the main file's mode, so fixing the main file once
+//  covers every later open; both are fixed here too for the open
+//  that finds them already there.
+const MODE_FILE = 0o600;
+const MODE_DIR = 0o700;
+const MODE_MASK = 0o777;
+const IN_MEMORY = ":memory:";
+
+//  The prompt hash key: 32 random bytes as 64 hex characters, made on
+//  first open and never rotated by Saxby. Deleting the file starts a
+//  new key, and grouping starts over from there.
+const KEY_BYTES = 32;
+const KEY_HEX = /^[0-9a-f]{64}$/;
 
 //  Single source of truth for the INSERT. The SQL and the value array
 //  are both generated from this list, so they cannot drift — the
@@ -71,7 +94,8 @@ const INSERT_COLUMNS = [
     "confidence",
     "embedding_model",
     "embedding_dim",
-    "prompt_sha256",
+    "prompt_hash",
+    "prompt_hash_scheme",
     "prompt",
     "system_prefix",
 ];
@@ -165,6 +189,129 @@ function toBool(value) {
 }
 
 //  ---------------------------------------------------------------------
+//  File modes
+//  ---------------------------------------------------------------------
+
+/**
+ * Sets one path to the mode, if it exists and differs. Returns
+ * whether anything changed. A platform that reports no mode (Windows)
+ * is left alone.
+ */
+function tightenMode(target, mode) {
+    let current;
+
+    try {
+        current = Deno.statSync(target).mode;
+    } catch {
+        return false;
+    }
+
+    if (current === null) {
+        return false;
+    }
+
+    if ((current & MODE_MASK) === mode) {
+        return false;
+    }
+
+    Deno.chmodSync(target, mode);
+
+    return true;
+}
+
+/**
+ * Makes the log, its WAL files and the folder holding them owner-only.
+ * Returns the paths it changed. Never throws: a mode that cannot be
+ * set costs a warning, not the log.
+ */
+function tightenModes(path) {
+    if (path === IN_MEMORY) {
+        return [];
+    }
+
+    const targets = [
+        [dirname(path), MODE_DIR],
+        [path, MODE_FILE],
+        [`${path}-wal`, MODE_FILE],
+        [`${path}-shm`, MODE_FILE],
+    ];
+
+    const changed = [];
+
+    for (const [target, mode] of targets) {
+        try {
+            if (tightenMode(target, mode)) {
+                changed.push(target);
+            }
+        } catch (err) {
+            console.warn(
+                `⚠️  could not make ${target} owner-only: ${err.message}`,
+            );
+        }
+    }
+
+    return changed;
+}
+
+//  ---------------------------------------------------------------------
+//  Prompt hash key
+//  ---------------------------------------------------------------------
+
+function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+
+    return bytes;
+}
+
+/**
+ * Reads the instance's key, creating it owner-only on first open.
+ * With no path (tests, in-memory logs) the key lives for this process
+ * only. A key that cannot be read or written stops the open: a folder
+ * that cannot hold a key cannot hold a WAL file either.
+ */
+function readOrCreateKey(keyPath) {
+    if (!keyPath) {
+        return crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+    }
+
+    let hex = null;
+
+    try {
+        hex = Deno.readTextFileSync(keyPath).trim();
+    } catch (err) {
+        if (!(err instanceof Deno.errors.NotFound)) {
+            throw err;
+        }
+    }
+
+    if (hex === null) {
+        const bytes = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+        const fresh = [...bytes]
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
+        Deno.writeTextFileSync(keyPath, `${fresh}\n`, { mode: MODE_FILE });
+
+        return bytes;
+    }
+
+    if (!KEY_HEX.test(hex)) {
+        throw new Error(
+            `${keyPath} is not a prompt hash key (64 hex characters). ` +
+                `Move it aside to start a new key.`,
+        );
+    }
+
+    tightenMode(keyPath, MODE_FILE);
+
+    return hexToBytes(hex);
+}
+
+//  ---------------------------------------------------------------------
 //  Schema management
 //  ---------------------------------------------------------------------
 
@@ -240,13 +387,19 @@ export function openDecisionLogReadOnly(path) {
  *
  * @param {string} path
  * @param {Object} config - reads config.log_prompts
+ * @param {string | null} keyPath - the instance's prompt-hash.key;
+ *   null keeps a key for this process only
  */
-export function openDecisionLog(path, config) {
+export async function openDecisionLog(path, config, keyPath = null) {
+    const hashPrompt = await createPromptHasher(readOrCreateKey(keyPath));
+
     const db = new DatabaseSync(path);
 
     for (const pragma of PRAGMAS) {
         db.exec(pragma);
     }
+
+    const tightened = tightenModes(path);
 
     const migration = migrate(db);
 
@@ -383,7 +536,8 @@ export function openDecisionLog(path, config) {
             embedding_model: entry.semantic?.model ?? null,
             embedding_dim: entry.semantic?.dim ?? null,
 
-            prompt_sha256: entry.promptHash,
+            prompt_hash: entry.promptHash,
+            prompt_hash_scheme: PROMPT_HASH_SCHEME,
             prompt: config.log_prompts ? entry.prompt : null,
 
             system_prefix: entry.systemPrefix ?? null,
@@ -523,6 +677,7 @@ export function openDecisionLog(path, config) {
     //  The exemplar vector cache lives in this same file and shares
     //  this connection rather than opening a second one.
     return {
+        hashPrompt,
         record,
         complete,
         memory,
@@ -532,6 +687,7 @@ export function openDecisionLog(path, config) {
         close,
         stats,
         migration,
+        tightened,
         db,
     };
 }

@@ -199,6 +199,28 @@ settings above. Two things to know:
   `python`, `node`, `curl`, `openai`. Use `client_names` to tell them
   apart.
 
+##  Where else your chats are stored
+
+Saxby keeps prompt text out of its own log unless you turn it on; see
+[Logging](configuration.md#logging). The tools in front of Saxby keep
+their own copies, and Saxby cannot do anything about those.
+
+**Open WebUI** stores every chat in its own database, unencrypted by
+default. Its page [Chat Data Privacy &
+Encryption](https://docs.openwebui.com/security/chat-data-privacy-and-encryption)
+says what it keeps and how to protect it; the short version is that
+encryption is the job of the database or the filesystem under it.
+
+**OpenClaw** keeps each agent's conversations on disk as transcripts,
+by default under `~/.openclaw/agents/<agent>/sessions/`, and its
+`transcripts` tool writes more under `~/.openclaw/transcripts/`. See
+its [transcripts](https://docs.openclaw.ai/cli/transcripts) and
+[session management](https://docs.openclaw.ai/reference/session-management-compaction)
+pages.
+
+A client's own history is that client's to protect. Check each
+tool's docs before giving other people an account on it.
+
 ##  Who owns what
 
 When one AI tool sits in front of another — Open WebUI in front of an

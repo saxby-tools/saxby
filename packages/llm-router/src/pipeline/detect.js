@@ -126,6 +126,13 @@ const TABULAR_MIN_ROWS = 3;
 //  Candidate delimiters for raw (non-markdown) tabular sniffing.
 const TABULAR_DELIMITERS = ["\t", ",", ";", "|"];
 
+//  A fence's info string is free text. Only its first token is kept,
+//  and only when it is shaped like a language name: `c++`, `c#` and
+//  `objective-c` pass, anything with a slash, dot or colon does not,
+//  so a path or a title written after the fence never reaches the log.
+const RE_LANG_NAME = /^[a-z0-9_+#-]{1,20}$/;
+const LANGS_MAX = 10;
+
 //  Rough chars-per-token. Code is denser than prose (symbols, short
 //  identifiers), so it gets its own divisor. Deliberately pessimistic:
 //  over-estimating tokens falls back a model early, which is the safe
@@ -335,6 +342,16 @@ export function prepareInput(text) {
 //  vocabulary. Adding a markdown signal means a case here, not a new
 //  parser.
 
+function readLangName(info) {
+    const first = info.trim().split(/\s+/)[0].toLowerCase();
+
+    if (!RE_LANG_NAME.test(first)) {
+        return null;
+    }
+
+    return first;
+}
+
 function extractMarkdownFeatures(input) {
     const features = {};
 
@@ -370,7 +387,12 @@ function extractMarkdownFeatures(input) {
         }
 
         if (node.name === "CodeInfo") {
-            codeLangs.add(node.text().trim().toLowerCase());
+            const lang = readLangName(node.text());
+
+            if (lang !== null) {
+                codeLangs.add(lang);
+            }
+
             return;
         }
 
@@ -469,7 +491,10 @@ function extractMarkdownFeatures(input) {
     });
 
     if (codeBlocks > 0) {
-        features.fencedCode = { count: codeBlocks, langs: [...codeLangs] };
+        features.fencedCode = {
+            count: codeBlocks,
+            langs: [...codeLangs].slice(0, LANGS_MAX),
+        };
     }
 
     if (inlineCode > 0) {
@@ -523,6 +548,12 @@ function extractMarkdownFeatures(input) {
 //  Contract: (input) -> null when absent, evidence object when present.
 //  Evidence goes into the decision log, which is what makes a routing
 //  choice auditable months later.
+//
+//  Evidence is never user text. Counts, booleans and names from a
+//  fixed vocabulary only. The log is on disk for years, with
+//  `log_prompts` off, and a detector that returns what it matched
+//  (a path, a heading, a cell) puts the prompt back in through the
+//  side door. filePaths once stored the first ten paths it found.
 
 function collectPaths(text) {
     const found = new Set();
@@ -550,7 +581,9 @@ function collectPaths(text) {
 function detectFilePaths(input) {
     //  Counted twice on purpose. Paths inside a pasted diff or trace
     //  are real signal, but so is "how many did the user actually
-    //  name". The mapping layer decides which number it wants.
+    //  name". The mapping layer decides which number it wants. The
+    //  paths themselves stay here: they name users, clients and
+    //  projects, and routing reads only the count.
     const all = collectPaths(input.raw);
     const inProse = collectPaths(input.masked);
 
@@ -561,7 +594,6 @@ function detectFilePaths(input) {
     return {
         count: all.size,
         proseCount: inProse.size,
-        paths: [...all].slice(0, 10),
     };
 }
 

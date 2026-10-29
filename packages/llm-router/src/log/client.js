@@ -165,17 +165,43 @@ export function unmappedSignatures(rows, config) {
     return [...unmapped.values()].sort((a, b) => b.requests - a.requests);
 }
 
-/**
- * SHA-256 of the prompt, hex encoded.
- *
- * Always stored, even when prompt text is not. Groups repeats and
- * regenerations without retaining content.
- */
-export async function hashPrompt(text) {
-    const bytes = new TextEncoder().encode(text || "");
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
+//  Stamped on every row, so a reader can tell these hashes from the
+//  plain SHA-256 of rows written before v0.9.7.
+export const PROMPT_HASH_SCHEME = "hmac-sha256";
 
-    return [...new Uint8Array(digest)]
+const HMAC_ALGORITHM = { name: "HMAC", hash: "SHA-256" };
+
+function toHex(buffer) {
+    return [...new Uint8Array(buffer)]
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
+}
+
+/**
+ * Builds the prompt hasher for one key.
+ *
+ * The hash is always stored, even when prompt text is not: it groups
+ * repeats and regenerations without retaining content. It is keyed so
+ * that nobody can hash a guess and confirm a short prompt against a
+ * log they were given, and so a table of common prompts matches no
+ * install but the one whose key it was built with.
+ *
+ * @param {Uint8Array} keyBytes - the instance's key
+ * @returns {Promise<(text: string) => Promise<string>>} hex HMAC
+ */
+export async function createPromptHasher(keyBytes) {
+    const key = await crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        HMAC_ALGORITHM,
+        false,
+        ["sign"],
+    );
+
+    return async function hashPrompt(text) {
+        const bytes = new TextEncoder().encode(text || "");
+        const signature = await crypto.subtle.sign(HMAC_ALGORITHM, key, bytes);
+
+        return toHex(signature);
+    };
 }

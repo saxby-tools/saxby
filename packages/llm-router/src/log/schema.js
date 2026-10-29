@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -238,6 +238,23 @@ export const MIGRATIONS = [
         bytes        INTEGER NOT NULL,
         measured_at  TEXT    NOT NULL
     ) STRICT;
+    `,
+    //  ---- v5 --------------------------------------------------------
+    //  The prompt hash is keyed. Plain SHA-256 let anyone with the
+    //  file hash a guess and confirm a short prompt, and one table of
+    //  common prompts matched every install. The key is per instance
+    //  (prompt-hash.key, beside the config), so it is a salt with a
+    //  better name: it protects a log shared on its own, not a stolen
+    //  folder, which holds both.
+    //
+    //  Old rows keep their plain hashes and say so. Rows from before
+    //  and after cannot be grouped together, and the scheme column is
+    //  how a reader tells them apart. Renamed because a column called
+    //  sha256 that holds an HMAC lies to the 2am reader.
+    `
+    ALTER TABLE decision_log RENAME COLUMN prompt_sha256 TO prompt_hash;
+    ALTER TABLE decision_log ADD COLUMN prompt_hash_scheme TEXT NOT NULL
+        DEFAULT 'sha256';
     `,
 ];
 

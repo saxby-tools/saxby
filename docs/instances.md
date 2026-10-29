@@ -23,10 +23,12 @@ an instance shares nothing: not config, not the log, not the vectors.
 ~/.config/saxby/               the default instance
 ├── config.jsonc
 ├── decision-log.db
+├── prompt-hash.key
 └── instances/
     └── dev/                   a named instance
         ├── config.jsonc
-        └── decision-log.db
+        ├── decision-log.db
+        └── prompt-hash.key
 ```
 
 The default instance is the config folder itself, which is where
@@ -34,6 +36,10 @@ Saxby kept everything before instances existed. An older install
 needs no migration. A named instance lives in `instances/<name>/`.
 
 If `XDG_CONFIG_HOME` is set, it replaces `~/.config`.
+
+`prompt-hash.key` is the key the instance hashes prompts with; see
+[Logging](configuration.md#logging). An instance's folder and files
+are readable by you alone.
 
 Exemplar vectors are stored inside the decision log, so they move
 with it. The first boot of a new instance embeds its exemplars from

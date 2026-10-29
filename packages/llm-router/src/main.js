@@ -1,5 +1,6 @@
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
+import { basename, join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
 import {
     fetchSaxbyStatus,
@@ -38,6 +39,10 @@ const HEARTBEAT_PATH = /^\/saxby\/v1\/reservations\/[^/]+\/heartbeat$/;
 
 //  The usual exit code for a command-line usage error.
 const EXIT_USAGE = 2;
+
+//  The prompt hash key lives beside the config, not beside the log:
+//  it belongs to the instance, wherever log_path points.
+const KEY_FILE = "prompt-hash.key";
 
 /**
  * Prepares Tier 3: resolves the active profile, confirms the embedder
@@ -345,7 +350,11 @@ async function main() {
     let log = null;
 
     try {
-        log = openDecisionLog(config.log_path, config);
+        log = await openDecisionLog(
+            config.log_path,
+            config,
+            join(getInstanceDir(instance), KEY_FILE),
+        );
 
         console.log(`📓 Decision log: ${config.log_path}`);
 
@@ -357,8 +366,21 @@ async function main() {
             );
         }
 
+        //  Names only: the line above already says where the log is.
+        if (log.tightened.length > 0) {
+            const names = log.tightened.map((path) => basename(path));
+
+            console.log(`   made owner-only: ${names.join(", ")}`);
+        }
+
+        //  Printed either way. With text off by default, the quiet
+        //  case is the one storing prompts, so neither may be silent.
+        if (config.log_prompts) {
+            console.log("   prompt text: logged (log_prompts: true)");
+        }
+
         if (!config.log_prompts) {
-            console.log("   prompt text disabled (hashes only)");
+            console.log("   prompt text: hashes only (log_prompts: false)");
         }
     } catch (error) {
         console.warn(

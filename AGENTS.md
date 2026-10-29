@@ -109,8 +109,8 @@ decision log, M5 Tier 3 semantic — **all complete**.
 **M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs, the rename
 (v0.9.4), packaging and publishing (v0.9.5) and the memory broker
 (merged in #39) are done. What remains is one GitHub milestone each:
-the broker's release (v0.9.6), the JSDoc sweep (v0.9.7), then the
-v1.0.0 tag ([Roadmap](docs/roadmap.md)).
+the decision log privacy release (v0.9.7), the JSDoc sweep (v0.9.8),
+then the v1.0.0 tag ([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `saxby instance list`, the dev
 instance, `saxby probe`), because everything after it assumes them.
@@ -214,6 +214,24 @@ added later applies retroactively.
 **Everything is logged**, including bypass and raw passthrough, tiered
 as `bypass` / `raw`. Excluding them made client mix and latency stats
 silently wrong while looking complete.
+
+**The decision log stores no user text unless asked.** It is a plain
+SQLite file; `node:sqlite` can neither password-protect nor encrypt
+it, and encryption at rest would not protect users from the operator,
+who holds the key. Storing less is the fix. `log_prompts` defaults to
+`false`; opt-out logging is reserved for a future server-backed store
+with its own access control. **Detector evidence is never user
+text**: counts, booleans and names from a fixed vocabulary. Through
+v0.9.6 `filePaths` stored the first ten paths it found, which name
+users, clients and projects, with routing reading only the count. The
+prompt hash is an HMAC with a per-instance key in `prompt-hash.key`,
+so a shared log cannot be checked against guesses and no table of
+common prompts matches every install; the key sits beside the log, so
+it does not protect a stolen folder. Every row names its scheme in
+`prompt_hash_scheme`. Files are owner-only and `secure_delete` is on.
+Trails left by other tools (Open WebUI, OpenClaw) get a paragraph in
+[Clients](docs/clients.md), nothing more: Saxby fixes its own part of
+the stack.
 
 **Observability is never load-bearing.** A failed log write, a missing
 embedder, or an unreachable decision log degrades the feature and

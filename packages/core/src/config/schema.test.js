@@ -43,6 +43,12 @@ Deno.test("config — a model missing from the catalog is named", () => {
     assert(message.includes("global_default_model 'ghost'"));
 });
 
+Deno.test("config — prompt text is not logged unless asked for", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.log_prompts, false);
+});
+
 //  =====================================================================
 //  Memory broker fields
 //  =====================================================================
