@@ -1,14 +1,20 @@
 import { assertEquals } from "@std/assert";
+import { join } from "@std/path";
 import { openDecisionLog } from "./db.js";
 
 //  An in-memory database needs no file permission and leaves nothing
 //  behind. The writer adds signal listeners for a clean shutdown, so
-//  the resource sanitizer is off for these cases.
+//  the resource sanitizer is off for these cases. The file-mode cases
+//  use a temp folder, which is why `deno task test` may read and write.
 
 const GIB = 2 ** 30;
 
 function openLog() {
     return openDecisionLog(":memory:", { log_prompts: false });
+}
+
+function modeOf(path) {
+    return Deno.statSync(path).mode & 0o777;
 }
 
 const BUDGET = {
@@ -132,5 +138,64 @@ Deno.test({
         }]);
 
         log.close();
+    },
+});
+
+//  =====================================================================
+//  Privacy
+//  =====================================================================
+
+Deno.test({
+    name: "log — freed text is zeroed, not left in free pages",
+    sanitizeResources: false,
+    fn: () => {
+        const log = openLog();
+
+        const row = log.db.prepare("PRAGMA secure_delete").get();
+
+        assertEquals(row.secure_delete, 1);
+
+        log.close();
+    },
+});
+
+Deno.test({
+    name: "log — the file and its folder become owner-only",
+    sanitizeResources: false,
+    fn: async () => {
+        const dir = await Deno.makeTempDir();
+        const path = join(dir, "decision-log.db");
+
+        await Deno.chmod(dir, 0o755);
+
+        const log = openDecisionLog(path, { log_prompts: false });
+
+        log.flush();
+
+        assertEquals(modeOf(dir), 0o700);
+        assertEquals(modeOf(path), 0o600);
+        assertEquals(log.tightened.includes(dir), true);
+        assertEquals(log.tightened.includes(path), true);
+
+        //  WAL files take the main file's mode once it is set.
+        for (const suffix of ["-wal", "-shm"]) {
+            try {
+                assertEquals(modeOf(`${path}${suffix}`), 0o600);
+            } catch (err) {
+                if (!(err instanceof Deno.errors.NotFound)) {
+                    throw err;
+                }
+            }
+        }
+
+        log.close();
+
+        //  A second open finds nothing to fix.
+        const again = openDecisionLog(path, { log_prompts: false });
+
+        assertEquals(again.tightened, []);
+
+        again.close();
+        await Deno.remove(dir, { recursive: true });
     },
 });

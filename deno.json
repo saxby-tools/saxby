@@ -19,7 +19,7 @@
         "valibot": "npm:valibot@^0.36.0"
     },
     "tasks": {
-        "test": "deno test --allow-net=127.0.0.1 --allow-env=XDG_CONFIG_HOME,HOME,USERPROFILE --allow-run=/bin/kill packages/",
+        "test": "deno test --allow-net=127.0.0.1 --allow-env=XDG_CONFIG_HOME,HOME,USERPROFILE --allow-read --allow-write --allow-run=/bin/kill packages/",
         "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run=/bin/kill,/usr/bin/kill,/usr/sbin/sysctl,/usr/bin/vm_stat --watch packages/llm-router/src/main.js --instance dev",
         "build": "deno run --allow-read --allow-write --allow-run=deno,tar scripts/build.js",
         "package": "deno run --allow-read --allow-write scripts/package.js",
