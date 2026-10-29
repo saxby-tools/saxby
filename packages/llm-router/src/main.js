@@ -1,6 +1,6 @@
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
-import { join } from "@std/path";
+import { basename, join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
 import {
     fetchSaxbyStatus,
@@ -366,10 +366,11 @@ async function main() {
             );
         }
 
+        //  Names only: the line above already says where the log is.
         if (log.tightened.length > 0) {
-            console.log(
-                `   made owner-only: ${log.tightened.join(", ")}`,
-            );
+            const names = log.tightened.map((path) => basename(path));
+
+            console.log(`   made owner-only: ${names.join(", ")}`);
         }
 
         //  Printed either way. With text off by default, the quiet
