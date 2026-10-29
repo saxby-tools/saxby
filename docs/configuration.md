@@ -98,7 +98,7 @@ and start it after editing the dev instance's config.
 | `personas` | required | Named routing roles; may be empty |
 | `semantic` | off | Tier 3 settings; leave out to disable |
 | `route_background_tasks` | `true` | Treat `stream: false` as background |
-| `log_prompts` | `true` | Store prompt text in the decision log |
+| `log_prompts` | `false` | Store prompt text in the decision log |
 | `client_names` | `{}` | Friendly names for client signatures |
 | `log_path` | instance folder | Where the decision log lives |
 | `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
@@ -296,8 +296,60 @@ like a catalog entry.
 
 ##  Logging
 
-`log_prompts: false` stores a hash of each prompt instead of its
-text. Routing decisions, tags and timings are still logged.
+The decision log is a plain SQLite file in the instance's folder,
+`decision-log.db`, with no password and no encryption. Anyone who can
+read the file reads everything in it, and whoever runs Saxby always
+can. So the log stores as little as it can.
+
+**Prompt text is off unless you turn it on.** With `log_prompts`
+unset or `false`, each prompt is stored as a keyed hash, which groups
+repeats and regenerations without keeping the words. Routing
+decisions, tags, timings and token counts are logged either way.
+`saxby config generate` asks, and writes the answer to the file.
+saxbyd says which way it is set at every boot.
+
+```jsonc
+"log_prompts": true
+```
+
+What the log keeps about a prompt with text off: its length in
+characters and lines, an estimated token count, how much of it was
+code, and counts of what the structural detectors saw, such as how
+many file paths or code fences it held. Never the paths, never the
+code, never a heading. A fence's language name is kept when it looks
+like one (`js`, `c++`), and dropped when it does not.
+
+**The hash is keyed per instance.** The key is 32 random bytes in
+`prompt-hash.key`, beside the config, made on first boot and never
+rotated by Saxby. A plain hash would let anyone with the file hash a
+guess and confirm a short prompt. The key sits next to the log, so it
+protects a log you share on its own, not a stolen folder, which holds
+both. Delete the file to start a new key; grouping starts over from
+there. Rows written before v0.9.7 keep their plain hashes, and every
+row says which it has in `prompt_hash_scheme`: `sha256` or
+`hmac-sha256`. Rows from either side cannot be grouped together.
+
+**Files are owner-only.** saxbyd makes the log, its `-wal` and `-shm`
+files and the folder holding them readable by you alone on every
+boot, and says so when it changed something. `config generate`
+creates the folder that way from the start.
+
+**Removing text already stored.** If an older install logged prompt
+text you no longer want, stop the service, then:
+
+```bash
+sqlite3 ~/.config/saxby/decision-log.db \
+    "UPDATE decision_log SET prompt = NULL; VACUUM;"
+```
+
+Then start it again. `VACUUM` rewrites the file, which is why the
+service has to be stopped, and it is what removes the old text from
+the file's free pages. Rows written by v0.9.7 or later are zeroed as
+they go. Backups made before this keep the text regardless.
+
+The log also holds a copy of each persona's exemplars, since Tier 3
+caches their vectors there. That is your config, not anyone's chat,
+but it is in the file.
 
 `client_names` turns a client's signature into a friendly name in the
 log. The signature is the first word of the `User-Agent` in
