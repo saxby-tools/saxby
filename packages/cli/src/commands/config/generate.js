@@ -15,6 +15,11 @@ import {
 const CONFIG_FILE_NAME = "config.jsonc"; // Default to JSONC
 const INDENT = 4;
 
+//  Owner-only from the start. The folder will hold the decision log,
+//  so saxbyd's first boot should find nothing to tighten.
+const MODE_DIR = 0o700;
+const MODE_FILE = 0o600;
+
 //  Instance 'default' keeps the port clients already point at. A named
 //  instance is suggested the next one so a dev config made by
 //  pressing Enter does not collide with the running service.
@@ -400,8 +405,11 @@ export const generateCommand = new Command()
         }
 
         const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/"));
-        if (targetDir) await Deno.mkdir(targetDir, { recursive: true });
 
-        await Deno.writeTextFile(targetPath, jsoncString);
+        if (targetDir) {
+            await Deno.mkdir(targetDir, { recursive: true, mode: MODE_DIR });
+        }
+
+        await Deno.writeTextFile(targetPath, jsoncString, { mode: MODE_FILE });
         console.log(`\n🎉 Success! Configuration saved to: ${targetPath}`);
     });
