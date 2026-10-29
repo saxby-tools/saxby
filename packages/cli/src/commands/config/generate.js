@@ -58,6 +58,14 @@ const CONFIG_COMMENTS = {
         "phrasing — do not lower the threshold. A missing exemplar",
         "looks exactly like a threshold set too high.",
     ],
+    log_prompts: [
+        "Store the text of each prompt in the decision log.",
+        "The log is a plain SQLite file in this folder. Anyone who can",
+        "read the file reads every prompt stored in it, and whoever",
+        "runs Saxby always can. With false, only a keyed hash is kept,",
+        "which still groups repeats. Routing, tags and timings are",
+        "logged either way.",
+    ],
 };
 
 /**
@@ -361,6 +369,14 @@ export const generateCommand = new Command()
                 };
             }
 
+            // 4d-ter. Prompt text in the decision log. Off unless asked:
+            // the file is readable by whoever can read the folder.
+            const logPrompts = await Confirm.prompt({
+                message: "Store prompt text in the decision log? " +
+                    "(Anyone who can read the file can read every prompt.)",
+                default: false,
+            });
+
             // 4d-bis. Build personas from curated presets
             //  general takes the global default: it IS the fallback
             //  persona, so it needs no prompt of its own.
@@ -390,6 +406,8 @@ export const generateCommand = new Command()
                 catalog,
                 ...(semanticConfig ? { semantic: semanticConfig } : {}),
                 personas,
+                //  Written either way, so the file shows the choice.
+                log_prompts: logPrompts,
             };
         } catch (err) {
             console.error(`❌ Generator Error: ${err.message}`);
