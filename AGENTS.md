@@ -317,9 +317,11 @@ exemplar, the edit is declined. The guard lists reload too, with the
 lines a boot prints, because whoever can write the file is already a
 local program. The API token stays boot-only. The FOLDER is watched,
 not the file, since editors save by rename and the decision log's
-writes in the same folder are filtered out by name. The save is the
+writes in the same folder are filtered out by name. A symlinked
+config is watched in the real file's folder as well. The save is the
 only trigger: no signal and no route, until something shows the
-watch is not enough.
+watch is not enough. Checked on macOS, and in a container on a named
+volume and on a bind mount from a Mac (Nov. 9, 2026).
 
 **License is AGPL-3.0-or-later.** Saxby is a network service, and
 plain GPL never triggers for software that is only run, not
