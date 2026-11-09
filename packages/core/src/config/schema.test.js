@@ -188,3 +188,58 @@ Deno.test("config — a proxy with no host is refused", () => {
 
     assert(message.includes("trusted_proxies.0.host"));
 });
+
+//  =====================================================================
+//  Client defaults
+//  =====================================================================
+
+Deno.test("config — no client gets a default unless one is set", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.client_defaults, {});
+});
+
+Deno.test("config — a client may have reasoning turned off", () => {
+    const parsed = validateConfig(config({
+        client_defaults: { leantype: { reasoning_effort: "none" } },
+    }));
+
+    assertEquals(parsed.client_defaults.leantype, {
+        reasoning_effort: "none",
+    });
+});
+
+Deno.test("config — any other reasoning_effort is refused", () => {
+    for (const effort of ["low", "high", "off", false]) {
+        const message = messageFor(config({
+            client_defaults: { leantype: { reasoning_effort: effort } },
+        }));
+
+        assert(
+            message.includes("client_defaults.leantype.reasoning_effort"),
+            String(effort),
+        );
+    }
+});
+
+Deno.test("config — a client default Saxby cannot add is refused", () => {
+    const message = messageFor(config({
+        client_defaults: { leantype: { temperature: 0 } },
+    }));
+
+    assert(
+        message.includes(
+            "unknown field 'client_defaults.leantype.temperature'",
+        ),
+    );
+});
+
+Deno.test("config — a signature that could never match is refused", () => {
+    for (const key of ["LeanType", "LeanType/1.0", "lean type"]) {
+        const message = messageFor(config({
+            client_defaults: { [key]: { reasoning_effort: "none" } },
+        }));
+
+        assert(message.includes("a client signature is lowercase"), key);
+    }
+});
