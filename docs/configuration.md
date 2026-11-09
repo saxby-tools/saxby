@@ -1,8 +1,8 @@
 #  Configuration
 
-Saxby reads one config file per instance, at boot. The quickest way
-to get one is to let `saxby` write it from what your backend has
-installed:
+Saxby reads one config file per instance: at boot, and again each
+time the file is saved. The quickest way to get one is to let `saxby`
+write it from what your backend has installed:
 
 ```bash
 saxby config generate
@@ -24,14 +24,65 @@ works too. If both exist, Saxby loads `config.jsonc` and warns that
 it is ignoring the other one, so an edit to the wrong file does not
 silently do nothing.
 
-Saxby reads the config only at boot. After editing, restart:
+##  Edits apply on save
+
+saxbyd watches the file and applies an edit when you save it. There
+is nothing to restart. A request already in flight finishes on the
+config it started with. The log says what changed:
+
+```
+🔄 Config reloaded: catalog, personas changed.
+```
+
+An edit is applied whole or not at all. If the file is broken, saxbyd
+keeps the config it had and says why. You are looking at an editor,
+not at its log, so ask it:
+
+```bash
+saxby status
+```
+
+```
+✅ saxbyd 0.9.8 is serving the default instance on 127.0.0.1:11435 (pid 4598)
+⚠️  The config on disk is NOT applied; saxbyd still runs the one loaded 2026-11-09T17:12:50.429Z.
+❌ Invalid config in ~/.config/saxby/config.jsonc:
+- unknown field 'listen_prot' — check the spelling
+```
+
+Fix the file and save again. `saxby service status` shows the same
+warning.
+
+Four settings cannot change while saxbyd runs: `listen_host`,
+`listen_port`, `log_path` and everything under `memory`. An edit that
+touches one is declined, along with anything else saved with it,
+until you restart:
 
 ```bash
 saxby service restart
 ```
 
-`deno task dev` restarts on code changes, not config changes. Stop
-and start it after editing the dev instance's config.
+Everything else applies on save, including `allowed_hosts`,
+`allowed_origins` and `trusted_proxies`. saxbyd prints the same lines
+for those as it does at boot, so a way in never opens silently.
+
+Tier 3 is rebuilt only when an exemplar, the `semantic` block or
+`upstream_url` changed. If the embedder cannot embed a new exemplar,
+the edit is declined: a save never turns off a Tier 3 that is
+working.
+
+Three things a save does not reach:
+
+- **The API token.** saxbyd reads it at boot only; see
+  [The API token](#the-api-token).
+- **A symlinked config.** If `config.jsonc` is a link to a file in
+  another folder, saxbyd does not see edits to that file. Restart
+  after editing it.
+- **A changed model on the backend.** Pulling or removing a model
+  changes no config file. Restart if Tier 3 was off for want of its
+  embedder.
+
+`deno task dev` restarts on code changes and applies config changes
+live, like any other saxbyd.
 
 ##  A complete example
 
@@ -295,7 +346,8 @@ another profile and back does not re-embed anything. That makes
 comparing two embedders a one-line change.
 
 Tier 3 is optional. If the embedder cannot be reached at boot, Saxby
-warns and keeps routing with Tiers 1 and 2.
+warns and keeps routing with Tiers 1 and 2. It tries again at the
+next restart, or the next time a config edit is applied.
 
 The active profile's model is pinned for the memory broker without
 being asked, since Tier 3 loads it. A profile may carry `size_gib`
@@ -667,3 +719,7 @@ catalog — `global_default_model`, each persona's `default_model`, and
 
 A config that is not valid JSON or JSONC also stops the boot and
 names the file.
+
+Once saxbyd is running, the same file does not stop it. It keeps the
+config it had and reports the same message; see
+[Edits apply on save](#edits-apply-on-save).
