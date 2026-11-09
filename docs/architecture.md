@@ -46,10 +46,10 @@ in order:
    unknown that will refuse jobs, then start the sweep that drops
    reservations whose processes have exited.
 7. **Serve.** Listen on `127.0.0.1` only, never other interfaces.
-   Saxby checks no credentials, so nothing beyond this machine may
-   reach it directly until per-client keys exist. The one way in is a
-   proxy named in `trusted_proxies`, which is printed at boot. A port
-   clash is explained by asking the holder who it is.
+   Nothing beyond this machine can reach it directly. The one way
+   in is a proxy named in `trusted_proxies`, printed at boot, and a
+   request through it must carry the API token. A port clash is
+   explained by asking the holder who it is.
 
 Steps 4 and 5 can fail without stopping Saxby. Observability and
 cleverness are optional; routing is not.
