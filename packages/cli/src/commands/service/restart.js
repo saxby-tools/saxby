@@ -1,5 +1,4 @@
 import { Command } from "@cliffy/command";
-import { probeHostFor } from "@saxby/core";
 import { fail, prepare, reportAnswer, waitForAnswer } from "./shared.js";
 
 //  The second half of deploying a build: the binary on disk changes,
@@ -23,12 +22,7 @@ export const restartCommand = new Command()
             fail(err.message);
         }
 
-        const answer = await waitForAnswer(
-            config.listen_port,
-            instance,
-            before.pid,
-            probeHostFor(config.listen_host),
-        );
+        const answer = await waitForAnswer(config, instance, before.pid);
 
         reportAnswer(answer, adapter, instance);
     });

@@ -1,18 +1,13 @@
 import { Command } from "@cliffy/command";
 import { join, resolve } from "@std/path";
 import {
-    fetchSaxbyStatus,
+    fetchInstanceStatus,
     getInstanceDir,
     instancePhrase,
     isPortHeld,
     probeHostFor,
 } from "@saxby/core";
-import {
-    fail,
-    prepare,
-    reportAnswer,
-    waitForAnswer,
-} from "./shared.js";
+import { fail, prepare, reportAnswer, waitForAnswer } from "./shared.js";
 
 const BINARY_NAME = "saxbyd";
 const EXECUTABLE_BITS = 0o111;
@@ -118,7 +113,7 @@ export const installCommand = new Command()
         //  run, a terminal left open — would put the new service into
         //  a crash loop. Reinstalling over our own service is fine.
         const service = await adapter.status(instance);
-        const holder = await fetchSaxbyStatus(port, probeHost);
+        const holder = await fetchInstanceStatus(config, instance);
 
         if (holder && holder.pid !== service.pid) {
             fail(
@@ -152,12 +147,7 @@ export const installCommand = new Command()
             fail(err.message);
         }
 
-        const answer = await waitForAnswer(
-            port,
-            instance,
-            service.pid,
-            probeHost,
-        );
+        const answer = await waitForAnswer(config, instance, service.pid);
 
         reportAnswer(answer, adapter, instance);
     });
