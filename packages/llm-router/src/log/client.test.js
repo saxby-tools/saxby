@@ -48,6 +48,58 @@ Deno.test("client — client_names renames a signature", () => {
 });
 
 //  RFC 4231, test case 2: HMAC-SHA-256 with a short key.
+const CHROME =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/142.0";
+
+Deno.test("client — a browser extension is named by its origin", () => {
+    const found = identify({
+        "User-Agent": CHROME,
+        "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+    });
+
+    assertEquals(found.signature, "ext-abcdefghijklmnopabcdefghijklmnop");
+    assertEquals(found.source, "origin");
+    assertEquals(found.userAgent, CHROME);
+});
+
+Deno.test("client — a Firefox extension id keeps a legal signature", () => {
+    const found = identify({
+        "User-Agent": CHROME,
+        "Origin": "moz-extension://1b2c3d4e-0000-4000-8000-123456789abc",
+    });
+
+    assertEquals(
+        found.signature,
+        "ext-1b2c3d4e-0000-4000-8000-123456789abc",
+    );
+});
+
+Deno.test("client — client_names renames an extension", () => {
+    const found = identify(
+        {
+            "User-Agent": CHROME,
+            "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        },
+        {
+            client_names: {
+                "ext-abcdefghijklmnopabcdefghijklmnop": "grammar-check",
+            },
+        },
+    );
+
+    assertEquals(found.id, "grammar-check");
+});
+
+Deno.test("client — a web page's origin names nothing", () => {
+    const found = identify({
+        "User-Agent": CHROME,
+        "Origin": "https://example.com",
+    });
+
+    assertEquals(found.signature, "mozilla");
+    assertEquals(found.source, "user_agent");
+});
+
 Deno.test("hash — matches the published HMAC-SHA-256 vector", async () => {
     const hash = await createPromptHasher(new TextEncoder().encode("Jefe"));
 
