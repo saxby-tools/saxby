@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { findServiceAdapter } from "../../services/index.js";
 import {
-    fetchSaxbyStatus,
+    fetchInstanceStatus,
     getHomeDir,
     getInstanceDir,
     instanceLabel,
@@ -82,7 +82,7 @@ async function describeInstance(name) {
     row.port = String(config.listen_port);
 
     const probeHost = probeHostFor(config.listen_host);
-    const holder = await fetchSaxbyStatus(config.listen_port, probeHost);
+    const holder = await fetchInstanceStatus(config, name);
 
     if (!holder && isPortHeld(config.listen_port, probeHost)) {
         row.state = "blocked";
