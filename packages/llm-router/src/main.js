@@ -27,8 +27,10 @@ import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
 //  Loopback only. Saxby checks no credentials, so nothing beyond this
-//  machine may reach it until keys exist (AGENTS.md). Docker Desktop's
-//  host.docker.internal and `tailscale serve` both reach loopback.
+//  machine may reach it directly until keys exist (AGENTS.md). Docker
+//  Desktop's host.docker.internal and `tailscale serve` both reach
+//  loopback; a proxy is let through only when `trusted_proxies` names
+//  it (security/guard.js).
 const LISTEN_HOSTNAME = "127.0.0.1";
 
 //  Polled by `saxby` — every half second while a service starts — so
@@ -246,14 +248,37 @@ async function describePortClash(port, instance) {
 }
 
 /**
- * First middleware on every route. Refuses proxied, browser and
- * rebinding requests and Ollama's management paths, before the request
- * logger or any route sees them (security/guard.js says why).
+ * Says at boot which proxies are trusted. Naming one lets other
+ * machines in with no credential check, so it is never silent.
  */
-async function guardRequests(c, next) {
+function announceProxies(config) {
+    for (const proxy of config.trusted_proxies) {
+        console.log(`🔓 Trusted proxy: ${proxy.kind} at ${proxy.host}`);
+    }
+
+    if (config.trusted_proxies.length === 0) {
+        return;
+    }
+
+    console.log(
+        "   Saxby checks no credentials: whoever that proxy lets in " +
+            "can use /v1/chat/completions and /v1/models.",
+    );
+}
+
+/**
+ * First middleware on every route. Refuses browser and rebinding
+ * requests, Ollama's management paths, and any proxied request that
+ * does not fit a proxy named in the config, before the request logger
+ * or any route sees them (security/guard.js says why).
+ */
+async function guardRequests(c, next, trustedProxies) {
     const verdict = inspectRequest({
         headers: c.req.raw.headers,
         path: c.req.path,
+        method: c.req.method,
+        remoteHostname: c.env?.remoteAddr?.hostname,
+        trustedProxies,
     });
 
     if (!verdict) {
@@ -344,6 +369,8 @@ async function main() {
         console.log(`🔍 Tracing enabled (level ${level}).`);
     }
 
+    announceProxies(config);
+
     //  The decision log is observability, never load-bearing. If it
     //  cannot be opened the router still routes — it just stops
     //  remembering, loudly.
@@ -398,7 +425,10 @@ async function main() {
 
     const app = new Hono();
 
-    app.use("*", guardRequests);
+    app.use(
+        "*",
+        (c, next) => guardRequests(c, next, config.trusted_proxies),
+    );
 
     if (!isVerbose()) {
         const requestLogger = logger();
