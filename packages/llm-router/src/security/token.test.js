@@ -15,6 +15,10 @@ Deno.test("token state — the right bearer token is valid", () => {
         `bearer ${TOKEN}`,
         `BEARER   ${TOKEN}`,
         `Bearer ${TOKEN} `,
+        `Bearer\t${TOKEN}`,
+        `Basic abc, Bearer ${TOKEN}`,
+        `Bearer other, Bearer ${TOKEN}`,
+        `Bearer ${TOKEN}, Bearer other`,
     ];
 
     for (const header of headers) {
@@ -28,6 +32,8 @@ Deno.test("token state — a wrong token is invalid", () => {
         `Bearer ${TOKEN}x`,
         `Bearer ${TOKEN.slice(1)}`,
         "Bearer placeholder",
+        "Bearer one, Bearer two",
+        "Basic abc, Bearer saxby",
     ];
 
     for (const header of headers) {
