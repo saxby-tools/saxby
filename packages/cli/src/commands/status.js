@@ -12,7 +12,7 @@
 
 import { Command } from "@cliffy/command";
 import {
-    fetchSaxbyStatus,
+    fetchInstanceStatus,
     instancePhrase,
     isPortHeld,
     loadConfig,
@@ -48,7 +48,7 @@ export const statusCommand = new Command()
 
         const port = config.listen_port;
         const probeHost = probeHostFor(config.listen_host);
-        const holder = await fetchSaxbyStatus(port, probeHost);
+        const holder = await fetchInstanceStatus(config, instance);
 
         if (!holder) {
             console.error(
