@@ -6,6 +6,11 @@ import { observeResponse } from "../../observability/stream.js";
 import { identifyClient } from "../../log/client.js";
 import { CODE_ABANDONED } from "../../memory/broker.js";
 
+//  The request fields `client_defaults` may fill in. The config schema
+//  allows the same list and no more, so a default is never a way to
+//  rewrite an arbitrary part of a request.
+const CLIENT_DEFAULT_FIELDS = ["reasoning_effort"];
+
 //  ---------------------------------------------------------------------
 //  Header construction
 //  ---------------------------------------------------------------------
@@ -61,6 +66,42 @@ function requestUsageReporting(body) {
     }
 
     body.stream_options = { include_usage: true };
+}
+
+/**
+ * Fills in the request fields the config sets for this client, where
+ * the request left them out. A value the client sent always stands.
+ *
+ * Returns what was added, or null, so it can be traced and logged: an
+ * added field shapes the response as surely as an injected prompt.
+ */
+function applyClientDefaults(body, client, config) {
+    const defaults = config.client_defaults?.[client.signature];
+
+    if (!defaults) {
+        return null;
+    }
+
+    const added = {};
+
+    for (const field of CLIENT_DEFAULT_FIELDS) {
+        if (defaults[field] === undefined) {
+            continue;
+        }
+
+        if (body[field] !== undefined) {
+            continue;
+        }
+
+        body[field] = defaults[field];
+        added[field] = defaults[field];
+    }
+
+    if (Object.keys(added).length === 0) {
+        return null;
+    }
+
+    return added;
 }
 
 /**
@@ -120,6 +161,14 @@ export function registerChatRoutes(app) {
             (name) => c.req.header(name),
             config,
         );
+
+        //  For every mode. A default belongs to the client, whichever
+        //  way its request names a model.
+        const clientDefaults = applyClientDefaults(body, client, config);
+
+        if (clientDefaults) {
+            tracer.defaults(client.signature, clientDefaults);
+        }
 
         let targetModel = rawModel;
         let logId = null;
@@ -200,6 +249,7 @@ export function registerChatRoutes(app) {
                     }
                     : null,
                 systemPrefix,
+                clientDefaults,
             });
 
             //  Nothing in the catalog can serve a requirement. The row
@@ -278,6 +328,7 @@ export function registerChatRoutes(app) {
                 promptHash: await log?.hashPrompt(""),
                 semantic: null,
                 systemPrefix,
+                clientDefaults,
             });
         }
 
