@@ -457,7 +457,7 @@ request that does not come straight from this machine must carry the
 API token, as `Authorization: Bearer <token>`. That means a request
 through a [trusted proxy](#trusted-proxies), and every request over
 a [bind wider than loopback](#listening), which includes every client
-of a container.
+of a Saxby that itself runs in a container.
 
 The token lets a client in. It does not make it a local program: a
 client on another machine reaches `/v1/chat/completions` and
@@ -510,6 +510,14 @@ and `tailscale serve --tcp` pass bytes along and add no header, so
 what they carry arrives looking like a local program and is asked
 for nothing. Use `tailscale serve` in its default HTTPS mode, which
 marks every request it forwards.
+
+**A container on Docker Desktop counts as this machine.** Docker
+Desktop hands a container's request for `host.docker.internal` to
+your machine's loopback, so Saxby sees a local program. It asks for
+no token, and the container reaches everything a local program does,
+the memory broker included. Run only containers you would trust with
+that. Checked on Docker Desktop for macOS, with Saxby installed on
+the Mac and listening on `127.0.0.1`.
 
 ##  Trusted proxies
 
