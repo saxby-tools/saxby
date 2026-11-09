@@ -8,21 +8,28 @@ Saxby instead of your backend, and ask for the model `saxby`.
 | Setting | Value |
 | --- | --- |
 | Base URL | `http://127.0.0.1:11435/v1` |
-| API key | anything non-empty |
+| API key | anything non-empty, on the same machine |
 | Model | `saxby` |
 
-Saxby does not check the API key. It passes the `Authorization`
-header on to the backend, and Ollama ignores it, but many clients
-refuse to start without one. Clients are told apart by their
-`User-Agent`, never by their key.
+On the same machine, Saxby does not check the API key. It passes the
+`Authorization` header on to the backend, and Ollama ignores it, but
+many clients refuse to start without one. Clients are told apart by
+their `User-Agent`, never by their key.
 
-Because nothing is checked, Saxby only serves clients on the same
-machine. It listens on `127.0.0.1` only, and it refuses requests that
-came through a proxy, came from a web page, or name a host other than
-`localhost`, `127.0.0.1`, `[::1]` or `host.docker.internal`. Each
-refusal is a 403 explained in [Troubleshooting](troubleshooting.md). Serving
-other machines needs per-client keys, which are planned after v1. The
-one exception is your own devices over Tailscale; see
+A client on another machine is different: its API key must be
+Saxby's API token. Print it on the machine running Saxby:
+
+```bash
+saxby token
+```
+
+See [The API token](configuration.md#the-api-token).
+
+Saxby listens on `127.0.0.1` only, and it refuses requests that came
+from a web page or name a host other than `localhost`, `127.0.0.1`,
+`[::1]` or `host.docker.internal`. Each refusal is explained in
+[Troubleshooting](troubleshooting.md). The way in from another
+machine is your own tailnet; see
 [A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale).
 A browser extension you choose can be let in too; see
 [A browser extension](#a-browser-extension).
@@ -208,10 +215,10 @@ proofreading and translation.
 | AI Provider | HF/OpenAI-compatible |
 | Model | `saxby` |
 | API Endpoint | `https://my-mac.my-tailnet.ts.net:11435/v1/chat/completions` |
-| API Token | anything non-empty |
+| API Token | the output of `saxby token` |
 
-Saxby does not check the token. Your tailnet's access rules decide
-who can reach it.
+The phone is another machine, so the token is checked. Run
+`saxby token` on the machine running Saxby and paste the result.
 
 ###  Turning reasoning off
 
@@ -255,8 +262,10 @@ You can let one in by its exact origin. This example is
 grammar checker that calls an OpenAI-compatible endpoint.
 
 1. In the extension, choose its local-model option, set the base
-   URL to `http://127.0.0.1:11435/v1` and the model to `saxby`. From another machine on your tailnet, use the address
-   from [Trusted proxies](configuration.md#trusted-proxies) instead.
+   URL to `http://127.0.0.1:11435/v1` and the model to `saxby`. From
+   another machine on your tailnet, use the address from
+   [Trusted proxies](configuration.md#trusted-proxies) instead, and
+   set the API key to the output of `saxby token`.
 2. Let it check something once. It fails with a 403 that names its
    origin.
 3. Add that origin to `allowed_origins`, as
