@@ -414,6 +414,10 @@ request that does not come straight from this machine must carry the
 API token, as `Authorization: Bearer <token>`. Today that means a
 request through a [trusted proxy](#trusted-proxies).
 
+The token lets a client in. It does not make it a local program: a
+client on another machine reaches `/v1/chat/completions` and
+`/v1/models`, and not the memory broker or Ollama's own API.
+
 ```bash
 saxby token
 ```
@@ -433,7 +437,10 @@ saxby token rotate
 ```
 
 Then restart Saxby, which reads the token at boot, and give every
-client on another machine the new one.
+client on another machine the new one. Restart before using the new
+token anywhere: until then Saxby does not know it, and a local
+client that sends it would have it passed on to the backend like any
+other key.
 
 You may put your own token in the file: one line, no spaces. Saxby
 accepts a short one and warns about it at every boot, because a
@@ -452,6 +459,12 @@ Three things it is not:
 
 If Saxby cannot read the file, it says so at boot and serves only
 this machine until that is fixed.
+
+**Never forward Saxby's port at the TCP level.** `ssh -L`, `socat`
+and `tailscale serve --tcp` pass bytes along and add no header, so
+what they carry arrives looking like a local program and is asked
+for nothing. Use `tailscale serve` in its default HTTPS mode, which
+marks every request it forwards.
 
 ##  Trusted proxies
 
