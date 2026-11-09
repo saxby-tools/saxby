@@ -50,6 +50,7 @@ jobs:
                   packages/llm-router/src/main.js
                   scripts/build.js
                   scripts/deploy.js
+                  scripts/docker-context.js
                   scripts/package.js
                   scripts/version.js
 
