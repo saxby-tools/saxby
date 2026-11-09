@@ -1,10 +1,9 @@
 //  =====================================================================
 //  Request guard
 //  =====================================================================
-//  Saxby listens on loopback only and checks no credentials, so it
-//  must be sure every request really comes from a local, non-browser
-//  client. Three ways that assumption breaks, each refused here before
-//  any route runs:
+//  Saxby asks nothing of a local, non-browser client, so it must be
+//  sure which requests really are one. Three ways that assumption
+//  breaks, each refused here before any route runs:
 //
 //    a proxy on the same machine   Caddy or `tailscale serve` forwards
 //                                  strangers, and every request then
@@ -26,14 +25,17 @@
 //
 //  One way in from another machine: a proxy the operator names in
 //  `trusted_proxies`. The list is empty by default, and then every
-//  proxied request is refused as before. Saxby still checks no
-//  credentials, so a named proxy decides who gets in. Saxby checks
-//  only that the request fits that proxy and nothing else.
+//  proxied request is refused as before. Saxby checks that a proxied
+//  request fits that proxy and nothing else.
 //
 //  A header cannot prove which proxy sent it: every connection here
 //  is from 127.0.0.1, and a program on this machine can send any
-//  header it likes. That program could already call Saxby directly,
-//  so the checks below are about strangers, not about it.
+//  header it likes. That is what the API token is for. A request
+//  that does not come STRAIGHT from this machine, meaning a loopback
+//  connection with no forwarding header, must carry the instance's
+//  token (core's config/token.js). Local clients never need it. The
+//  token is checked before anything else is said, so a caller without
+//  it learns nothing about how this Saxby is set up.
 //
 //  One way in from a browser: an extension whose exact origin the
 //  operator lists in `allowed_origins`. A browser sets Origin itself,
@@ -114,6 +116,18 @@ const MANAGEMENT_PATHS = [
 ];
 
 const DOCS_HINT = "See docs/troubleshooting.md.";
+
+//  How the caller's token compares with this instance's. main.js
+//  works it out (security/token.js) so this file stays pure.
+//  UNAVAILABLE means saxbyd could not read its own token file: then
+//  nothing can be checked, and only local clients are served.
+export const TOKEN_VALID = "valid";
+export const TOKEN_INVALID = "invalid";
+export const TOKEN_MISSING = "missing";
+export const TOKEN_UNAVAILABLE = "unavailable";
+
+const TOKEN_HINT = "Run 'saxby token' on the machine running Saxby " +
+    "to see it.";
 
 function findProxyHeader(headers) {
     for (const name of headers.keys()) {
@@ -233,6 +247,58 @@ function isClientRoute(method, path) {
 
 function refusal(status, code, message) {
     return { status, code, message };
+}
+
+/**
+ * Whether a request comes straight from this machine: a loopback
+ * connection that no proxy forwarded. An unknown address is not
+ * loopback.
+ */
+function isDirect(remoteHostname, proxyHeader) {
+    if (proxyHeader) {
+        return false;
+    }
+
+    return LOOPBACK.has(remoteHostname);
+}
+
+/**
+ * Judges the token of a request that is not straight from this
+ * machine. The messages say nothing about this Saxby's config.
+ * @param {string} tokenState - one of the TOKEN_ constants
+ * @returns {{ status: number, code: string, message: string } | null}
+ */
+function inspectToken(tokenState) {
+    if (tokenState === TOKEN_VALID) {
+        return null;
+    }
+
+    if (tokenState === TOKEN_UNAVAILABLE) {
+        return refusal(
+            403,
+            "token_unavailable",
+            `Refused: this Saxby could not read its API token file, ` +
+                `so it serves only the machine it runs on. Its log ` +
+                `says why. ${DOCS_HINT}`,
+        );
+    }
+
+    if (tokenState === TOKEN_INVALID) {
+        return refusal(
+            401,
+            "token_invalid",
+            `Refused: that is not this Saxby's API token. ` +
+                `${TOKEN_HINT} ${DOCS_HINT}`,
+        );
+    }
+
+    return refusal(
+        401,
+        "token_required",
+        `Refused: this request did not come straight from the machine ` +
+            `running Saxby, so it needs the API token, sent as ` +
+            `'Authorization: Bearer <token>'. ${TOKEN_HINT} ${DOCS_HINT}`,
+    );
 }
 
 function notTrusted(message) {
@@ -368,10 +434,12 @@ function inspectOrigin(origin, request, allowedOrigins) {
  * @param {{ headers: Headers, path: string, method?: string,
  *     remoteHostname?: string,
  *     trustedProxies?: { kind: string, host: string }[],
- *     allowedOrigins?: string[] }} request
- *     method is read only for a proxied or browser request, and
- *     remoteHostname only for a proxied one; trustedProxies and
- *     allowedOrigins are the config's lists, empty when left out.
+ *     allowedOrigins?: string[], tokenState?: string }} request
+ *     method is read only for a proxied or browser request;
+ *     trustedProxies and allowedOrigins are the config's lists, empty
+ *     when left out. tokenState is one of the TOKEN_ constants and
+ *     counts as missing when left out, as an unknown remoteHostname
+ *     counts as another machine: both fail closed.
  * @returns {{ status: number, code: string, message: string } | null}
  *     null to allow; otherwise what to refuse with.
  */
@@ -379,6 +447,7 @@ export function inspectRequest(request) {
     const { headers, path } = request;
     const trustedProxies = request.trustedProxies ?? [];
     const allowedOrigins = request.allowedOrigins ?? [];
+    const tokenState = request.tokenState ?? TOKEN_MISSING;
     const proxyHeader = findProxyHeader(headers);
 
     if (proxyHeader) {
@@ -390,6 +459,14 @@ export function inspectRequest(request) {
                     `came through a proxy. Saxby only serves clients ` +
                     `on this machine directly. ${DOCS_HINT}`,
             );
+        }
+    }
+
+    if (!isDirect(request.remoteHostname, proxyHeader)) {
+        const verdict = inspectToken(tokenState);
+
+        if (verdict) {
+            return verdict;
         }
     }
 

@@ -1,5 +1,11 @@
 import { assertEquals } from "@std/assert";
-import { inspectRequest } from "./guard.js";
+import {
+    inspectRequest,
+    TOKEN_INVALID,
+    TOKEN_MISSING,
+    TOKEN_UNAVAILABLE,
+    TOKEN_VALID,
+} from "./guard.js";
 
 //  Header names and Host values captured from real clients on
 //  2026-10-25 (tcpdump on lo0). Personal values are replaced. These
@@ -37,8 +43,13 @@ const OPENCLAW = {
 
 const CURL = { "host": "127.0.0.1:11435", "user-agent": "curl/8.7.1" };
 
+//  A local client: a loopback connection, and no token to send.
 function inspect(headers, path = "/v1/chat/completions") {
-    return inspectRequest({ headers: new Headers(headers), path });
+    return inspectRequest({
+        headers: new Headers(headers),
+        path,
+        remoteHostname: "127.0.0.1",
+    });
 }
 
 function codeFor(headers, path) {
@@ -160,6 +171,7 @@ function inspectProxied(headers, overrides = {}) {
         method: "POST",
         remoteHostname: "127.0.0.1",
         trustedProxies: TRUSTED,
+        tokenState: TOKEN_VALID,
         ...overrides,
     });
 }
@@ -378,6 +390,7 @@ function inspectBrowser(headers, overrides = {}) {
         method: "POST",
         remoteHostname: "127.0.0.1",
         allowedOrigins: [EXTENSION],
+        tokenState: TOKEN_VALID,
         ...overrides,
     });
 }
@@ -496,4 +509,161 @@ Deno.test("origin — listing an extension changes nothing for others", () => {
         browserCode(CURL, { path: "/saxby/v1/status", method: "GET" }),
         null,
     );
+});
+
+//  =====================================================================
+//  The API token
+//  =====================================================================
+//  A request that is not straight from this machine needs the token.
+//  "Straight from this machine" is a loopback connection that no
+//  proxy forwarded.
+
+const LAN = "192.168.1.20";
+
+Deno.test("token — local clients never need one", () => {
+    for (const headers of [OPEN_WEBUI, OPENCLAW, CURL]) {
+        for (const tokenState of [TOKEN_MISSING, TOKEN_INVALID]) {
+            assertEquals(
+                inspectRequest({
+                    headers: new Headers(headers),
+                    path: "/v1/chat/completions",
+                    remoteHostname: "127.0.0.1",
+                    tokenState,
+                }),
+                null,
+            );
+        }
+    }
+});
+
+Deno.test("token — a local client is served with no token file", () => {
+    assertEquals(
+        inspectRequest({
+            headers: new Headers(CURL),
+            path: "/v1/chat/completions",
+            remoteHostname: "::1",
+            tokenState: TOKEN_UNAVAILABLE,
+        }),
+        null,
+    );
+});
+
+Deno.test("token — a proxied request without one is refused", () => {
+    const verdict = inspectProxied(SERVE, { tokenState: TOKEN_MISSING });
+
+    assertEquals(verdict.status, 401);
+    assertEquals(verdict.code, "token_required");
+});
+
+Deno.test("token — a proxied request with a wrong one is refused", () => {
+    const verdict = inspectProxied(SERVE, { tokenState: TOKEN_INVALID });
+
+    assertEquals(verdict.status, 401);
+    assertEquals(verdict.code, "token_invalid");
+});
+
+Deno.test("token — a proxied request with no state given is refused", () => {
+    assertEquals(
+        proxiedCode(SERVE, { tokenState: undefined }),
+        "token_required",
+    );
+});
+
+Deno.test("token — with no token file, other machines get nothing", () => {
+    const verdict = inspectProxied(SERVE, {
+        tokenState: TOKEN_UNAVAILABLE,
+    });
+
+    assertEquals(verdict.status, 403);
+    assertEquals(verdict.code, "token_unavailable");
+});
+
+Deno.test("token — a connection from another machine needs one", () => {
+    for (const remoteHostname of [LAN, "172.17.0.1", "100.64.0.7", undefined]) {
+        assertEquals(
+            inspectRequest({
+                headers: new Headers(CURL),
+                path: "/v1/chat/completions",
+                remoteHostname,
+                tokenState: TOKEN_MISSING,
+            })?.code,
+            "token_required",
+            String(remoteHostname),
+        );
+    }
+});
+
+Deno.test("token — with it, a connection from another machine passes", () => {
+    assertEquals(
+        inspectRequest({
+            headers: new Headers(CURL),
+            path: "/v1/chat/completions",
+            remoteHostname: LAN,
+            tokenState: TOKEN_VALID,
+        }),
+        null,
+    );
+});
+
+Deno.test("token — it comes before anything about the config", () => {
+    //  Each of these fails a later check too. Without the token the
+    //  caller must learn only that it needs one.
+    const cases = [
+        { ...SERVE, "host": "other.example.ts.net" },
+        { ...SERVE, "via": "1.1 caddy" },
+        { ...SERVE, "x-forwarded-for": "203.0.113.7" },
+        { ...SERVE, "tailscale-funnel-request": "?1" },
+        { ...SERVE, "origin": "https://evil.example" },
+    ];
+
+    for (const headers of cases) {
+        assertEquals(
+            proxiedCode(headers, {
+                tokenState: TOKEN_MISSING,
+                path: "/saxby/v1/reservations",
+            }),
+            "token_required",
+        );
+    }
+});
+
+Deno.test("token — it does not replace the other checks", () => {
+    assertEquals(
+        proxiedCode({ ...SERVE, "host": "other.example.ts.net" }),
+        "proxy_not_trusted",
+    );
+
+    assertEquals(
+        proxiedCode(SERVE, { path: "/saxby/v1/reservations" }),
+        "proxy_path_not_allowed",
+    );
+
+    assertEquals(
+        inspectRequest({
+            headers: new Headers({ host: "attacker.example" }),
+            path: "/v1/models",
+            remoteHostname: LAN,
+            tokenState: TOKEN_VALID,
+        })?.code,
+        "host_not_allowed",
+    );
+});
+
+Deno.test("token — with no proxy named, the old refusal stands", () => {
+    assertEquals(
+        proxiedCode(SERVE, {
+            trustedProxies: [],
+            tokenState: TOKEN_VALID,
+        }),
+        "proxy_attribution_required",
+    );
+});
+
+Deno.test("token — a refusal never repeats what was sent", () => {
+    for (const tokenState of [TOKEN_MISSING, TOKEN_INVALID]) {
+        const verdict = inspectProxied(SERVE, { tokenState });
+
+        assertEquals(verdict.message.includes("placeholder"), false);
+        assertEquals(verdict.message.includes("ts.net"), false);
+    }
 });

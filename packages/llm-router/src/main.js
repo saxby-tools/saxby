@@ -9,8 +9,10 @@ import {
     getInstanceDir,
     instanceLabel,
     instancePhrase,
+    isWeakApiToken,
     loadConfig,
     OllamaAdapter,
+    readOrCreateApiToken,
     resolveInstanceName,
     validateTagContract,
 } from "@saxby/core";
@@ -22,16 +24,20 @@ import { isProcessAlive } from "./memory/liveness.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
-import { inspectRequest } from "./security/guard.js";
+import { inspectRequest, TOKEN_VALID } from "./security/guard.js";
+import { tokenStateFor } from "./security/token.js";
 import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
-//  Loopback only. Saxby checks no credentials, so nothing beyond this
-//  machine may reach it directly until keys exist (AGENTS.md). Docker
-//  Desktop's host.docker.internal and `tailscale serve` both reach
-//  loopback; a proxy is let through only when `trusted_proxies` names
-//  it (security/guard.js).
+//  Loopback only. Docker Desktop's host.docker.internal and
+//  `tailscale serve` both reach loopback; a proxy is let through only
+//  when `trusted_proxies` names it and the request carries the API
+//  token (security/guard.js).
 const LISTEN_HOSTNAME = "127.0.0.1";
+
+//  Sent with a 401, as HTTP requires, so a client knows what to send.
+const AUTHENTICATE_HEADER = 'Bearer realm="saxby"';
+const STATUS_UNAUTHORIZED = 401;
 
 //  Polled by `saxby` — every half second while a service starts — so
 //  logging them buries the lines that matter. Every running
@@ -248,8 +254,46 @@ async function describePortClash(port, instance) {
 }
 
 /**
+ * Reads this instance's API token, writing one at first boot.
+ *
+ * Returns null on any failure. Local clients never need the token, so
+ * a broken token file costs the other machines their way in, loudly,
+ * and never the router.
+ * @returns {Promise<string | null>}
+ */
+async function loadApiToken(instance) {
+    let found;
+
+    try {
+        found = await readOrCreateApiToken(getInstanceDir(instance));
+    } catch (error) {
+        console.warn(
+            `⚠️  API token unavailable, so only this machine is ` +
+                `served: ${error.message}`,
+        );
+
+        return null;
+    }
+
+    if (found.created) {
+        console.log(`🔑 API token written to ${found.path}`);
+    }
+
+    if (isWeakApiToken(found.token)) {
+        console.warn(
+            `⚠️  The API token is ${found.token.length} characters ` +
+                `long. One that short can be guessed by anyone who can ` +
+                `reach Saxby from another machine. 'saxby token rotate' ` +
+                `writes a strong one.`,
+        );
+    }
+
+    return found.token;
+}
+
+/**
  * Says at boot which proxies are trusted. Naming one lets other
- * machines in with no credential check, so it is never silent.
+ * machines in, so it is never silent.
  */
 function announceProxies(config) {
     for (const proxy of config.trusted_proxies) {
@@ -261,8 +305,8 @@ function announceProxies(config) {
     }
 
     console.log(
-        "   Saxby checks no credentials: whoever that proxy lets in " +
-            "can use /v1/chat/completions and /v1/models.",
+        "   Requests through it need the API token ('saxby token') " +
+            "and reach /v1/chat/completions and /v1/models only.",
     );
 }
 
@@ -287,11 +331,20 @@ function announceOrigins(config) {
 
 /**
  * First middleware on every route. Refuses browser and rebinding
- * requests, Ollama's management paths, and any proxied request that
- * does not fit a proxy named in the config, before the request logger
- * or any route sees them (security/guard.js says why).
+ * requests, Ollama's management paths, any request from another
+ * machine without the API token, and any proxied request that does
+ * not fit a proxy named in the config, before the request logger or
+ * any route sees them (security/guard.js says why).
  */
-async function guardRequests(c, next, config) {
+async function guardRequests(c, next, config, apiToken) {
+    const tokenState = tokenStateFor(c.req.header("authorization"), apiToken);
+
+    //  The routes must never pass Saxby's own token on to the backend.
+    //  Set for a local client too, if it sent the token.
+    if (tokenState === TOKEN_VALID) {
+        c.set("sentApiToken", true);
+    }
+
     const verdict = inspectRequest({
         headers: c.req.raw.headers,
         path: c.req.path,
@@ -299,6 +352,7 @@ async function guardRequests(c, next, config) {
         remoteHostname: c.env?.remoteAddr?.hostname,
         trustedProxies: config.trusted_proxies,
         allowedOrigins: config.allowed_origins,
+        tokenState,
     });
 
     if (!verdict) {
@@ -311,6 +365,10 @@ async function guardRequests(c, next, config) {
         `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
             `from ${source}`,
     );
+
+    if (verdict.status === STATUS_UNAUTHORIZED) {
+        c.header("WWW-Authenticate", AUTHENTICATE_HEADER);
+    }
 
     return c.json({
         error: {
@@ -389,6 +447,8 @@ async function main() {
         console.log(`🔍 Tracing enabled (level ${level}).`);
     }
 
+    const apiToken = await loadApiToken(instance);
+
     announceProxies(config);
     announceOrigins(config);
 
@@ -448,7 +508,7 @@ async function main() {
 
     app.use(
         "*",
-        (c, next) => guardRequests(c, next, config),
+        (c, next) => guardRequests(c, next, config, apiToken),
     );
 
     if (!isVerbose()) {
@@ -490,6 +550,10 @@ async function main() {
         upstreamHeaders.delete("accept-encoding");
         upstreamHeaders.delete("content-length");
         upstreamHeaders.delete("host");
+
+        if (c.get("sentApiToken")) {
+            upstreamHeaders.delete("authorization");
+        }
 
         const upstreamReq = new Request(
             `${config.upstream_url}${url.pathname}${url.search}`,
