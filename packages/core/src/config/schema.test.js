@@ -43,6 +43,12 @@ Deno.test("config — a model missing from the catalog is named", () => {
     assert(message.includes("global_default_model 'ghost'"));
 });
 
+Deno.test("config — prompt text is not logged unless asked for", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.log_prompts, false);
+});
+
 //  =====================================================================
 //  Listening
 //  =====================================================================
@@ -162,4 +168,172 @@ Deno.test("config — an embedder profile may carry a size", () => {
     }));
 
     assertEquals(parsed.semantic.profiles["bge-m3"].size_gib, 0.7);
+});
+
+//  =====================================================================
+//  Trusted proxies
+//  =====================================================================
+
+function proxy(fields = {}) {
+    return {
+        trusted_proxies: [{
+            kind: "tailscale-serve",
+            host: "box.example.ts.net",
+            ...fields,
+        }],
+    };
+}
+
+Deno.test("config — no proxy is trusted unless one is named", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.trusted_proxies, []);
+});
+
+Deno.test("config — a Tailscale Serve proxy passes", () => {
+    const parsed = validateConfig(config(proxy()));
+
+    assertEquals(parsed.trusted_proxies, [{
+        kind: "tailscale-serve",
+        host: "box.example.ts.net",
+    }]);
+});
+
+Deno.test("config — an unknown proxy kind is refused", () => {
+    const message = messageFor(config(proxy({ kind: "caddy" })));
+
+    assert(message.includes("trusted_proxies.0.kind"));
+    assert(message.includes("tailscale-serve"));
+});
+
+Deno.test("config — a proxy host with a scheme or port is refused", () => {
+    const hosts = [
+        "https://box.example.ts.net",
+        "box.example.ts.net:11435",
+        "",
+    ];
+
+    for (const host of hosts) {
+        const message = messageFor(config(proxy({ host })));
+
+        assert(message.includes("trusted_proxies.0.host"), host);
+    }
+});
+
+Deno.test("config — a proxy with no host is refused", () => {
+    const message = messageFor(config({
+        trusted_proxies: [{ kind: "tailscale-serve" }],
+    }));
+
+    assert(message.includes("trusted_proxies.0.host"));
+});
+
+//  =====================================================================
+//  Client defaults
+//  =====================================================================
+
+Deno.test("config — no client gets a default unless one is set", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.client_defaults, {});
+});
+
+Deno.test("config — a client may have reasoning turned off", () => {
+    const parsed = validateConfig(config({
+        client_defaults: { leantype: { reasoning_effort: "none" } },
+    }));
+
+    assertEquals(parsed.client_defaults.leantype, {
+        reasoning_effort: "none",
+    });
+});
+
+Deno.test("config — any other reasoning_effort is refused", () => {
+    for (const effort of ["low", "high", "off", false]) {
+        const message = messageFor(config({
+            client_defaults: { leantype: { reasoning_effort: effort } },
+        }));
+
+        assert(
+            message.includes("client_defaults.leantype.reasoning_effort"),
+            String(effort),
+        );
+    }
+});
+
+Deno.test("config — a client default Saxby cannot add is refused", () => {
+    const message = messageFor(config({
+        client_defaults: { leantype: { temperature: 0 } },
+    }));
+
+    assert(
+        message.includes(
+            "unknown field 'client_defaults.leantype.temperature'",
+        ),
+    );
+});
+
+Deno.test("config — a signature that could never match is refused", () => {
+    for (const key of ["LeanType", "LeanType/1.0", "lean type"]) {
+        const message = messageFor(config({
+            client_defaults: { [key]: { reasoning_effort: "none" } },
+        }));
+
+        assert(message.includes("a client signature is lowercase"), key);
+    }
+});
+
+//  =====================================================================
+//  Allowed origins
+//  =====================================================================
+
+const EXTENSION = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+
+Deno.test("config — no browser origin is allowed unless listed", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.allowed_origins, []);
+});
+
+Deno.test("config — a browser extension's origin passes", () => {
+    const origins = [
+        EXTENSION,
+        "moz-extension://1b2c3d4e-0000-4000-8000-123456789abc",
+    ];
+
+    const parsed = validateConfig(config({ allowed_origins: origins }));
+
+    assertEquals(parsed.allowed_origins, origins);
+});
+
+Deno.test("config — anything but one extension is refused", () => {
+    const origins = [
+        "chrome-extension://*",
+        "*",
+        "https://example.com",
+        "http://localhost:3000",
+        `${EXTENSION}/`,
+        `${EXTENSION}/popup.html`,
+        "CHROME-EXTENSION://ABCDEF",
+        "null",
+    ];
+
+    for (const origin of origins) {
+        const message = messageFor(config({ allowed_origins: [origin] }));
+
+        assert(message.includes("allowed_origins.0"), origin);
+        assert(message.includes("one browser extension"), origin);
+    }
+});
+
+Deno.test("config — an extension may have client defaults", () => {
+    const parsed = validateConfig(config({
+        client_defaults: {
+            "ext-abcdefghijklmnopabcdefghijklmnop": {
+                reasoning_effort: "none",
+            },
+        },
+    }));
+
+    assertEquals(Object.keys(parsed.client_defaults).length, 1);
 });

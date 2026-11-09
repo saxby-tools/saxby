@@ -46,12 +46,12 @@ in order:
    unknown that will refuse jobs, then start the sweep that drops
    reservations whose processes have exited.
 7. **Serve.** Listen on `listen_host`, which is `127.0.0.1` unless
-   the config says otherwise. A wider bind is named in a warning
-   first; a loopback bind inside a container gets a hint that the
-   published port will not answer.
-   Saxby checks no credentials, so nothing beyond this machine may
-   reach it until per-client keys exist. A port clash is explained by
-   asking the holder who it is.
+   the config says otherwise. A wider bind is named at boot; a
+   loopback bind inside a container gets a hint that the published
+   port will not answer. A request that does not come straight from
+   this machine, through a proxy named in `trusted_proxies` or over
+   a wider bind, must carry the API token. A port clash is explained
+   by asking the holder who it is.
 
 Steps 4 and 5 can fail without stopping Saxby. Observability and
 cleverness are optional; routing is not.
@@ -156,6 +156,15 @@ Saxby writes.
 **Views** for the questions asked most: `v_routing_funnel`,
 `v_client_mix`, `v_unclaimed_tags`, `v_incomplete`,
 `v_exemplar_cache` and `v_memory_events`.
+
+**Stores no user text by default.** Prompt text is opt-in
+(`log_prompts`), and detector evidence is counts, booleans and names
+from a fixed vocabulary, never what was matched. The prompt hash is
+an HMAC with a per-instance key (`prompt-hash.key`), and every row
+names its hash scheme. The file, its WAL files and the folder are
+made owner-only on every open, and `secure_delete` is on so a blanked
+prompt does not survive in free pages. The reasoning is in
+[Configuration](configuration.md#logging).
 
 The log also holds Tier 3's exemplar vectors, keyed by embedding
 model, which is why switching embedders back and forth re-embeds

@@ -1,5 +1,6 @@
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
+import { basename, join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
 import {
     fetchSaxbyStatus,
@@ -8,9 +9,11 @@ import {
     getInstanceDir,
     instanceLabel,
     instancePhrase,
+    isWeakApiToken,
     loadConfig,
     OllamaAdapter,
     probeHostFor,
+    readOrCreateApiToken,
     resolveInstanceName,
     validateTagContract,
 } from "@saxby/core";
@@ -22,10 +25,19 @@ import { isProcessAlive } from "./memory/liveness.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
-import { buildAllowedHosts, inspectRequest } from "./security/guard.js";
+import {
+    buildAllowedHosts,
+    inspectRequest,
+    TOKEN_VALID,
+} from "./security/guard.js";
 import { isInContainer, isLoopbackHost } from "./security/listen.js";
+import { tokenStateFor } from "./security/token.js";
 import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
+
+//  Sent with a 401, as HTTP requires, so a client knows what to send.
+const AUTHENTICATE_HEADER = 'Bearer realm="saxby"';
+const STATUS_UNAUTHORIZED = 401;
 
 //  Polled by `saxby` — every half second while a service starts — so
 //  logging them buries the lines that matter. Every running
@@ -35,6 +47,10 @@ const HEARTBEAT_PATH = /^\/saxby\/v1\/reservations\/[^/]+\/heartbeat$/;
 
 //  The usual exit code for a command-line usage error.
 const EXIT_USAGE = 2;
+
+//  The prompt hash key lives beside the config, not beside the log:
+//  it belongs to the instance, wherever log_path points.
+const KEY_FILE = "prompt-hash.key";
 
 /**
  * Prepares Tier 3: resolves the active profile, confirms the embedder
@@ -242,22 +258,104 @@ async function describePortClash(config, instance) {
 }
 
 /**
+ * Reads this instance's API token, writing one at first boot.
+ *
+ * Returns null on any failure. Local clients never need the token, so
+ * a broken token file costs the other machines their way in, loudly,
+ * and never the router.
+ * @returns {Promise<string | null>}
+ */
+async function loadApiToken(instance) {
+    let found;
+
+    try {
+        found = await readOrCreateApiToken(getInstanceDir(instance));
+    } catch (error) {
+        console.warn(
+            `⚠️  API token unavailable, so only this machine is ` +
+                `served: ${error.message}`,
+        );
+
+        return null;
+    }
+
+    if (found.created) {
+        console.log(`🔑 API token written to ${found.path}`);
+    }
+
+    if (isWeakApiToken(found.token)) {
+        console.warn(
+            `⚠️  The API token is ${found.token.length} characters ` +
+                `long. One that short can be guessed by anyone who can ` +
+                `reach Saxby from another machine. 'saxby token rotate' ` +
+                `writes a strong one.`,
+        );
+    }
+
+    return found.token;
+}
+
+/**
+ * Says at boot which proxies are trusted. Naming one lets other
+ * machines in, so it is never silent.
+ */
+function announceProxies(config) {
+    for (const proxy of config.trusted_proxies) {
+        console.log(`🔓 Trusted proxy: ${proxy.kind} at ${proxy.host}`);
+    }
+
+    if (config.trusted_proxies.length === 0) {
+        return;
+    }
+
+    console.log(
+        "   Requests through it need the API token ('saxby token') " +
+            "and reach /v1/chat/completions and /v1/models only.",
+    );
+}
+
+/**
+ * Says at boot which browser extensions are let in, for the same
+ * reason: a way in is never silent.
+ */
+function announceOrigins(config) {
+    for (const origin of config.allowed_origins) {
+        console.log(`🧩 Browser extension allowed: ${origin}`);
+    }
+
+    if (config.allowed_origins.length === 0) {
+        return;
+    }
+
+    console.log(
+        "   An extension can use /v1/chat/completions and /v1/models, " +
+            "and nothing else.",
+    );
+}
+
+/**
  * Says what the bind means, once, before listening. A bind beyond
  * loopback is the operator's call (AGENTS.md), so it is named, not
- * refused. A loopback bind inside a container is the usual first-run
- * mistake: the published port never answers.
+ * refused: what protects it is the API token, which every request
+ * from another machine must carry. A loopback bind inside a container
+ * is the usual first-run mistake: the published port never answers.
  */
-async function announceListen(config) {
+async function announceListen(config, apiToken) {
     const where = `${config.listen_host}:${config.listen_port}`;
 
     if (!isLoopbackHost(config.listen_host)) {
-        console.warn(
-            `⚠️  Listening on ${where}, beyond loopback. Saxby checks ` +
-                `no credentials: anyone who can reach this port can ` +
-                `use your models and your hardware. In a container, ` +
-                `publish the port to 127.0.0.1 on the host ` +
-                `(docs/configuration.md).`,
+        console.log(
+            `🌐 Listening on ${where}, beyond loopback. A request from ` +
+                `another machine needs the API token ('saxby token') ` +
+                `and reaches /v1/chat/completions and /v1/models only.`,
         );
+
+        if (apiToken === null) {
+            console.warn(
+                `⚠️  With no API token, nothing beyond this machine ` +
+                    `can be served on ${where}.`,
+            );
+        }
 
         return;
     }
@@ -267,44 +365,63 @@ async function announceListen(config) {
             `ℹ️  Running in a container with listen_host ` +
                 `${config.listen_host}: a published port will not ` +
                 `answer. Set listen_host to 0.0.0.0 ` +
-                `(docs/configuration.md).`,
+                `(docs/docker.md).`,
         );
     }
 }
 
 /**
- * First middleware on every route. Refuses proxied, browser and
- * rebinding requests and Ollama's management paths, before the request
- * logger or any route sees them (security/guard.js says why).
- * @param {Set<string>} allowedHosts - from buildAllowedHosts
+ * First middleware on every route. Refuses browser and rebinding
+ * requests, Ollama's management paths, any request from another
+ * machine without the API token, and any proxied request that does
+ * not fit a proxy named in the config, before the request logger or
+ * any route sees them (security/guard.js says why).
+ * @param {{ config: Object, apiToken: string | null,
+ *     allowedHosts: Set<string> }} access - fixed at boot
  */
-function createGuard(allowedHosts) {
-    return async function guardRequests(c, next) {
-        const verdict = inspectRequest({
-            headers: c.req.raw.headers,
-            path: c.req.path,
-            allowedHosts,
-        });
+async function guardRequests(c, next, access) {
+    const { config, apiToken, allowedHosts } = access;
+    const tokenState = tokenStateFor(c.req.header("authorization"), apiToken);
 
-        if (!verdict) {
-            return await next();
-        }
+    //  The routes must never pass Saxby's own token on to the backend.
+    //  Set for a local client too, if it sent the token.
+    if (tokenState === TOKEN_VALID) {
+        c.set("sentApiToken", true);
+    }
 
-        const source = c.env?.remoteAddr?.hostname ?? "unknown";
+    const verdict = inspectRequest({
+        headers: c.req.raw.headers,
+        path: c.req.path,
+        method: c.req.method,
+        remoteHostname: c.env?.remoteAddr?.hostname,
+        trustedProxies: config.trusted_proxies,
+        allowedOrigins: config.allowed_origins,
+        allowedHosts,
+        tokenState,
+    });
 
-        console.warn(
-            `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
-                `from ${source}`,
-        );
+    if (!verdict) {
+        return await next();
+    }
 
-        return c.json({
-            error: {
-                message: verdict.message,
-                type: "invalid_request_error",
-                code: verdict.code,
-            },
-        }, verdict.status);
-    };
+    const source = c.env?.remoteAddr?.hostname ?? "unknown";
+
+    console.warn(
+        `🚫 ${verdict.code}: ${c.req.method} ${c.req.path} ` +
+            `from ${source}`,
+    );
+
+    if (verdict.status === STATUS_UNAUTHORIZED) {
+        c.header("WWW-Authenticate", AUTHENTICATE_HEADER);
+    }
+
+    return c.json({
+        error: {
+            message: verdict.message,
+            type: "invalid_request_error",
+            code: verdict.code,
+        },
+    }, verdict.status);
 }
 
 /**
@@ -375,13 +492,22 @@ async function main() {
         console.log(`🔍 Tracing enabled (level ${level}).`);
     }
 
+    const apiToken = await loadApiToken(instance);
+
+    announceProxies(config);
+    announceOrigins(config);
+
     //  The decision log is observability, never load-bearing. If it
     //  cannot be opened the router still routes — it just stops
     //  remembering, loudly.
     let log = null;
 
     try {
-        log = openDecisionLog(config.log_path, config);
+        log = await openDecisionLog(
+            config.log_path,
+            config,
+            join(getInstanceDir(instance), KEY_FILE),
+        );
 
         console.log(`📓 Decision log: ${config.log_path}`);
 
@@ -393,8 +519,21 @@ async function main() {
             );
         }
 
+        //  Names only: the line above already says where the log is.
+        if (log.tightened.length > 0) {
+            const names = log.tightened.map((path) => basename(path));
+
+            console.log(`   made owner-only: ${names.join(", ")}`);
+        }
+
+        //  Printed either way. With text off by default, the quiet
+        //  case is the one storing prompts, so neither may be silent.
+        if (config.log_prompts) {
+            console.log("   prompt text: logged (log_prompts: true)");
+        }
+
         if (!config.log_prompts) {
-            console.log("   prompt text disabled (hashes only)");
+            console.log("   prompt text: hashes only (log_prompts: false)");
         }
     } catch (error) {
         console.warn(
@@ -412,7 +551,13 @@ async function main() {
 
     const app = new Hono();
 
-    app.use("*", createGuard(buildAllowedHosts(config.allowed_hosts)));
+    const access = {
+        config,
+        apiToken,
+        allowedHosts: buildAllowedHosts(config.allowed_hosts),
+    };
+
+    app.use("*", (c, next) => guardRequests(c, next, access));
 
     if (config.allowed_hosts.length > 0) {
         const names = config.allowed_hosts.join(", ");
@@ -460,6 +605,10 @@ async function main() {
         upstreamHeaders.delete("content-length");
         upstreamHeaders.delete("host");
 
+        if (c.get("sentApiToken")) {
+            upstreamHeaders.delete("authorization");
+        }
+
         const upstreamReq = new Request(
             `${config.upstream_url}${url.pathname}${url.search}`,
             {
@@ -483,7 +632,7 @@ async function main() {
         });
     });
 
-    await announceListen(config);
+    await announceListen(config, apiToken);
 
     try {
         Deno.serve(

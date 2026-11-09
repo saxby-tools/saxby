@@ -3,8 +3,13 @@ import { resolvePipeline } from "../../pipeline/resolve.js";
 import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
-import { hashPrompt, identifyClient } from "../../log/client.js";
+import { identifyClient } from "../../log/client.js";
 import { CODE_ABANDONED } from "../../memory/broker.js";
+
+//  The request fields `client_defaults` may fill in. The config schema
+//  allows the same list and no more, so a default is never a way to
+//  rewrite an arbitrary part of a request.
+const CLIENT_DEFAULT_FIELDS = ["reasoning_effort"];
 
 //  ---------------------------------------------------------------------
 //  Header construction
@@ -18,6 +23,13 @@ import { CODE_ABANDONED } from "../../memory/broker.js";
  */
 function buildUpstreamHeaders(c) {
     const headers = { "Content-Type": "application/json" };
+
+    //  Saxby's own API token stops here (main.js sets the flag). Any
+    //  other Authorization value is the client's business with the
+    //  backend and is passed on.
+    if (c.get("sentApiToken")) {
+        return headers;
+    }
 
     const auth = c.req.header("Authorization");
 
@@ -61,6 +73,42 @@ function requestUsageReporting(body) {
     }
 
     body.stream_options = { include_usage: true };
+}
+
+/**
+ * Fills in the request fields the config sets for this client, where
+ * the request left them out. A value the client sent always stands.
+ *
+ * Returns what was added, or null, so it can be traced and logged: an
+ * added field shapes the response as surely as an injected prompt.
+ */
+function applyClientDefaults(body, client, config) {
+    const defaults = config.client_defaults?.[client.signature];
+
+    if (!defaults) {
+        return null;
+    }
+
+    const added = {};
+
+    for (const field of CLIENT_DEFAULT_FIELDS) {
+        if (defaults[field] === undefined) {
+            continue;
+        }
+
+        if (body[field] !== undefined) {
+            continue;
+        }
+
+        body[field] = defaults[field];
+        added[field] = defaults[field];
+    }
+
+    if (Object.keys(added).length === 0) {
+        return null;
+    }
+
+    return added;
 }
 
 /**
@@ -120,6 +168,14 @@ export function registerChatRoutes(app) {
             (name) => c.req.header(name),
             config,
         );
+
+        //  For every mode. A default belongs to the client, whichever
+        //  way its request names a model.
+        const clientDefaults = applyClientDefaults(body, client, config);
+
+        if (clientDefaults) {
+            tracer.defaults(client.signature, clientDefaults);
+        }
 
         let targetModel = rawModel;
         let logId = null;
@@ -188,7 +244,7 @@ export function registerChatRoutes(app) {
                 decision,
                 intent: extracted,
                 prompt: extracted.cleanPrompt,
-                promptHash: await hashPrompt(extracted.cleanPrompt),
+                promptHash: await log?.hashPrompt(extracted.cleanPrompt),
 
                 //  Written whether or not Tier 3 won. A rejected score
                 //  is what the threshold gets tuned against.
@@ -200,6 +256,7 @@ export function registerChatRoutes(app) {
                     }
                     : null,
                 systemPrefix,
+                clientDefaults,
             });
 
             //  Nothing in the catalog can serve a requirement. The row
@@ -275,9 +332,10 @@ export function registerChatRoutes(app) {
                     },
                 },
                 prompt: null,
-                promptHash: await hashPrompt(""),
+                promptHash: await log?.hashPrompt(""),
                 semantic: null,
                 systemPrefix,
+                clientDefaults,
             });
         }
 

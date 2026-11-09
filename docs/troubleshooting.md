@@ -149,11 +149,61 @@ Saxby could not reach its upstream at http://127.0.0.1:11434: fetch failed
 Saxby is fine; the backend is not answering. Check that Ollama is
 running and that `upstream_url` is right.
 
+##  Requests are refused (401)
+
+A request that does not come straight from the machine running Saxby
+must carry the API token; see
+[The API token](configuration.md#the-api-token). Local clients never
+get these.
+
+###  token_required
+
+```
+Refused: this request did not come straight from the machine running Saxby, so it needs the API token, sent as 'Authorization: Bearer <token>'. Run 'saxby token' on the machine running Saxby to see it.
+```
+
+The client sent no token. Run `saxby token` on the machine running
+Saxby and paste the result into the client's API key field.
+
+###  token_invalid
+
+```
+Refused: that is not this Saxby's API token. Run 'saxby token' on the machine running Saxby to see it.
+```
+
+The client sent a token, and it is the wrong one. The usual causes
+are a placeholder key left over from local use, a token from another
+instance, or a token replaced by `saxby token rotate`.
+
 ##  Requests are refused (403)
 
-Saxby checks no credentials, so it serves only clients on the same
-machine and refuses anything that looks otherwise. Each refusal is
-logged as a line starting with `🚫`, with its reason and source.
+Saxby serves clients on the same machine and refuses anything that
+looks otherwise. The exceptions are ones you name yourself; see
+[Trusted proxies](configuration.md#trusted-proxies) and
+[Browser extensions](configuration.md#browser-extensions). Each
+refusal is logged as a line starting with `🚫`, with its reason and
+source.
+
+###  remote_path_not_allowed
+
+```
+Refused: 'POST /saxby/v1/reservations' is served only to programs on the machine running Saxby. Other machines get /v1/chat/completions and /v1/models.
+```
+
+The request came from another machine with the right token, and
+asked for something only a local program may use. Run it on the
+machine running Saxby.
+
+###  token_unavailable
+
+```
+Refused: this Saxby could not read its API token file, so it serves only the machine it runs on. Its log says why.
+```
+
+Saxby could not read or create `api-token` in its config folder, so
+it cannot check anyone's token. The boot log has a line starting
+`⚠️  API token unavailable` with the cause. `saxby token rotate`
+writes a fresh file; restart Saxby after.
 
 ###  proxy_attribution_required
 
@@ -165,8 +215,35 @@ A reverse proxy — Caddy, nginx, `tailscale serve` — is passing
 requests to Saxby. On the same machine, every proxied request looks
 local, including ones from strangers, so Saxby refuses them. Point
 the client at `127.0.0.1:11435` directly instead of through the
-proxy. Serving through a proxy needs per-client keys, planned after
-v1.
+proxy.
+
+If the proxy is Tailscale Serve and the client is one of your own
+devices, name it in `trusted_proxies`; see
+[Trusted proxies](configuration.md#trusted-proxies). No other proxy
+can be trusted.
+
+###  proxy_not_trusted
+
+A proxy is named in `trusted_proxies`, and this request does not fit
+it. The message says which check failed:
+
+| Message says | Cause |
+| --- | --- |
+| `Host '...' is not a proxy named in trusted_proxies` | The client used a name other than the configured `host`. Use the machine's full tailnet name. |
+| `carries '...', which Tailscale Serve does not send` | A second proxy sits in front of or behind Serve. Saxby trusts Serve alone. |
+| `is not one tailnet address` | The caller is not a tailnet device, or the request passed through more than one proxy. |
+| `through Tailscale Funnel` | The request came from the public internet. Saxby serves your tailnet only; use `tailscale serve`, not `tailscale funnel`. |
+| `must reach Saxby from this machine` | The proxy is not running on the same machine as Saxby. |
+
+###  proxy_path_not_allowed
+
+```
+Refused: 'GET /api/tags' is not served through a proxy. Proxied clients get /v1/chat/completions and /v1/models.
+```
+
+A proxied client asked for something other than chat or the model
+list. The memory broker, the status and explain routes and Ollama's
+own API stay on this machine. Use them from `127.0.0.1`.
 
 ###  origin_not_allowed
 
@@ -178,6 +255,25 @@ A web page in a browser tried to call Saxby. Any site you visit can
 send requests to `127.0.0.1`, so every request carrying an `Origin`
 header is refused. Server-side apps such as Open WebUI's backend send
 none.
+
+A browser extension gets a different message, with the fix in it:
+
+```
+Refused: the browser extension 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' is not in allowed_origins. Add that origin to the config to let it in.
+```
+
+Copy the origin from the message into `allowed_origins` and restart;
+see [Browser extensions](configuration.md#browser-extensions).
+
+###  origin_path_not_allowed
+
+```
+Refused: 'GET /api/tags' is not served to a browser extension. Extensions get /v1/chat/completions and /v1/models.
+```
+
+An allowed extension asked for something other than chat or the
+model list. If it was `/models` or `/chat/completions` with no
+`/v1`, the extension's base URL is missing `/v1`.
 
 ###  host_not_allowed
 
@@ -207,23 +303,27 @@ job, not a router's. Run `ollama pull` or call Ollama on port 11434.
 ###  Another machine cannot connect
 
 Saxby listens on `127.0.0.1` by default, so nothing beyond this
-machine can reach it. Per-client keys, for serving other machines
-with credentials, come after v1. `listen_host` can widen the bind
-today, with a warning at every boot, and the other machine's request
-then also needs its `Host` in `allowed_hosts`; see
-[Listening](configuration.md#listening) before you do either.
+machine can reach it directly. There are two ways in, and both need
+the API token:
+
+- Tailscale Serve, for devices on your own tailnet; see
+  [Trusted proxies](configuration.md#trusted-proxies).
+- A wider bind with `listen_host`. The other machine's request then
+  also needs its `Host` in `allowed_hosts`; see
+  [Listening](configuration.md#listening) before you set either.
 
 ###  A container's published port does not answer
 
 ```
-ℹ️  Running in a container with listen_host 127.0.0.1: a published port will not answer. Set listen_host to 0.0.0.0 (docs/configuration.md).
+ℹ️  Running in a container with listen_host 127.0.0.1: a published port will not answer. Set listen_host to 0.0.0.0 (docs/docker.md).
 ```
 
 A container's loopback is its own, so a loopback bind is unreachable
 from the host through `-p` or `ports:`. Generate the config with
 `--listen-host 0.0.0.0`, or set `listen_host` in it, and publish the
 port to the host's loopback: `127.0.0.1:11435:11435`, not
-`11435:11435`, which puts it on every host interface.
+`11435:11435`, which puts it on every host interface. See
+[Docker](docker.md).
 
 ##  Requests go to the wrong model
 

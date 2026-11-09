@@ -74,6 +74,21 @@ Deno.test("fencedCode — lang is captured for free", () => {
     assertEquals(found.langs, ["js"]);
 });
 
+//  The info string is free text and the log keeps it for years, so
+//  only a token shaped like a language name survives.
+Deno.test("fencedCode — only the language name is kept", () => {
+    const titled = evidence("```js title=secret.js\nx\n```", "fencedCode");
+    const plus = evidence("```C++\nx\n```", "fencedCode");
+    const path = evidence("```src/clients/acme.js\nx\n```", "fencedCode");
+    const colon = evidence("```ts:src/acme.ts\nx\n```", "fencedCode");
+
+    assertEquals(titled.langs, ["js"]);
+    assertEquals(plus.langs, ["c++"]);
+    assertEquals(path.count, 1);
+    assertEquals(path.langs, []);
+    assertEquals(colon.langs, []);
+});
+
 //  ---------------------------------------------------------------------
 //  filePaths — owned, and the highest-value routing signal
 //  ---------------------------------------------------------------------
@@ -96,6 +111,15 @@ Deno.test("filePaths — distinct count drives multi-file routing", () => {
 
     assertEquals(evidence(single, "filePaths").count, 1);
     assertEquals(evidence(multi, "filePaths").count, 2);
+});
+
+//  Paths name users, clients and projects. Routing reads the count,
+//  and the log must never get the list.
+Deno.test("filePaths — the paths themselves are not evidence", () => {
+    const found = evidence("see /Users/alice/clients/acme/a.js", "filePaths");
+
+    assertEquals(found.count, 1);
+    assertEquals(Object.hasOwn(found, "paths"), false);
 });
 
 Deno.test("filePaths — repeats collapse to one", () => {

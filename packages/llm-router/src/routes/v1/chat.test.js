@@ -42,7 +42,11 @@ function stubUpstream() {
     const requests = [];
 
     globalThis.fetch = (url, init) => {
-        requests.push({ url, body: JSON.parse(init.body) });
+        requests.push({
+            url,
+            body: JSON.parse(init.body),
+            headers: init.headers,
+        });
 
         return Promise.resolve(Response.json({ choices: [] }));
     };
@@ -153,4 +157,205 @@ Deno.test("chat — an admitted load is sent and its hold freed", async () => {
     } finally {
         upstream.restore();
     }
+});
+
+//  =====================================================================
+//  Client defaults
+//  =====================================================================
+//  A client that cannot send a field itself gets it from the config.
+//  These pin three things: the field reaches the backend, the client's
+//  own value is never replaced, and the decision log is told.
+
+const KEYBOARD = "LeanType/1.0";
+
+const DEFAULTS_CONFIG = {
+    ...CONFIG,
+    global_default_model: "voxtral:32k",
+    client_defaults: { leantype: { reasoning_effort: "none" } },
+};
+
+function fakeLog() {
+    const entries = [];
+
+    const log = {
+        record: (entry) => {
+            entries.push(entry);
+
+            return "log-1";
+        },
+        complete: () => {},
+        hashPrompt: () => Promise.resolve("hash"),
+    };
+
+    return { log, entries };
+}
+
+function appWithDefaults(log = null) {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", DEFAULTS_CONFIG);
+        c.set("log", log);
+        c.set("semantic", null);
+        c.set("broker", broker);
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+function send(server, userAgent, fields = {}) {
+    return server.request("/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "User-Agent": userAgent,
+        },
+        body: JSON.stringify({
+            model: "saxby/voxtral:32k",
+            messages: [{ role: "user", content: "hello" }],
+            ...fields,
+        }),
+    });
+}
+
+async function upstreamBodyFor(userAgent, fields, log) {
+    const upstream = stubUpstream();
+
+    try {
+        const res = await quietly(
+            () => send(appWithDefaults(log), userAgent, fields),
+        );
+
+        await res.text();
+
+        return upstream.requests[0].body;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("defaults — the named client gets the field", async () => {
+    const body = await upstreamBodyFor(KEYBOARD);
+
+    assertEquals(body.reasoning_effort, "none");
+});
+
+Deno.test("defaults — a routed request gets it too", async () => {
+    const body = await upstreamBodyFor(KEYBOARD, { model: "saxby" });
+
+    assertEquals(body.model, "voxtral:32k");
+    assertEquals(body.reasoning_effort, "none");
+});
+
+Deno.test("defaults — the client's own value always stands", async () => {
+    for (const effort of ["low", null]) {
+        const body = await upstreamBodyFor(KEYBOARD, {
+            reasoning_effort: effort,
+        });
+
+        assertEquals(body.reasoning_effort, effort);
+    }
+});
+
+Deno.test("defaults — any other client is left alone", async () => {
+    for (const userAgent of ["curl/8.7.1", "OpenAI/JS 7.20.0"]) {
+        const body = await upstreamBodyFor(userAgent);
+
+        assertEquals("reasoning_effort" in body, false, userAgent);
+    }
+});
+
+Deno.test("defaults — the decision log is told what was added", async () => {
+    const { log, entries } = fakeLog();
+
+    await upstreamBodyFor(KEYBOARD, {}, log);
+
+    assertEquals(entries[0].clientDefaults, { reasoning_effort: "none" });
+});
+
+Deno.test("defaults — nothing added is logged as nothing", async () => {
+    const cases = [
+        ["curl/8.7.1", {}],
+        [KEYBOARD, { reasoning_effort: "low" }],
+    ];
+
+    for (const [userAgent, fields] of cases) {
+        const { log, entries } = fakeLog();
+
+        await upstreamBodyFor(userAgent, fields, log);
+
+        assertEquals(entries[0].clientDefaults, null, userAgent);
+    }
+});
+
+//  =====================================================================
+//  The API token stops at Saxby
+//  =====================================================================
+//  main.js flags a request that carried Saxby's own token. The route
+//  must not hand that secret to the backend. Any other Authorization
+//  value still passes, as it always has.
+
+function appWithToken(sentApiToken) {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", CONFIG);
+        c.set("log", null);
+        c.set("semantic", null);
+        c.set("broker", broker);
+
+        if (sentApiToken) {
+            c.set("sentApiToken", true);
+        }
+
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+async function upstreamHeadersFor(sentApiToken) {
+    const upstream = stubUpstream();
+
+    try {
+        const res = await quietly(() =>
+            appWithToken(sentApiToken).request("/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer the-secret",
+                },
+                body: JSON.stringify({
+                    model: "saxby/voxtral:32k",
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            })
+        );
+
+        await res.text();
+
+        return upstream.requests[0].headers;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("token — Saxby's own token stops at Saxby", async () => {
+    const headers = await upstreamHeadersFor(true);
+
+    assertEquals("Authorization" in headers, false);
+    assertEquals(headers["Content-Type"], "application/json");
+});
+
+Deno.test("token — any other Authorization is passed on", async () => {
+    const headers = await upstreamHeadersFor(false);
+
+    assertEquals(headers.Authorization, "Bearer the-secret");
 });

@@ -8,23 +8,34 @@ Saxby instead of your backend, and ask for the model `saxby`.
 | Setting | Value |
 | --- | --- |
 | Base URL | `http://127.0.0.1:11435/v1` |
-| API key | anything non-empty |
+| API key | anything non-empty, on the same machine |
 | Model | `saxby` |
 
-Saxby does not check the API key. It passes the `Authorization`
-header on to the backend, and Ollama ignores it, but many clients
-refuse to start without one. Clients are told apart by their
-`User-Agent`, never by their key.
+On the same machine, Saxby does not check the API key. It passes the
+`Authorization` header on to the backend, and Ollama ignores it, but
+many clients refuse to start without one. Clients are told apart by
+their `User-Agent`, never by their key.
 
-Because nothing is checked, Saxby only serves clients on the same
-machine. It listens on `127.0.0.1` by default, and it refuses requests
-that came through a proxy, came from a web page, or name a host other
-than `localhost`, `127.0.0.1`, `[::1]`, `host.docker.internal` or a
-name in `allowed_hosts`. Each refusal is a 403 explained in
-[Troubleshooting](troubleshooting.md). A wider bind is yours to set and
-is warned about at boot; see [Listening](configuration.md#listening).
-Serving other machines with credentials needs per-client keys, which
-are planned after v1.
+A client on another machine is different: its API key must be
+Saxby's API token. Print it on the machine running Saxby:
+
+```bash
+saxby token
+```
+
+See [The API token](configuration.md#the-api-token).
+
+Saxby listens on `127.0.0.1` by default, and it refuses requests that
+came from a web page or name a host other than `localhost`,
+`127.0.0.1`, `[::1]`, `host.docker.internal` or a name in
+`allowed_hosts`. Each refusal is explained in
+[Troubleshooting](troubleshooting.md). There are two ways in from
+another machine: your own tailnet, as in
+[A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale),
+and a wider bind, which is yours to set; see
+[Listening](configuration.md#listening). A browser extension you
+choose can be let in too; see
+[A browser extension](#a-browser-extension).
 
 Use `saxby/<model>` to skip routing and reach one model directly.
 See [Routing](routing.md).
@@ -188,6 +199,92 @@ to tell them apart.
 OpenClaw's memory search can embed text through Ollama directly.
 Those calls do not pass through Saxby and are not logged.
 
+##  A phone keyboard over Tailscale
+
+A phone is not on the same machine, so it needs the one way in: a
+proxy you name in `trusted_proxies`. This example is
+[LeanType](https://github.com/LeanBitLab/LeanType), an Android
+keyboard that sends text to an OpenAI-compatible endpoint for
+proofreading and translation.
+
+###  Connecting
+
+1. Publish Saxby to your tailnet and name the proxy in the config.
+   Both steps are in
+   [Trusted proxies](configuration.md#trusted-proxies).
+2. In LeanType's AI settings:
+
+| Setting | Value |
+| --- | --- |
+| AI Provider | HF/OpenAI-compatible |
+| Model | `saxby` |
+| API Endpoint | `https://my-mac.my-tailnet.ts.net:11435/v1/chat/completions` |
+| API Token | the output of `saxby token` |
+
+The phone is another machine, so the token is checked. Run
+`saxby token` on the machine running Saxby and paste the result.
+
+###  Turning reasoning off
+
+LeanType's request is fixed: a model, one user message holding its
+instruction and your text, a temperature and a token limit. A model
+that reasons by default will reason over every sentence, and on the
+reference setup one grammar fix took 13 seconds that way. LeanType
+has no setting that sends `reasoning_effort` (its source, read Nov.
+8, 2026), so set it for the client:
+
+```jsonc
+"client_defaults": {
+    "leantype": { "reasoning_effort": "none" }
+}
+```
+
+The same fixes then took about a second. See
+[Client defaults](configuration.md#client-defaults).
+
+###  Two things to know
+
+- **Its text is stored if `log_prompts` is on.** A keyboard sends
+  whatever you select in any app. With `log_prompts` set to `true`,
+  each piece lands in the decision log as plain text. See
+  [Logging](configuration.md#logging).
+- **A small model may be the wrong saving.** Asking for
+  `saxby/<small-model>` is faster still. On the reference setup a 3B
+  model failed the first test sentence, while the 31B model with
+  reasoning off got every one right.
+
+LeanType leaves `stream` unset, so it is not routed as background
+work; that rule needs an explicit `stream: false`. On the reference
+setup its requests matched no tier and reached the global default
+model.
+
+##  A browser extension
+
+An extension runs inside your browser, and Saxby refuses browsers.
+You can let one in by its exact origin. This example is
+[grammer-check](https://github.com/Mangesh-P/grammer-check), a
+grammar checker that calls an OpenAI-compatible endpoint.
+
+1. In the extension, choose its local-model option, set the base
+   URL to `http://127.0.0.1:11435/v1` and the model to `saxby`. From
+   another machine on your tailnet, use the address from
+   [Trusted proxies](configuration.md#trusted-proxies) instead, and
+   set the API key to the output of `saxby token`.
+2. Let it check something once. It fails with a 403 that names its
+   origin.
+3. Add that origin to `allowed_origins`, as
+   [Browser extensions](configuration.md#browser-extensions) shows,
+   and restart Saxby.
+
+This extension checks on every pause in typing and sends no
+`reasoning_effort` to a local endpoint (its source, read Nov. 8,
+2026). With a model that reasons by default, give it a
+`client_defaults` entry under its `ext-<id>` signature, or every
+pause costs a full round of reasoning.
+
+As with a keyboard, what it sends is stored if `log_prompts` is on:
+here that is the text of whatever field you are typing in.
+
 ##  Scripts and SDKs
 
 `curl`, the OpenAI SDKs and your own scripts work with the three
@@ -202,6 +299,28 @@ settings above. Two things to know:
 - The log names a script by the first word of its `User-Agent`:
   `python`, `node`, `curl`, `openai`. Use `client_names` to tell them
   apart.
+
+##  Where else your chats are stored
+
+Saxby keeps prompt text out of its own log unless you turn it on; see
+[Logging](configuration.md#logging). The tools in front of Saxby keep
+their own copies, and Saxby cannot do anything about those.
+
+**Open WebUI** stores every chat in its own database, unencrypted by
+default. Its page [Chat Data Privacy &
+Encryption](https://docs.openwebui.com/security/chat-data-privacy-and-encryption)
+says what it keeps and how to protect it; the short version is that
+encryption is the job of the database or the filesystem under it.
+
+**OpenClaw** keeps each agent's conversations on disk as transcripts,
+by default under `~/.openclaw/agents/<agent>/sessions/`, and its
+`transcripts` tool writes more under `~/.openclaw/transcripts/`. See
+its [transcripts](https://docs.openclaw.ai/cli/transcripts) and
+[session management](https://docs.openclaw.ai/reference/session-management-compaction)
+pages.
+
+A client's own history is that client's to protect. Check each
+tool's docs before giving other people an account on it.
 
 ##  Who owns what
 

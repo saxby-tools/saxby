@@ -107,10 +107,11 @@ M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
 
 **M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs, the rename
-(v0.9.4), packaging and publishing (v0.9.5) and the memory broker
-(merged in #39) are done. What remains is one GitHub milestone each:
-the broker's release (v0.9.6), the JSDoc sweep (v0.9.7), then the
-v1.0.0 tag ([Roadmap](docs/roadmap.md)).
+(v0.9.4), packaging and publishing (v0.9.5), the memory broker
+(v0.9.6), the decision log privacy release (v0.9.7) and tailnet
+clients (v0.9.8) are done. What remains is one GitHub milestone each:
+the JSDoc sweep (v0.9.9), then the v1.0.0 tag
+([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `saxby instance list`, the dev
 instance, `saxby probe`), because everything after it assumes them.
@@ -215,6 +216,24 @@ added later applies retroactively.
 as `bypass` / `raw`. Excluding them made client mix and latency stats
 silently wrong while looking complete.
 
+**The decision log stores no user text unless asked.** It is a plain
+SQLite file; `node:sqlite` can neither password-protect nor encrypt
+it, and encryption at rest would not protect users from the operator,
+who holds the key. Storing less is the fix. `log_prompts` defaults to
+`false`; opt-out logging is reserved for a future server-backed store
+with its own access control. **Detector evidence is never user
+text**: counts, booleans and names from a fixed vocabulary. Through
+v0.9.6 `filePaths` stored the first ten paths it found, which name
+users, clients and projects, with routing reading only the count. The
+prompt hash is an HMAC with a per-instance key in `prompt-hash.key`,
+so a shared log cannot be checked against guesses and no table of
+common prompts matches every install; the key sits beside the log, so
+it does not protect a stolen folder. Every row names its scheme in
+`prompt_hash_scheme`. Files are owner-only and `secure_delete` is on.
+Trails left by other tools (Open WebUI, OpenClaw) get a paragraph in
+[Clients](docs/clients.md), nothing more: Saxby fixes its own part of
+the stack.
+
 **Observability is never load-bearing.** A failed log write, a missing
 embedder, or an unreachable decision log degrades the feature and
 leaves routing working.
@@ -304,29 +323,103 @@ step. **Support happens on GitHub issues only.** Package pages point
 there; nobody monitors AUR or Homebrew comment threads. If Saxby
 grows, others can maintain fancier packages or forks.
 
-**Saxby serves this machine by default, and says so when it does
-not.** It checks no credentials, so it listens on `127.0.0.1` unless
-`listen_host` says otherwise — `Deno.serve` with no hostname listens on
-every interface, and until v0.9.2 that put Saxby, and through its
-catch-all Ollama's management API, on the LAN. v0.9.2 refused every
-other bind. The Docker image made that a config field: a container's
-loopback is unreachable from outside it, so a refusal meant no image.
-A wider bind is the operator's call, named by a warning at every boot
-rather than refused — their machine, their decision; Saxby's job is to
-say plainly what the setting means. A guard
+**Saxby asks nothing of this machine and a token of every other.**
+It listens on `127.0.0.1` unless `listen_host` says otherwise —
+`Deno.serve` with no hostname listens on every interface, and until
+v0.9.2 that put Saxby, and through its catch-all Ollama's management
+API, on the LAN. v0.9.2 refused every other bind. The Docker image
+made that a config field: a container's loopback is unreachable from
+outside it, so a refusal meant no image. A wider bind is the
+operator's call, named at every boot rather than refused — their
+machine, their decision; what protects it is the API token (next
+entry), not the warning. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
-box makes strangers look local), any `Origin` (a browser), a `Host`
-that is neither a local name nor in `allowed_hosts` (DNS rebinding; a
-browser cannot forge `Host`, so a listed name loosens nothing) and
-Ollama's management paths. It judges "browser" by `Origin` and `Host`
-only: Node's `fetch` sends `sec-fetch-mode: cors` from server code, and
-OpenClaw's real requests carry it. `host.docker.internal` is allowed
-because a Docker Desktop container reaches the host by that name; a
-Compose service name goes in `allowed_hosts`. Serving other machines
-on purpose — keys, a trusted-proxy list — is the post-v1 exposure
-work; when it lands, "identified by `User-Agent`, never by API key"
-must be revisited, since its objection is to keys nobody verifies.
+box makes strangers look local; the one exception is two entries
+down), any `Origin` not listed in `allowed_origins` (a browser), a
+`Host` that is neither a local name nor in `allowed_hosts` (DNS
+rebinding; a browser cannot forge `Host`, so a listed name loosens
+nothing) and Ollama's management paths. It judges "browser" by
+`Origin` and `Host` only: Node's `fetch` sends `sec-fetch-mode: cors`
+from server code, and OpenClaw's real requests carry it.
+`host.docker.internal` is allowed because a Docker Desktop container
+reaches the host by that name; a Compose service name goes in
+`allowed_hosts`. What remains of the post-v1 exposure work is
+per-client keys and proxies other than Tailscale Serve; when keys
+land, "identified by `User-Agent`, never by API key" must be
+revisited, since its objection is to keys nobody verifies.
+
+**One shared API token, for any request not straight from this
+machine.** "Straight from this machine" is a loopback connection with
+no forwarding header; everything else — through a trusted proxy, or
+over a listener that is not loopback, which is every client of a
+container — must send the token.
+One rule, so no second kind of exposure can arrive without it. Local
+clients need nothing, which keeps every existing install working.
+The token is checked BEFORE any other proxied check, so a caller
+without it learns nothing about the config. It lives in `api-token`
+beside the config, never in `config.jsonc`, which gets pasted into
+issues; saxbyd writes a random one at first boot and reads it at
+boot only. The operator may write their own, and a short one is
+warned about at every boot, not refused — nudged, not blocked. If the
+file cannot be read, other machines are refused and local clients
+are served: fail closed for strangers, never for the router. Saxby's
+own token is never forwarded to the backend. It is ONE token, so it
+identifies nobody, and "clients are identified by `User-Agent`"
+stands untouched. **The token lets a caller in; it does not make it
+a local program.** Whatever is not straight from this machine gets
+chat and the model list, never the broker or the catch-all, plus the
+status route for a direct connection, which is `saxby` asking a
+daemon bound to one interface. **Loopback is the whole definition of
+local, so a TCP-level forwarder defeats all of it**: `ssh -L`, `socat`
+and `tailscale serve --tcp` add no header, and what they carry looks
+local. That was true before the token and is documented, not solved.
+
+**One proxy may be trusted: Tailscale Serve, named in
+`trusted_proxies`.** Off by default, added in v0.9.8 so a phone
+keyboard on the tailnet could reach Saxby with no agent in between.
+Every proxied request must carry the API token (previous entry);
+v0.9.8 was built without one, and #49 closed that. Per-client keys
+stay post-v1. Beyond the token, the guard checks that a proxied
+request fits Serve and nothing else: a
+loopback connection, the configured `Host`, only the three forwarding
+headers Serve sends, one tailnet address in `X-Forwarded-For`, no
+Funnel header, no `Origin`. Serve deletes a client's own
+`Tailscale-User-*` and Funnel headers and overwrites
+`X-Forwarded-For` (`ipn/ipnlocal/serve.go`, v1.102.2), so a tailnet
+device cannot fake them. **A header cannot prove which proxy sent
+it**: every connection is from 127.0.0.1, and a program on this
+machine can send the same headers — but it could already call Saxby
+directly, and it is why the token exists. Proxied requests reach chat
+and the model list ONLY, never the memory broker, status, explain or
+the catch-all. The log does not yet say who called through the proxy
+(#50), because a login names a person and `log/client.js` stores apps.
+
+**One kind of browser client may be let in: an extension, by its
+exact origin in `allowed_origins`.** Off by default. A browser sets
+`Origin` itself, so a web page cannot claim an extension's, and that
+is the whole basis for trusting the header. No wildcards:
+`chrome-extension://*`, which extension READMEs tell Ollama users to
+set in `OLLAMA_ORIGINS`, lets in every extension in the browser. No
+web-page
+origins: a page would also need CORS answers, and a guard that passes
+a request whose response the page cannot read has only let the side
+effects through. An allowed extension gets the same two routes as a
+proxied client. Because every extension sends the browser's
+`User-Agent`, its client signature is its id, `ext-<id>` — the one
+place identity comes from a header other than `User-Agent` or an app
+header, and still never from a credential.
+
+**A request field a client cannot send comes from `client_defaults`,
+keyed by client signature.** One field, one value:
+`reasoning_effort: "none"`, the only value safe on every model (see
+Ecosystem facts). Per client rather than per model, because the
+default model also serves chat and code. Per client rather than per
+persona, because a persona route would hinge on Tier 3 recognising
+the client's template every time, and one miss brings back a
+13-second answer with nothing to show why; the `User-Agent` is known
+on every request. The request's own value always wins, and what Saxby
+added is stored on the row.
 
 **The memory broker lives in Saxby, and fails closed.** On Oct. 27,
 2026, an uncapped PyTorch job grew to 122 GiB beside two loaded models
@@ -387,6 +480,13 @@ OpenAI-compatible endpoint, so token counts come free.
 Ollama's `/v1/*` endpoints IGNORE per-request `options` (`num_ctx`)
 and `keep_alive`; only `/api/*` accepts them. Per-persona context
 sizing would need an optional Ollama capability layer. Deferred.
+
+Ollama's `/v1/chat/completions` honours `reasoning_effort`. `"none"`
+turns reasoning off and is accepted by every model; any other value
+gets a 400, "does not support thinking", from a model with no
+reasoning. `think: false` is IGNORED on `/v1` — the model reasons
+anyway. Checked on 0.40.15 with a 31B reasoning model and a 3B model
+without.
 
 `OLLAMA_MAX_LOADED_MODELS` is a ceiling, not a reservation — models
 load concurrently only if they also fit in available memory.

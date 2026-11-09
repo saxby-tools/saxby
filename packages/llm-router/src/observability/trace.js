@@ -112,6 +112,19 @@ export function startTrace(label) {
             );
         },
 
+        //  Fields Saxby added from `client_defaults`.
+        defaults(signature, added) {
+            if (currentLevel < LEVEL_VERBOSE) {
+                return;
+            }
+
+            const fields = Object.entries(added)
+                .map(([field, value]) => `${field}=${value}`)
+                .join(" ");
+
+            emit(id, "DEFAULT", `client=${signature} ${fields}`);
+        },
+
         extract(extracted) {
             if (currentLevel < LEVEL_VERBOSE) {
                 return;
