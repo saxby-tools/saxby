@@ -450,6 +450,24 @@ paths, so a changed PATH can't swap one out; Linux needs only `kill`.
 It lives in `SAXBYD_RUN` in [`scripts/build.js`](scripts/build.js),
 and `deno task dev` takes the same flags.
 
+**The Docker image is the release's own binaries on a bare base, and
+every client of it needs the token.** `saxbytools/saxby` is
+distroless `cc`, because Deno-compiled binaries need glibc and libgcc
+and nothing else; it runs as `nonroot`, with one volume at `/data`
+and `XDG_CONFIG_HOME=/data`, since config, log, vectors and token are
+one tree. The workflow copies the release's Linux tarballs in rather
+than compiling a fifth time, so the image and the tarball hold the
+same bytes. In a container saxbyd binds `0.0.0.0` by config, never by
+an env var or a second build of the binary. The container's own
+loopback is the only thing local to it, so the host through a
+published port and the next container over both send the token; that
+is the right default where `-p 11435:11435` reaches every interface.
+Tags are `X.Y.Z` and `X.Y`, with no `latest` before v1.0.0, since
+every v0.* release is a pre-release. Signed by digest with cosign,
+keyless. The memory broker stays a feature of a native install: in a
+container it cannot see the host's processes, so it fails closed and
+says why.
+
 **Rejected and why:** a hosted router model (opaque dispatcher —
 Saxby's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
