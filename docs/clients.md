@@ -58,7 +58,8 @@ ENABLE_OLLAMA_API=false
 `host.docker.internal` is how a container reaches your machine.
 Saxby listens only on `127.0.0.1`, and Docker Desktop on macOS
 routes `host.docker.internal` to the host's loopback, so this works
-as is.
+as is. Saxby sees the container as a local client: the API key can
+be anything, and Saxby's API token is not needed.
 
 **On Linux**, a container cannot reach the host's loopback through
 Docker's bridge network. Run Open WebUI with host networking
