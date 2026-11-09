@@ -1,0 +1,171 @@
+#  =====================================================================
+#  Docker
+#  =====================================================================
+#  Publishes saxbytools/saxby to Docker Hub, beside the channels in
+#  publish.yml. A file of its own so that it can also be run by hand
+#  without setting those off.
+#
+#    a release is published   the release's own Linux tarballs go into
+#                             the image, so it holds the same bytes.
+#                             Pushed, then signed.
+#    Run workflow (manual)    a dry run: this branch's binaries are
+#                             compiled here and the image is built for
+#                             both platforms. Nothing is pushed.
+#
+#  Tags: X.Y.Z, which never moves, and X.Y, which follows the newest
+#  patch release. No `latest` until v1.0.0: every v0.* release is a
+#  pre-release, and `latest` should not point at one. A tag with a
+#  suffix (v1.0.0-rc.1) publishes nothing, as in publish.yml.
+#
+#  The image is signed with cosign, keyless: the signature is tied to
+#  this workflow's OIDC identity, so no signing key is stored. BuildKit
+#  attaches an SBOM and build provenance.
+#
+#  The login name is not a secret, so it is written here. DOCKER_PAT
+#  is a Docker Hub access token for that account.
+#
+#  The Dockerfile's only RUN step runs on the builder's own platform,
+#  so the arm64 image needs no emulation.
+
+name: docker
+
+on:
+    release:
+        types: [published]
+    workflow_dispatch:
+
+permissions: {}
+
+#  One at a time, so two quick releases cannot race the X.Y tag.
+concurrency:
+    group: docker
+
+env:
+    IMAGE: saxbytools/saxby
+    DOCKER_USER: saxbytools
+    PLATFORMS: linux/amd64,linux/arm64
+    RELEASE_URL: >-
+        https://github.com/${{ github.repository }}/releases/download
+
+jobs:
+    image:
+        if: >-
+            ${{ github.event_name == 'workflow_dispatch' ||
+            !contains(github.event.release.tag_name, '-') }}
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            #  actions/checkout v7.0.1
+            - name: Check out
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+            #  denoland/setup-deno v2.0.5
+            - name: Set up Deno
+              uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+              with:
+                  deno-version: 2.9.6
+
+            - name: Read the version
+              run: |
+                  version="$(deno run --allow-read scripts/version.js)"
+                  echo "VERSION=$version" >> "$GITHUB_ENV"
+                  echo "MINOR=${version%.*}" >> "$GITHUB_ENV"
+
+            #  A release: the tag must be the version this checkout
+            #  carries, or the tarballs below would not match it.
+            - name: Tag matches package version
+              if: github.event_name == 'release'
+              env:
+                  TAG: ${{ github.event.release.tag_name }}
+              run: >-
+                  deno run --allow-read scripts/version.js
+                  --expect "${TAG#v}"
+
+            - name: Download the release's Linux tarballs
+              if: github.event_name == 'release'
+              env:
+                  TAG: ${{ github.event.release.tag_name }}
+              run: |
+                  mkdir -p dist
+                  cd dist
+
+                  for target in linux-x64 linux-arm64; do
+                      name="saxby-$VERSION-$target.tar.gz"
+                      curl -fsSL -O "$RELEASE_URL/$TAG/$name"
+                      curl -fsSL -O "$RELEASE_URL/$TAG/$name.sha256"
+                  done
+
+                  sha256sum -c *.sha256
+
+                  for archive in *.tar.gz; do
+                      tar -xzf "$archive"
+                  done
+
+            - name: Build the Linux binaries (dry run)
+              if: github.event_name == 'workflow_dispatch'
+              run: deno task build linux-x64 linux-arm64
+
+            - name: Lay out the build context
+              run: deno task docker-context all
+
+            #  The default builder cannot make a two-platform image.
+            - name: Create a builder
+              run: docker buildx create --use
+
+            - name: Build (dry run)
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  docker buildx build \
+                      --platform "$PLATFORMS" \
+                      --file packaging/Dockerfile \
+                      --build-arg "VERSION=$VERSION" \
+                      --build-arg "REVISION=$GITHUB_SHA" \
+                      dist/docker
+
+            - name: Log in to Docker Hub
+              if: github.event_name == 'release'
+              env:
+                  DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
+              run: >-
+                  printf '%s' "$DOCKER_PAT" |
+                  docker login --username "$DOCKER_USER" --password-stdin
+
+            - name: Build and push
+              if: github.event_name == 'release'
+              run: |
+                  docker buildx build \
+                      --platform "$PLATFORMS" \
+                      --file packaging/Dockerfile \
+                      --build-arg "VERSION=$VERSION" \
+                      --build-arg "REVISION=$GITHUB_SHA" \
+                      --tag "$IMAGE:$VERSION" \
+                      --tag "$IMAGE:$MINOR" \
+                      --provenance=mode=max \
+                      --sbom=true \
+                      --metadata-file metadata.json \
+                      --push \
+                      dist/docker
+
+                  digest="$(jq -r '."containerimage.digest"' metadata.json)"
+
+                  case "$digest" in
+                      sha256:*) ;;
+                      *) echo "No image digest in metadata.json"; exit 1 ;;
+                  esac
+
+                  echo "DIGEST=$digest" >> "$GITHUB_ENV"
+
+            #  sigstore/cosign-installer v4.1.3
+            - name: Install cosign
+              if: github.event_name == 'release'
+              uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532
+
+            #  By digest, never by tag: a tag can be moved after the
+            #  signature is made, and a digest cannot.
+            - name: Sign the image
+              if: github.event_name == 'release'
+              run: cosign sign --yes "$IMAGE@$DIGEST"
