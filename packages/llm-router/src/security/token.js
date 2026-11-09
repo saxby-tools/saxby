@@ -14,26 +14,39 @@ import {
     TOKEN_VALID,
 } from "./guard.js";
 
-//  "Bearer <token>", the scheme matched in any case, as HTTP requires.
-const BEARER = /^Bearer\x20+(\S+)\s*$/i;
+//  "Bearer <token>", the scheme matched in any case and followed by
+//  spaces or tabs, as HTTP allows.
+const BEARER = /^Bearer[\x20\t]+(\S+)$/i;
+
+//  A request may carry several Authorization headers, which arrive
+//  joined by commas.
+const CREDENTIAL_SEPARATOR = ",";
 
 /**
- * Pulls the token out of an Authorization header.
+ * Pulls every bearer token out of an Authorization header.
+ *
+ * All of them, not the first: main.js keeps Saxby's token from the
+ * backend by asking whether the request carried it, and a token
+ * hidden behind a second credential would otherwise be passed on.
  * @param {string | null | undefined} authorization
- * @returns {string | null} null when there is no bearer token
+ * @returns {string[]} empty when there is no bearer token
  */
-function readBearer(authorization) {
+function readBearers(authorization) {
     if (!authorization) {
-        return null;
+        return [];
     }
 
-    const match = authorization.match(BEARER);
+    const found = [];
 
-    if (!match) {
-        return null;
+    for (const credential of authorization.split(CREDENTIAL_SEPARATOR)) {
+        const match = credential.trim().match(BEARER);
+
+        if (match) {
+            found.push(match[1]);
+        }
     }
 
-    return match[1];
+    return found;
 }
 
 /**
@@ -49,15 +62,21 @@ export function tokenStateFor(authorization, apiToken) {
         return TOKEN_UNAVAILABLE;
     }
 
-    const presented = readBearer(authorization);
+    const presented = readBearers(authorization);
 
-    if (presented === null) {
+    if (presented.length === 0) {
         return TOKEN_MISSING;
     }
 
-    if (sameApiToken(presented, apiToken)) {
-        return TOKEN_VALID;
+    //  Every one is compared, so the time taken does not say which
+    //  position matched.
+    let matched = false;
+
+    for (const candidate of presented) {
+        if (sameApiToken(candidate, apiToken)) {
+            matched = true;
+        }
     }
 
-    return TOKEN_INVALID;
+    return matched ? TOKEN_VALID : TOKEN_INVALID;
 }
