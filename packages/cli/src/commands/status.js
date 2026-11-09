@@ -9,12 +9,17 @@
 //    0   saxbyd is serving this instance on its port
 //    1   nothing answers, something else holds the port, or the
 //        config cannot be read
+//
+//  A saved config that saxbyd could not apply is a warning under the
+//  line, and still exit 0: the daemon is serving, on the config it
+//  had, so a health check must not restart it for that.
 
 import { Command } from "@cliffy/command";
 import {
     fetchInstanceStatus,
     instancePhrase,
     isPortHeld,
+    listConfigWarnings,
     loadConfig,
     probeHostFor,
     resolveInstanceName,
@@ -71,4 +76,8 @@ export const statusCommand = new Command()
                 `${instancePhrase(instance)} on ${probeHost}:${port} ` +
                 `(pid ${holder.pid})`,
         );
+
+        for (const warning of listConfigWarnings(holder)) {
+            console.warn(`⚠️  ${warning}`);
+        }
     });
