@@ -60,12 +60,48 @@ Deno.test("token — the first read writes one, owner-only", async () => {
     });
 });
 
-Deno.test("token — the instance folder is made if missing", async () => {
+Deno.test("token — a missing instance folder is never invented", async () => {
     await withDir(async (dir) => {
-        const nested = `${dir}/instances/dev`;
-        const made = await readOrCreateApiToken(nested);
+        const missing = `${dir}/instances/nosuch`;
 
-        assertEquals(await readApiToken(nested), made.token);
+        await assertRejects(
+            () => readOrCreateApiToken(missing),
+            Deno.errors.NotFound,
+        );
+
+        await assertRejects(
+            () => writeApiToken(missing, "new-token"),
+            Deno.errors.NotFound,
+        );
+
+        await assertRejects(() => Deno.stat(missing), Deno.errors.NotFound);
+    });
+});
+
+Deno.test("token — writers racing at first boot agree on one", async () => {
+    await withDir(async (dir) => {
+        const found = await Promise.all(
+            Array.from({ length: 8 }, () => readOrCreateApiToken(dir)),
+        );
+
+        const tokens = new Set(found.map((each) => each.token));
+        const creators = found.filter((each) => each.created);
+
+        assertEquals(tokens.size, 1);
+        assertEquals(creators.length, 1);
+        assertEquals(await readApiToken(dir), found[0].token);
+    });
+});
+
+Deno.test("token — no staging file is left behind", async () => {
+    await withDir(async (dir) => {
+        await readOrCreateApiToken(dir);
+        await readOrCreateApiToken(dir);
+        await writeApiToken(dir, "new-token");
+
+        const names = [...Deno.readDirSync(dir)].map((entry) => entry.name);
+
+        assertEquals(names, [API_TOKEN_FILE]);
     });
 });
 
