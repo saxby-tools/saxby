@@ -76,7 +76,9 @@ function isStatusShape(body) {
  * @param {string | null} [token] - the instance's API token, for a
  *     daemon that is not asked on loopback; none when omitted.
  * @returns {Promise<{instance: string | null, port: number,
- *     pid: number, version?: string} | null>} null when nothing
+ *     pid: number, version?: string, config?: {loaded_at: string,
+ *     declined: {at: string, reason: string} | null,
+ *     watch_error: string | null}} | null>} null when nothing
  *     answers or the answer is not from saxbyd.
  */
 export async function fetchSaxbyStatus(
@@ -120,6 +122,40 @@ export async function fetchSaxbyStatus(
     }
 
     return body;
+}
+
+/**
+ * What a status answer says is wrong between the config file and the
+ * config that is running, one entry each. Empty when the file on disk
+ * is what runs, and for a saxbyd too old to say.
+ * @param {Awaited<ReturnType<typeof fetchSaxbyStatus>>} holder
+ * @returns {string[]}
+ */
+export function listConfigWarnings(holder) {
+    const state = holder?.config;
+
+    if (!state) {
+        return [];
+    }
+
+    const warnings = [];
+
+    if (state.declined) {
+        warnings.push(
+            `The config on disk is NOT applied; saxbyd still runs the ` +
+                `one loaded ${state.loaded_at}.
+${state.declined.reason}`,
+        );
+    }
+
+    if (state.watch_error) {
+        warnings.push(
+            `Config edits are NOT being watched ` +
+                `(${state.watch_error}). Restart to apply an edit.`,
+        );
+    }
+
+    return warnings;
 }
 
 /**
