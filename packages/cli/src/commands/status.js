@@ -13,6 +13,10 @@
 //  A saved config that saxbyd could not apply is a warning under the
 //  line, and still exit 0: the daemon is serving, on the config it
 //  had, so a health check must not restart it for that.
+//
+//  A config that cannot be READ is exit 1, as it always was: the port
+//  is in that file, so there is nowhere to ask. saxbyd may well still
+//  be serving the config it had, and the message says so.
 
 import { Command } from "@cliffy/command";
 import {
@@ -26,6 +30,10 @@ import {
 } from "@saxby/core";
 
 const EXIT_DOWN = 1;
+
+const STILL_SERVING_HINT =
+    "   A saxbyd that was already running keeps serving the config " +
+    "it had.";
 
 function describeDown(port, probeHost) {
     if (isPortHeld(port, probeHost)) {
@@ -45,9 +53,17 @@ export const statusCommand = new Command()
 
         try {
             instance = resolveInstanceName(options.instance);
-            config = await loadConfig(instance);
         } catch (err) {
             console.error(`❌ ${err.message}`);
+            Deno.exit(EXIT_DOWN);
+        }
+
+        //  The loader's messages carry their own marker.
+        try {
+            config = await loadConfig(instance);
+        } catch (err) {
+            console.error(err.message);
+            console.error(STILL_SERVING_HINT);
             Deno.exit(EXIT_DOWN);
         }
 
