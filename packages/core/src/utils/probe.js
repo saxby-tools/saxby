@@ -5,6 +5,14 @@
 //  for the same one. The router answers /saxby/v1/status from memory
 //  with its instance name and pid, so a probe never reaches the
 //  upstream and never loads a model.
+//
+//  A daemon asked on 127.0.0.1 wants nothing from the caller. One
+//  bound to a single interface must be asked on that interface, and
+//  it sees that request arrive from an address that is not loopback,
+//  so the probe carries the instance's API token (config/token.js).
+
+import { getInstanceDir } from "../config/instance.js";
+import { readApiToken } from "../config/token.js";
 
 const PROBE_HOST = "127.0.0.1";
 const PROBE_TIMEOUT_MS = 1000;
@@ -65,17 +73,29 @@ function isStatusShape(body) {
  * Asks whatever holds a local port whether it is saxbyd.
  * @param {number} port
  * @param {string} [host] - from probeHostFor; loopback when omitted.
+ * @param {string | null} [token] - the instance's API token, for a
+ *     daemon that is not asked on loopback; none when omitted.
  * @returns {Promise<{instance: string | null, port: number,
  *     pid: number, version?: string} | null>} null when nothing
  *     answers or the answer is not from saxbyd.
  */
-export async function fetchSaxbyStatus(port, host = PROBE_HOST) {
+export async function fetchSaxbyStatus(
+    port,
+    host = PROBE_HOST,
+    token = null,
+) {
     const url = `http://${hostForUrl(host)}:${port}${STATUS_PATH}`;
+    const headers = {};
+
+    if (token !== null) {
+        headers.Authorization = `Bearer ${token}`;
+    }
 
     let response;
 
     try {
         response = await fetch(url, {
+            headers,
             signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
         });
     } catch {
@@ -100,6 +120,43 @@ export async function fetchSaxbyStatus(port, host = PROBE_HOST) {
     }
 
     return body;
+}
+
+/**
+ * The token to send when asking a daemon for its status: none on
+ * 127.0.0.1, where saxbyd asks for nothing, and the instance's own
+ * anywhere else. Sent nowhere it is not needed, since the port may be
+ * held by a program that is not saxbyd.
+ * @param {string} listenHost - config.listen_host
+ * @param {string | null} instance
+ * @returns {Promise<string | null>} null also when the token cannot
+ *     be read; the probe then reports the daemon as not answering.
+ */
+export async function probeTokenFor(listenHost, instance) {
+    if (probeHostFor(listenHost) === PROBE_HOST) {
+        return null;
+    }
+
+    try {
+        return await readApiToken(getInstanceDir(instance));
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Asks the saxbyd that a config describes for its status, where it
+ * listens and with what it needs to be answered.
+ * @param {{ listen_port: number, listen_host: string }} config
+ * @param {string | null} instance
+ * @returns {ReturnType<typeof fetchSaxbyStatus>}
+ */
+export async function fetchInstanceStatus(config, instance) {
+    return await fetchSaxbyStatus(
+        config.listen_port,
+        probeHostFor(config.listen_host),
+        await probeTokenFor(config.listen_host, instance),
+    );
 }
 
 /**
