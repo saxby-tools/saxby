@@ -100,8 +100,10 @@ and start it after editing the dev instance's config.
 | `route_background_tasks` | `true` | Treat `stream: false` as background |
 | `log_prompts` | `false` | Store prompt text in the decision log |
 | `client_names` | `{}` | Friendly names for client signatures |
+| `client_defaults` | `{}` | Request fields filled in for a client; see [Client defaults](#client-defaults) |
 | `log_path` | instance folder | Where the decision log lives |
 | `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
+| `trusted_proxies` | `[]` | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies) |
 
 Unknown fields are an error, not a warning. A misspelled key such as
 `listen_prot` stops the boot instead of being ignored.
@@ -363,9 +365,108 @@ when Open WebUI's own headers are present:
 The raw `User-Agent` is stored on every row too, so a name added
 later still applies to old traffic.
 
+###  Client defaults
+
+`client_defaults` fills in a request field for one client when the
+request leaves it out. It is for a client you cannot configure, such
+as a phone keyboard that sends a fixed request. The key is the same
+signature `client_names` uses:
+
+```jsonc
+"client_defaults": {
+    "leantype": { "reasoning_effort": "none" }
+}
+```
+
+`reasoning_effort` is the only field, and `"none"` is its only value.
+It turns off a model's reasoning for that client. On the reference
+setup, one grammar fix on a 31B model took 5.2 seconds with reasoning
+and 0.6 without, with the same answer.
+
+Three rules:
+
+- A value the client sends always wins. Saxby only fills a gap.
+- It applies however the request names a model: `saxby`,
+  `saxby/<model>` or a raw name.
+- What Saxby added is stored on the row, in the `client_defaults`
+  column, and printed by `--verbose` as a `DEFAULT` line. A row with
+  nothing there was sent as the client wrote it.
+
+Only `"none"` is accepted because it is the only value safe on every
+model. Ollama answers 400 to any other value when the model has no
+reasoning to turn down, and routing may pick such a model.
+
+The signature comes from the `User-Agent`, which any client can set.
+That is fine for a preference like this one. It is not a way to
+restrict what a client may do.
+
 `log_path` moves the decision log. Leave it unset in a named instance:
 its log then stays in the instance's folder. See
 [Instances](instances.md).
+
+##  Trusted proxies
+
+Saxby listens on `127.0.0.1` and refuses every request that came
+through a proxy. `trusted_proxies` names the one exception: Tailscale
+Serve, so your own devices can reach Saxby over your tailnet.
+
+```jsonc
+"trusted_proxies": [
+    { "kind": "tailscale-serve", "host": "my-mac.my-tailnet.ts.net" }
+]
+```
+
+`kind` is always `tailscale-serve`; no other proxy can be named.
+`host` is the machine's full tailnet name, with no `https://` and no
+port. It is empty by default, and `saxby config generate` leaves it
+out.
+
+Saxby does not set Tailscale up. On the machine running Saxby,
+something like this publishes it to your tailnet over HTTPS:
+
+```bash
+tailscale serve --bg --https 11435 http://127.0.0.1:11435
+```
+
+Clients then use `https://my-mac.my-tailnet.ts.net:11435/v1`.
+
+**Saxby still checks no credentials.** A token the client sends is
+ignored. Whoever your tailnet's access rules let reach this machine
+on that port can use Saxby, so those rules are the lock. That suits
+one person's tailnet. On a shared one, restrict the port in
+Tailscale first.
+[Issue #49](https://github.com/saxby-tools/saxby/issues/49) tracks a
+token. Every boot prints the trusted proxy, so it is never on
+quietly.
+
+What Saxby does check is that a proxied request fits Serve and
+nothing else. All of these must hold:
+
+- The connection comes from this machine.
+- `Host` is the configured `host`.
+- The only forwarding headers are the three Serve sends:
+  `X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto`.
+- `X-Forwarded-For` is one tailnet address.
+- It did not come through Tailscale Funnel, which is the public
+  internet.
+- It did not come from a web page.
+
+A request that fails one gets a 403 that says which; see
+[Troubleshooting](troubleshooting.md#proxy_not_trusted).
+
+Proxied clients reach `/v1/chat/completions` and `/v1/models` only.
+The memory broker, the status and explain routes and Ollama's own API
+stay on this machine.
+
+Two limits to know:
+
+- The decision log names the app, from its `User-Agent`, as it does
+  for local clients. It does not record which person or device
+  called.
+  [Issue #50](https://github.com/saxby-tools/saxby/issues/50) tracks
+  that.
+- A program on this machine can send the same headers Serve does.
+  It could already call Saxby directly, so this gives it nothing new.
 
 ##  Memory
 

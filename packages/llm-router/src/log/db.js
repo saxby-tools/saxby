@@ -98,6 +98,7 @@ const INSERT_COLUMNS = [
     "prompt_hash_scheme",
     "prompt",
     "system_prefix",
+    "client_defaults",
 ];
 
 const INSERT_SQL = `
@@ -541,6 +542,8 @@ export async function openDecisionLog(path, config, keyPath = null) {
             prompt: config.log_prompts ? entry.prompt : null,
 
             system_prefix: entry.systemPrefix ?? null,
+
+            client_defaults: toJson(entry.clientDefaults),
         };
 
         enqueue({

@@ -5,6 +5,23 @@ export const DEFAULT_MARGIN_GIB = 8;
 export const DEFAULT_WAIT_TIMEOUT_S = 120;
 export const DEFAULT_HEARTBEAT_INTERVAL_S = 10;
 
+//  The one kind of proxy Saxby knows how to judge. A kind is added
+//  only with the checks that make it safe (llm-router's guard.js).
+export const PROXY_KIND_TAILSCALE_SERVE = "tailscale-serve";
+
+//  A bare DNS name: no scheme, no port, no path.
+const PROXY_HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
+
+//  The one reasoning_effort Saxby will add for a client. It is the
+//  only value safe on every model: Ollama answers 400 to any other
+//  when the model has no reasoning to turn down (seen on 0.40.15).
+export const REASONING_EFFORT_NONE = "none";
+
+//  A client signature as the router's log/client.js spells it: the
+//  User-Agent's product token, lowercased. "LeanType/1.0" is
+//  "leantype". A key in any other shape would never match a client.
+const CLIENT_SIGNATURE = /^[a-z][a-z0-9_.-]*$/;
+
 export const TagSchema = v.pipe(
     v.string(),
     v.regex(
@@ -105,6 +122,34 @@ export const MemorySchema = v.strictObject({
     ceiling_gib: v.optional(SizeGibSchema),
 });
 
+export const TrustedProxySchema = v.strictObject({
+    kind: v.picklist(
+        [PROXY_KIND_TAILSCALE_SERVE],
+        `kind must be '${PROXY_KIND_TAILSCALE_SERVE}'`,
+    ),
+    //  The name clients use to reach the proxy, as it arrives in the
+    //  Host header: "my-mac.my-tailnet.ts.net".
+    host: v.pipe(
+        v.string("host is required"),
+        v.regex(
+            PROXY_HOST,
+            "host must be a bare name, with no https:// and no port",
+        ),
+    ),
+});
+
+//  Request fields Saxby fills in for one client when the request
+//  leaves them out. A closed list: each field here is one the chat
+//  route knows how to add and the decision log knows how to show.
+export const ClientDefaultsSchema = v.strictObject({
+    reasoning_effort: v.optional(
+        v.picklist(
+            [REASONING_EFFORT_NONE],
+            `reasoning_effort must be '${REASONING_EFFORT_NONE}'`,
+        ),
+    ),
+});
+
 export const SaxbyConfigSchema = v.strictObject({
     listen_port: v.optional(
         v.pipe(
@@ -130,8 +175,29 @@ export const SaxbyConfigSchema = v.strictObject({
     //  the operator always can. Hashes group repeats without text.
     log_prompts: v.optional(v.boolean(), false),
     client_names: v.optional(v.record(v.string(), v.string()), {}),
+    //  Keyed by client signature, as client_names is. A client that
+    //  cannot be told to send a field itself, such as a phone
+    //  keyboard, gets it here. The request's own value always wins.
+    client_defaults: v.optional(
+        v.record(
+            v.pipe(
+                v.string(),
+                v.regex(
+                    CLIENT_SIGNATURE,
+                    "a client signature is lowercase, such as 'leantype'",
+                ),
+            ),
+            ClientDefaultsSchema,
+        ),
+        {},
+    ),
     log_path: v.optional(v.string()),
     memory: v.optional(MemorySchema, {}),
+    //  Empty unless the operator names one, and then every proxied
+    //  request is still refused unless it fits that proxy exactly.
+    //  Saxby checks no credentials, so naming a proxy hands the
+    //  question of who gets in to that proxy.
+    trusted_proxies: v.optional(v.array(TrustedProxySchema), []),
 });
 
 /**
