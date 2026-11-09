@@ -184,6 +184,16 @@ looks otherwise. The exceptions are ones you name yourself; see
 refusal is logged as a line starting with `🚫`, with its reason and
 source.
 
+###  remote_path_not_allowed
+
+```
+Refused: 'POST /saxby/v1/reservations' is served only to programs on the machine running Saxby. Other machines get /v1/chat/completions and /v1/models.
+```
+
+The request came from another machine with the right token, and
+asked for something only a local program may use. Run it on the
+machine running Saxby.
+
 ###  token_unavailable
 
 ```
