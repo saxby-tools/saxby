@@ -12,6 +12,14 @@ export const PROXY_KIND_TAILSCALE_SERVE = "tailscale-serve";
 //  A bare DNS name: no scheme, no port, no path.
 const PROXY_HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
 
+//  A browser extension's origin: "chrome-extension://<id>" or
+//  "moz-extension://<uuid>". Lowercase, as browsers send it, with no
+//  path and no wildcard. The second group is the extension's id.
+//  The only kind of origin Saxby lets in: a web page would also need
+//  CORS answers, which Saxby does not give.
+export const EXTENSION_ORIGIN =
+    /^(chrome-extension|moz-extension|safari-web-extension):\/\/([a-z0-9-]+)$/;
+
 //  The one reasoning_effort Saxby will add for a client. It is the
 //  only value safe on every model: Ollama answers 400 to any other
 //  when the model has no reasoning to turn down (seen on 0.40.15).
@@ -198,6 +206,23 @@ export const SaxbyConfigSchema = v.strictObject({
     //  Saxby checks no credentials, so naming a proxy hands the
     //  question of who gets in to that proxy.
     trusted_proxies: v.optional(v.array(TrustedProxySchema), []),
+    //  Browser extensions that may call Saxby, each by its exact
+    //  origin. Empty by default: every request from a browser is
+    //  refused. A browser sets Origin itself, so a web page cannot
+    //  claim to be an extension.
+    allowed_origins: v.optional(
+        v.array(
+            v.pipe(
+                v.string(),
+                v.regex(
+                    EXTENSION_ORIGIN,
+                    "an origin must be one browser extension, such as " +
+                        "'chrome-extension://<id>', with no wildcard",
+                ),
+            ),
+        ),
+        [],
+    ),
 });
 
 /**
