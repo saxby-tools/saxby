@@ -352,3 +352,148 @@ Deno.test("proxy — naming a proxy changes nothing for local clients", () => {
         "management_not_allowed",
     );
 });
+
+//  =====================================================================
+//  Allowed origins
+//  =====================================================================
+//  A browser extension is the one browser client let in, by its exact
+//  origin. These stand in for a Chrome extension's request: the header
+//  set is a guess, not a capture.
+
+const EXTENSION = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+
+const EXTENSION_HEADERS = {
+    "host": "127.0.0.1:11435",
+    "origin": EXTENSION,
+    "content-type": "application/json",
+    "authorization": "Bearer placeholder",
+    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/142.0",
+    "sec-fetch-mode": "cors",
+};
+
+function inspectBrowser(headers, overrides = {}) {
+    return inspectRequest({
+        headers: new Headers(headers),
+        path: "/v1/chat/completions",
+        method: "POST",
+        remoteHostname: "127.0.0.1",
+        allowedOrigins: [EXTENSION],
+        ...overrides,
+    });
+}
+
+function browserCode(headers, overrides) {
+    return inspectBrowser(headers, overrides)?.code ?? null;
+}
+
+Deno.test("origin — a listed extension passes for chat", () => {
+    assertEquals(inspectBrowser(EXTENSION_HEADERS), null);
+});
+
+Deno.test("origin — with none listed, the extension is refused", () => {
+    const verdict = inspectBrowser(EXTENSION_HEADERS, { allowedOrigins: [] });
+
+    assertEquals(verdict.code, "origin_not_allowed");
+    assertEquals(verdict.message.includes("allowed_origins"), true);
+    assertEquals(verdict.message.includes(EXTENSION), true);
+});
+
+Deno.test("origin — another extension is refused", () => {
+    const headers = {
+        ...EXTENSION_HEADERS,
+        "origin": "chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba",
+    };
+
+    assertEquals(browserCode(headers), "origin_not_allowed");
+});
+
+Deno.test("origin — a web page is refused whatever is listed", () => {
+    const origins = [
+        "https://evil.example",
+        "null",
+        "http://localhost",
+        `${EXTENSION}.evil.example`,
+        `https://${EXTENSION}`,
+    ];
+
+    for (const origin of origins) {
+        const verdict = inspectBrowser({ ...EXTENSION_HEADERS, origin });
+
+        assertEquals(verdict.code, "origin_not_allowed", origin);
+        assertEquals(verdict.message.includes("web page"), true, origin);
+    }
+});
+
+Deno.test("origin — an extension gets chat and models, nothing else", () => {
+    const allowed = [
+        ["POST", "/v1/chat/completions"],
+        ["GET", "/v1/models"],
+        ["GET", "/v1/models/saxby"],
+    ];
+
+    for (const [method, path] of allowed) {
+        assertEquals(
+            browserCode(EXTENSION_HEADERS, { method, path }),
+            null,
+            `${method} ${path}`,
+        );
+    }
+
+    const refused = [
+        ["POST", "/saxby/v1/reservations"],
+        ["GET", "/saxby/v1/status"],
+        ["POST", "/saxby/v1/explain"],
+        ["GET", "/api/tags"],
+        ["POST", "/api/pull"],
+        ["OPTIONS", "/v1/chat/completions"],
+        ["POST", "/models"],
+    ];
+
+    for (const [method, path] of refused) {
+        assertEquals(
+            browserCode(EXTENSION_HEADERS, { method, path }),
+            "origin_path_not_allowed",
+            `${method} ${path}`,
+        );
+    }
+});
+
+Deno.test("origin — a listed extension still needs a local Host", () => {
+    const headers = { ...EXTENSION_HEADERS, "host": "attacker.example" };
+
+    assertEquals(browserCode(headers), "host_not_allowed");
+});
+
+Deno.test("origin — a listed extension passes through a named proxy", () => {
+    const headers = { ...SERVE, "origin": EXTENSION };
+
+    assertEquals(
+        inspectBrowser(headers, { trustedProxies: TRUSTED }),
+        null,
+    );
+});
+
+Deno.test("origin — through a proxy that is not named, still refused", () => {
+    const headers = { ...SERVE, "origin": EXTENSION };
+
+    assertEquals(browserCode(headers), "proxy_attribution_required");
+
+    assertEquals(
+        browserCode(
+            { ...headers, "host": "other.example.ts.net" },
+            { trustedProxies: TRUSTED },
+        ),
+        "proxy_not_trusted",
+    );
+});
+
+Deno.test("origin — listing an extension changes nothing for others", () => {
+    for (const headers of [OPEN_WEBUI, OPENCLAW, CURL]) {
+        assertEquals(inspectBrowser(headers), null);
+    }
+
+    assertEquals(
+        browserCode(CURL, { path: "/saxby/v1/status", method: "GET" }),
+        null,
+    );
+});
