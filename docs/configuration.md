@@ -100,6 +100,7 @@ and start it after editing the dev instance's config.
 | `route_background_tasks` | `true` | Treat `stream: false` as background |
 | `log_prompts` | `false` | Store prompt text in the decision log |
 | `client_names` | `{}` | Friendly names for client signatures |
+| `client_defaults` | `{}` | Request fields filled in for a client; see [Client defaults](#client-defaults) |
 | `log_path` | instance folder | Where the decision log lives |
 | `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
 
@@ -362,6 +363,41 @@ when Open WebUI's own headers are present:
 
 The raw `User-Agent` is stored on every row too, so a name added
 later still applies to old traffic.
+
+###  Client defaults
+
+`client_defaults` fills in a request field for one client when the
+request leaves it out. It is for a client you cannot configure, such
+as a phone keyboard that sends a fixed request. The key is the same
+signature `client_names` uses:
+
+```jsonc
+"client_defaults": {
+    "leantype": { "reasoning_effort": "none" }
+}
+```
+
+`reasoning_effort` is the only field, and `"none"` is its only value.
+It turns off a model's reasoning for that client. On the reference
+setup, one grammar fix on a 31B model took 5.2 seconds with reasoning
+and 0.6 without, with the same answer.
+
+Three rules:
+
+- A value the client sends always wins. Saxby only fills a gap.
+- It applies however the request names a model: `saxby`,
+  `saxby/<model>` or a raw name.
+- What Saxby added is stored on the row, in the `client_defaults`
+  column, and printed by `--verbose` as a `DEFAULT` line. A row with
+  nothing there was sent as the client wrote it.
+
+Only `"none"` is accepted because it is the only value safe on every
+model. Ollama answers 400 to any other value when the model has no
+reasoning to turn down, and routing may pick such a model.
+
+The signature comes from the `User-Agent`, which any client can set.
+That is fine for a preference like this one. It is not a way to
+restrict what a client may do.
 
 `log_path` moves the decision log. Leave it unset in a named instance:
 its log then stays in the instance's folder. See
