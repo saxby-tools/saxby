@@ -24,6 +24,8 @@ refusal is a 403 explained in [Troubleshooting](troubleshooting.md). Serving
 other machines needs per-client keys, which are planned after v1. The
 one exception is your own devices over Tailscale; see
 [A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale).
+A browser extension you choose can be let in too; see
+[A browser extension](#a-browser-extension).
 
 Use `saxby/<model>` to skip routing and reach one model directly.
 See [Routing](routing.md).
@@ -244,6 +246,31 @@ LeanType leaves `stream` unset, so it is not routed as background
 work; that rule needs an explicit `stream: false`. On the reference
 setup its requests matched no tier and reached the global default
 model.
+
+##  A browser extension
+
+An extension runs inside your browser, and Saxby refuses browsers.
+You can let one in by its exact origin. This example is
+[grammer-check](https://github.com/Mangesh-P/grammer-check), a
+grammar checker that calls an OpenAI-compatible endpoint.
+
+1. In the extension, choose its local-model option, set the base
+   URL to `http://127.0.0.1:11435/v1` and the model to `saxby`. From another machine on your tailnet, use the address
+   from [Trusted proxies](configuration.md#trusted-proxies) instead.
+2. Let it check something once. It fails with a 403 that names its
+   origin.
+3. Add that origin to `allowed_origins`, as
+   [Browser extensions](configuration.md#browser-extensions) shows,
+   and restart Saxby.
+
+This extension checks on every pause in typing and sends no
+`reasoning_effort` to a local endpoint (its source, read Nov. 8,
+2026). With a model that reasons by default, give it a
+`client_defaults` entry under its `ext-<id>` signature, or every
+pause costs a full round of reasoning.
+
+As with a keyboard, what it sends is stored if `log_prompts` is on:
+here that is the text of whatever field you are typing in.
 
 ##  Scripts and SDKs
 
