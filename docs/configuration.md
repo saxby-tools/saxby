@@ -34,9 +34,9 @@ config it started with. The log says what changed:
 🔄 Config reloaded: catalog, personas changed.
 ```
 
-An edit is applied whole or not at all. If the file is broken, saxbyd
-keeps the config it had and says why. You are looking at an editor,
-not at its log, so ask it:
+An edit is applied whole or not at all. If saxbyd cannot apply the
+file, it keeps the config it had and says why. You are looking at an
+editor, not at its log, so ask:
 
 ```bash
 saxby status
@@ -45,12 +45,20 @@ saxby status
 ```
 ✅ saxbyd 0.9.8 is serving the default instance on 127.0.0.1:11435 (pid 4598)
 ⚠️  The config on disk is NOT applied; saxbyd still runs the one loaded 2026-11-09T17:12:50.429Z.
-❌ Invalid config in ~/.config/saxby/config.jsonc:
-- unknown field 'listen_prot' — check the spelling
+memory changed, and that needs a restart. Restart to apply it: 'saxby service restart'.
 ```
 
-Fix the file and save again. `saxby service status` shows the same
-warning.
+`saxby service status` shows the same warning. If the file itself is
+broken, `saxby status` reads it too, so it prints the file's error
+and exits 1:
+
+```
+❌ Invalid config in ~/.config/saxby/config.jsonc:
+- unknown field 'listen_prot' — check the spelling
+   A saxbyd that was already running keeps serving the config it had.
+```
+
+Either way, fix the file and save again.
 
 Four settings cannot change while saxbyd runs: `listen_host`,
 `listen_port`, `log_path` and everything under `memory`. An edit that
@@ -74,12 +82,17 @@ Three things a save does not reach:
 
 - **The API token.** saxbyd reads it at boot only; see
   [The API token](#the-api-token).
-- **A symlinked config.** If `config.jsonc` is a link to a file in
-  another folder, saxbyd does not see edits to that file. Restart
-  after editing it.
+- **A file system that sends no change events.** Some network
+  shares send none, and saxbyd then never hears of the save. Restart
+  after an edit there.
 - **A changed model on the backend.** Pulling or removing a model
   changes no config file. Restart if Tier 3 was off for want of its
   embedder.
+
+A `config.jsonc` that is a symlink into another folder, as GNU Stow
+and dotfile repos make it, is watched where the real file lives. If
+you later point the link into a different folder, saxbyd says edits
+are no longer watched; restart once.
 
 `deno task dev` restarts on code changes and applies config changes
 live, like any other saxbyd.
