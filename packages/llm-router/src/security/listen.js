@@ -7,8 +7,8 @@
 //  word at boot about what the bind means, which main.js prints from
 //  these two answers:
 //
-//    not loopback          anyone who reaches the port can use the
-//                          models, since Saxby checks no credentials
+//    not loopback          other machines can reach the port, and
+//                          each must send the API token
 //    loopback, in a        the published port will never answer, so
 //    container             the usual first-run mistake is named
 //
