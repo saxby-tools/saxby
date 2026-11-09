@@ -1,10 +1,9 @@
 //  =====================================================================
 //  Request guard
 //  =====================================================================
-//  Saxby listens on loopback only and checks no credentials, so it
-//  must be sure every request really comes from a local, non-browser
-//  client. Three ways that assumption breaks, each refused here before
-//  any route runs:
+//  Saxby asks nothing of a local, non-browser client, so it must be
+//  sure which requests really are one. Three ways that assumption
+//  breaks, each refused here before any route runs:
 //
 //    a proxy on the same machine   Caddy or `tailscale serve` forwards
 //                                  strangers, and every request then
@@ -26,14 +25,17 @@
 //
 //  One way in from another machine: a proxy the operator names in
 //  `trusted_proxies`. The list is empty by default, and then every
-//  proxied request is refused as before. Saxby still checks no
-//  credentials, so a named proxy decides who gets in. Saxby checks
-//  only that the request fits that proxy and nothing else.
+//  proxied request is refused as before. Saxby checks that a proxied
+//  request fits that proxy and nothing else.
 //
 //  A header cannot prove which proxy sent it: every connection here
 //  is from 127.0.0.1, and a program on this machine can send any
-//  header it likes. That program could already call Saxby directly,
-//  so the checks below are about strangers, not about it.
+//  header it likes. That is what the API token is for. A request
+//  that does not come STRAIGHT from this machine, meaning a loopback
+//  connection with no forwarding header, must carry the instance's
+//  token (core's config/token.js). Local clients never need it. The
+//  token is checked before anything else is said, so a caller without
+//  it learns nothing about how this Saxby is set up.
 //
 //  One way in from a browser: an extension whose exact origin the
 //  operator lists in `allowed_origins`. A browser sets Origin itself,
@@ -81,16 +83,27 @@ const TAILNET_V4_SECOND_MIN = 64;
 const TAILNET_V4_SECOND_MAX = 127;
 const TAILNET_V6_PREFIX = "fd7a:115c:a1e0:";
 
-//  Where a proxy on this machine connects from.
-const LOOPBACK = new Set(["127.0.0.1", "::1"]);
+//  A connection from this machine: all of 127.0.0.0/8, ::1, and an
+//  IPv4 loopback address as a dual-stack listener reports it,
+//  "::ffff:127.0.0.1".
+const LOOPBACK_V4_PREFIX = "127.";
+const LOOPBACK_V6 = "::1";
+const MAPPED_V4_PREFIX = "::ffff:";
 
-//  All a proxied client or a browser extension may reach. Everything
-//  else stays with local programs: the memory broker, the status
-//  route with its pid, and the catch-all that passes Ollama's own API
+//  All a client that is not on this machine may reach, and a browser
+//  extension too. Everything else stays with local programs: the
+//  memory broker and the catch-all that passes Ollama's own API
 //  through.
 const CLIENT_CHAT = { method: "POST", path: "/v1/chat/completions" };
 const CLIENT_MODELS = { method: "GET", path: "/v1/models" };
 const CLIENT_ROUTES_HINT = "/v1/chat/completions and /v1/models";
+
+//  One more for a direct connection from another address: the status
+//  route. `saxby` asks it where saxbyd listens, and when that is one
+//  interface and not loopback, its own request arrives from that
+//  interface's address. A proxied client and an extension never get
+//  it.
+const REMOTE_STATUS = { method: "GET", path: "/saxby/v1/status" };
 
 //  Names a local client uses to reach Saxby. host.docker.internal is
 //  how a Docker Desktop container reaches the host; Niko's Open WebUI
@@ -114,6 +127,18 @@ const MANAGEMENT_PATHS = [
 ];
 
 const DOCS_HINT = "See docs/troubleshooting.md.";
+
+//  How the caller's token compares with this instance's. main.js
+//  works it out (security/token.js) so this file stays pure.
+//  UNAVAILABLE means saxbyd could not read its own token file: then
+//  nothing can be checked, and only local clients are served.
+export const TOKEN_VALID = "valid";
+export const TOKEN_INVALID = "invalid";
+export const TOKEN_MISSING = "missing";
+export const TOKEN_UNAVAILABLE = "unavailable";
+
+const TOKEN_HINT = "Run 'saxby token' on the machine running Saxby " +
+    "to see it.";
 
 function findProxyHeader(headers) {
     for (const name of headers.keys()) {
@@ -235,6 +260,98 @@ function refusal(status, code, message) {
     return { status, code, message };
 }
 
+/**
+ * Whether a connection's address is this machine's loopback. The
+ * address comes from the socket, never from a header. Anything that
+ * is not plainly loopback, an unknown address included, is not.
+ * @param {string | undefined} remoteHostname
+ * @returns {boolean}
+ */
+function isLoopbackAddress(remoteHostname) {
+    if (typeof remoteHostname !== "string") {
+        return false;
+    }
+
+    let address = remoteHostname.toLowerCase();
+
+    if (address === LOOPBACK_V6) {
+        return true;
+    }
+
+    if (address.startsWith(MAPPED_V4_PREFIX)) {
+        address = address.slice(MAPPED_V4_PREFIX.length);
+    }
+
+    if (!IPV4.test(address)) {
+        return false;
+    }
+
+    return address.startsWith(LOOPBACK_V4_PREFIX);
+}
+
+/**
+ * Whether a request comes straight from this machine: a loopback
+ * connection that no proxy forwarded.
+ */
+function isDirect(remoteHostname, proxyHeader) {
+    if (proxyHeader) {
+        return false;
+    }
+
+    return isLoopbackAddress(remoteHostname);
+}
+
+function isRemoteRoute(method, path) {
+    if (isClientRoute(method, path)) {
+        return true;
+    }
+
+    if (method !== REMOTE_STATUS.method) {
+        return false;
+    }
+
+    return path === REMOTE_STATUS.path;
+}
+
+/**
+ * Judges the token of a request that is not straight from this
+ * machine. The messages say nothing about this Saxby's config.
+ * @param {string} tokenState - one of the TOKEN_ constants
+ * @returns {{ status: number, code: string, message: string } | null}
+ */
+function inspectToken(tokenState) {
+    if (tokenState === TOKEN_VALID) {
+        return null;
+    }
+
+    if (tokenState === TOKEN_UNAVAILABLE) {
+        return refusal(
+            403,
+            "token_unavailable",
+            `Refused: this Saxby could not read its API token file, ` +
+                `so it serves only the machine it runs on. Its log ` +
+                `says why. ${DOCS_HINT}`,
+        );
+    }
+
+    if (tokenState === TOKEN_INVALID) {
+        return refusal(
+            401,
+            "token_invalid",
+            `Refused: that is not this Saxby's API token. ` +
+                `${TOKEN_HINT} ${DOCS_HINT}`,
+        );
+    }
+
+    return refusal(
+        401,
+        "token_required",
+        `Refused: this request did not come straight from the machine ` +
+            `running Saxby, so it needs the API token, sent as ` +
+            `'Authorization: Bearer <token>'. ${TOKEN_HINT} ${DOCS_HINT}`,
+    );
+}
+
 function notTrusted(message) {
     return refusal(403, "proxy_not_trusted", `${message} ${DOCS_HINT}`);
 }
@@ -254,7 +371,7 @@ function inspectProxied(request, trustedProxies) {
     //  True of every connection today, since Saxby listens on loopback
     //  only. Checked so that a later non-loopback listener cannot
     //  inherit this trust by accident.
-    if (!LOOPBACK.has(remoteHostname)) {
+    if (!isLoopbackAddress(remoteHostname)) {
         return notTrusted(
             `Refused: a proxied request must reach Saxby from this ` +
                 `machine, and this one came from ` +
@@ -368,10 +485,12 @@ function inspectOrigin(origin, request, allowedOrigins) {
  * @param {{ headers: Headers, path: string, method?: string,
  *     remoteHostname?: string,
  *     trustedProxies?: { kind: string, host: string }[],
- *     allowedOrigins?: string[] }} request
- *     method is read only for a proxied or browser request, and
- *     remoteHostname only for a proxied one; trustedProxies and
- *     allowedOrigins are the config's lists, empty when left out.
+ *     allowedOrigins?: string[], tokenState?: string }} request
+ *     method is read only for a proxied or browser request;
+ *     trustedProxies and allowedOrigins are the config's lists, empty
+ *     when left out. tokenState is one of the TOKEN_ constants and
+ *     counts as missing when left out, as an unknown remoteHostname
+ *     counts as another machine: both fail closed.
  * @returns {{ status: number, code: string, message: string } | null}
  *     null to allow; otherwise what to refuse with.
  */
@@ -379,6 +498,7 @@ export function inspectRequest(request) {
     const { headers, path } = request;
     const trustedProxies = request.trustedProxies ?? [];
     const allowedOrigins = request.allowedOrigins ?? [];
+    const tokenState = request.tokenState ?? TOKEN_MISSING;
     const proxyHeader = findProxyHeader(headers);
 
     if (proxyHeader) {
@@ -390,6 +510,16 @@ export function inspectRequest(request) {
                     `came through a proxy. Saxby only serves clients ` +
                     `on this machine directly. ${DOCS_HINT}`,
             );
+        }
+    }
+
+    const direct = isDirect(request.remoteHostname, proxyHeader);
+
+    if (!direct) {
+        const verdict = inspectToken(tokenState);
+
+        if (verdict) {
+            return verdict;
         }
     }
 
@@ -407,6 +537,21 @@ export function inspectRequest(request) {
     //  never carries. It has its own checks, and passes or fails there.
     if (proxyHeader) {
         return inspectProxied(request, trustedProxies);
+    }
+
+    //  A connection from another address, token in hand. The token
+    //  says the caller is allowed in, not that it is a local program,
+    //  so it gets the client routes and not the whole surface.
+    if (!direct) {
+        if (!isRemoteRoute(request.method, path)) {
+            return refusal(
+                403,
+                "remote_path_not_allowed",
+                `Refused: '${request.method} ${path}' is served only ` +
+                    `to programs on the machine running Saxby. Other ` +
+                    `machines get ${CLIENT_ROUTES_HINT}. ${DOCS_HINT}`,
+            );
+        }
     }
 
     const host = headers.get("host");

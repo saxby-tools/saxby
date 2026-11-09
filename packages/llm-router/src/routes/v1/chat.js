@@ -24,6 +24,13 @@ const CLIENT_DEFAULT_FIELDS = ["reasoning_effort"];
 function buildUpstreamHeaders(c) {
     const headers = { "Content-Type": "application/json" };
 
+    //  Saxby's own API token stops here (main.js sets the flag). Any
+    //  other Authorization value is the client's business with the
+    //  backend and is passed on.
+    if (c.get("sentApiToken")) {
+        return headers;
+    }
+
     const auth = c.req.header("Authorization");
 
     if (!auth) {

@@ -149,13 +149,61 @@ Saxby could not reach its upstream at http://127.0.0.1:11434: fetch failed
 Saxby is fine; the backend is not answering. Check that Ollama is
 running and that `upstream_url` is right.
 
+##  Requests are refused (401)
+
+A request that does not come straight from the machine running Saxby
+must carry the API token; see
+[The API token](configuration.md#the-api-token). Local clients never
+get these.
+
+###  token_required
+
+```
+Refused: this request did not come straight from the machine running Saxby, so it needs the API token, sent as 'Authorization: Bearer <token>'. Run 'saxby token' on the machine running Saxby to see it.
+```
+
+The client sent no token. Run `saxby token` on the machine running
+Saxby and paste the result into the client's API key field.
+
+###  token_invalid
+
+```
+Refused: that is not this Saxby's API token. Run 'saxby token' on the machine running Saxby to see it.
+```
+
+The client sent a token, and it is the wrong one. The usual causes
+are a placeholder key left over from local use, a token from another
+instance, or a token replaced by `saxby token rotate`.
+
 ##  Requests are refused (403)
 
-Saxby checks no credentials, so it serves only clients on the same
-machine and refuses anything that looks otherwise. The one exception
-is a proxy you name yourself; see
-[Trusted proxies](configuration.md#trusted-proxies). Each refusal is
-logged as a line starting with `🚫`, with its reason and source.
+Saxby serves clients on the same machine and refuses anything that
+looks otherwise. The exceptions are ones you name yourself; see
+[Trusted proxies](configuration.md#trusted-proxies) and
+[Browser extensions](configuration.md#browser-extensions). Each
+refusal is logged as a line starting with `🚫`, with its reason and
+source.
+
+###  remote_path_not_allowed
+
+```
+Refused: 'POST /saxby/v1/reservations' is served only to programs on the machine running Saxby. Other machines get /v1/chat/completions and /v1/models.
+```
+
+The request came from another machine with the right token, and
+asked for something only a local program may use. Run it on the
+machine running Saxby.
+
+###  token_unavailable
+
+```
+Refused: this Saxby could not read its API token file, so it serves only the machine it runs on. Its log says why.
+```
+
+Saxby could not read or create `api-token` in its config folder, so
+it cannot check anyone's token. The boot log has a line starting
+`⚠️  API token unavailable` with the cause. `saxby token rotate`
+writes a fresh file; restart Saxby after.
 
 ###  proxy_attribution_required
 
@@ -172,8 +220,7 @@ proxy.
 If the proxy is Tailscale Serve and the client is one of your own
 devices, name it in `trusted_proxies`; see
 [Trusted proxies](configuration.md#trusted-proxies). No other proxy
-can be trusted. Serving through one would need per-client keys,
-planned after v1.
+can be trusted.
 
 ###  proxy_not_trusted
 
@@ -252,9 +299,8 @@ job, not a router's. Run `ollama pull` or call Ollama on port 11434.
 ###  Another machine cannot connect
 
 Saxby listens on `127.0.0.1` only, so nothing beyond this machine
-can reach it directly. That is deliberate until per-client keys
-exist, after v1. The one way in is Tailscale Serve, for devices on
-your own tailnet; see
+can reach it directly. The way in is Tailscale Serve, for devices on
+your own tailnet, with the API token; see
 [Trusted proxies](configuration.md#trusted-proxies).
 
 ##  Requests go to the wrong model

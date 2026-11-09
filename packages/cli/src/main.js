@@ -6,6 +6,7 @@ import { instanceCommand } from "./commands/instance/index.js";
 import { probeCommand } from "./commands/probe.js";
 import { reserveCommand } from "./commands/reserve.js";
 import { serviceCommand } from "./commands/service/index.js";
+import { tokenCommand } from "./commands/token.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
 //  Global so `saxby -i dev config generate` and
@@ -25,6 +26,7 @@ await new Command()
     .command("probe", probeCommand)
     .command("reserve", reserveCommand)
     .command("service", serviceCommand)
+    .command("token", tokenCommand)
     .command("vram-guard-mac", vramGuardMacCommand)
     .command("completions", new CompletionsCommand())
     .parse(Deno.args);

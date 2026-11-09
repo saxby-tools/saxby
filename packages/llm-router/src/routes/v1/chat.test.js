@@ -42,7 +42,11 @@ function stubUpstream() {
     const requests = [];
 
     globalThis.fetch = (url, init) => {
-        requests.push({ url, body: JSON.parse(init.body) });
+        requests.push({
+            url,
+            body: JSON.parse(init.body),
+            headers: init.headers,
+        });
 
         return Promise.resolve(Response.json({ choices: [] }));
     };
@@ -286,4 +290,72 @@ Deno.test("defaults — nothing added is logged as nothing", async () => {
 
         assertEquals(entries[0].clientDefaults, null, userAgent);
     }
+});
+
+//  =====================================================================
+//  The API token stops at Saxby
+//  =====================================================================
+//  main.js flags a request that carried Saxby's own token. The route
+//  must not hand that secret to the backend. Any other Authorization
+//  value still passes, as it always has.
+
+function appWithToken(sentApiToken) {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", CONFIG);
+        c.set("log", null);
+        c.set("semantic", null);
+        c.set("broker", broker);
+
+        if (sentApiToken) {
+            c.set("sentApiToken", true);
+        }
+
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+async function upstreamHeadersFor(sentApiToken) {
+    const upstream = stubUpstream();
+
+    try {
+        const res = await quietly(() =>
+            appWithToken(sentApiToken).request("/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer the-secret",
+                },
+                body: JSON.stringify({
+                    model: "saxby/voxtral:32k",
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            })
+        );
+
+        await res.text();
+
+        return upstream.requests[0].headers;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("token — Saxby's own token stops at Saxby", async () => {
+    const headers = await upstreamHeadersFor(true);
+
+    assertEquals("Authorization" in headers, false);
+    assertEquals(headers["Content-Type"], "application/json");
+});
+
+Deno.test("token — any other Authorization is passed on", async () => {
+    const headers = await upstreamHeadersFor(false);
+
+    assertEquals(headers.Authorization, "Bearer the-secret");
 });
