@@ -356,7 +356,14 @@ file cannot be read, other machines are refused and local clients
 are served: fail closed for strangers, never for the router. Saxby's
 own token is never forwarded to the backend. It is ONE token, so it
 identifies nobody, and "clients are identified by `User-Agent`"
-stands untouched.
+stands untouched. **The token lets a caller in; it does not make it
+a local program.** Whatever is not straight from this machine gets
+chat and the model list, never the broker or the catch-all, plus the
+status route for a direct connection, which is `saxby` asking a
+daemon bound to one interface. **Loopback is the whole definition of
+local, so a TCP-level forwarder defeats all of it**: `ssh -L`, `socat`
+and `tailscale serve --tcp` add no header, and what they carry looks
+local. That was true before the token and is documented, not solved.
 
 **One proxy may be trusted: Tailscale Serve, named in
 `trusted_proxies`.** Off by default, added in v0.9.8 so a phone
