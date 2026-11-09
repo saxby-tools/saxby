@@ -303,10 +303,11 @@ like a catalog entry.
 
 ##  Listening
 
-Saxby listens on `127.0.0.1` by default and checks no credentials, so
-only programs on this machine can reach it. Two fields change that.
-Both are accepted as written, because the machine is yours; Saxby's
-part is to say plainly what each one means.
+Saxby listens on `127.0.0.1` by default, so only programs on this
+machine can reach it. Two fields change that. Both are accepted as
+written, because the machine is yours; Saxby's part is to say plainly
+what each one means, and to ask every other machine for
+[the API token](#the-api-token).
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -314,9 +315,10 @@ part is to say plainly what each one means.
 | `allowed_hosts` | `[]` | `Host` names accepted besides the local ones |
 
 `listen_host` takes any address the system accepts. `0.0.0.0` binds
-every interface, and saxbyd then prints a warning at every boot:
-anyone who can reach the port can use your models and your hardware.
-The case that needs it is a container. A container's loopback is its
+every interface, and saxbyd says so at every boot. A request from
+another machine must then carry the API token, and reaches
+`/v1/chat/completions` and `/v1/models` only. The case that needs a
+wider bind is a container; see [Docker](docker.md). A container's loopback is its
 own, so a loopback bind never answers on a published port, and saxbyd
 says so at boot when it finds itself in one. Publish the port to the
 host's loopback, `127.0.0.1:11435:11435`, and the reach is the same
@@ -452,8 +454,10 @@ its log then stays in the instance's folder. See
 
 A client on the same machine sends Saxby nothing to prove itself. A
 request that does not come straight from this machine must carry the
-API token, as `Authorization: Bearer <token>`. Today that means a
-request through a [trusted proxy](#trusted-proxies).
+API token, as `Authorization: Bearer <token>`. That means a request
+through a [trusted proxy](#trusted-proxies), and every request over
+a [bind wider than loopback](#listening), which includes every client
+of a container.
 
 The token lets a client in. It does not make it a local program: a
 client on another machine reaches `/v1/chat/completions` and
