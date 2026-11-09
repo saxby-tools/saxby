@@ -84,6 +84,8 @@ Then point your apps at `http://127.0.0.1:11435/v1` with the model
   GPU jobs, and model loads that wait for room
 - [Services](docs/services.md) — launchd and systemd, the default
   instance and the dev instance
+- [Docker](docs/docker.md) — the image, Compose, and why every
+  client of a container needs the token
 - [Troubleshooting](docs/troubleshooting.md) — messages and what to
   do
 - [Architecture](docs/architecture.md) — how it fits together
