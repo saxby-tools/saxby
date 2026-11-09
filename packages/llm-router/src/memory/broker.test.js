@@ -605,3 +605,78 @@ Deno.test("load — an untagged name matches its loaded model", async () => {
     assert(got.admitted);
     assertEquals(got.hold, null);
 });
+
+//  =====================================================================
+//  Reloading the config
+//  =====================================================================
+
+Deno.test("reconfigure — a new pin shrinks the budget", async () => {
+    const { broker } = harness();
+    const first = await reserve(broker, 10);
+
+    assert(first.admitted);
+
+    //  voxtral:32k is 10 GiB in the catalog and not loaded.
+    const next = testConfig();
+
+    next.catalog["voxtral:32k"] = { pinned: true, size_gib: 10 };
+    next.upstream_url = "http://ollama.test";
+
+    broker.reconfigure(next);
+
+    const { budget, jobs } = await broker.snapshot();
+
+    //  32 free - 10 reserved - 10 newly pinned.
+    assertEquals(budget.freeBytes, gibToBytes(12));
+    assertEquals(jobs.length, 1);
+    assertEquals(jobs[0].id, first.reservation.id);
+});
+
+Deno.test("reconfigure — a load is sized from the new catalog", async () => {
+    const { broker } = harness();
+
+    await reserve(broker, 1);
+
+    const before = await broker.gateLoad("new:9b", { requestId: "req_1" });
+
+    assertEquals(before.admitted, false);
+
+    const next = testConfig();
+
+    next.catalog["new:9b"] = { pinned: false, size_gib: 9 };
+    next.upstream_url = "http://ollama.test";
+
+    broker.reconfigure(next);
+
+    const after = await broker.gateLoad("new:9b", { requestId: "req_2" });
+
+    assert(after.admitted);
+});
+
+Deno.test("reconfigure — the new backend address is used", async () => {
+    const asked = [];
+
+    const broker = createBroker({
+        config: testConfig(),
+        probe: null,
+        backend: {
+            canonicalName,
+            fetchResidency: (url) => {
+                asked.push(url);
+
+                return Promise.resolve([]);
+            },
+        },
+        upstreamUrl: "http://old.test",
+        isAlive: () => Promise.resolve(true),
+        sizes: createSizeCache({}),
+    });
+
+    await broker.snapshot();
+
+    broker.reconfigure({ ...testConfig(), upstream_url: "http://new.test" });
+
+    await broker.snapshot();
+
+    assertEquals(asked, ["http://old.test", "http://new.test"]);
+});
