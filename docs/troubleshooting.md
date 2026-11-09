@@ -128,13 +128,16 @@ cannot. `saxby status` says which happened; so does the log.
 ###  The file is broken
 
 ```
-⚠️  The config on disk is NOT applied; saxbyd still runs the one loaded 2026-11-09T17:12:50.429Z.
 ❌ ~/.config/saxby/config.jsonc is not valid JSON or JSONC:
 Cannot parse JSONC: unexpected token "," in JSONC at position 79
+   A saxbyd that was already running keeps serving the config it had.
 ```
 
 The same messages as [The config is broken](#the-config-is-broken),
-except that saxbyd keeps serving. Fix the file and save again.
+except that saxbyd keeps serving. Its log has the same error under
+`⚠️  Config on disk NOT applied`. `saxby status` exits 1 while the
+file is broken, because it reads the file to find the port. Fix the
+file and save again.
 
 ###  The edit needs a restart
 
@@ -162,14 +165,15 @@ stays on. Check the backend, then save the file again.
 ⚠️  Config edits are NOT being watched: ...
 ```
 
-The watch on the config folder failed or ended. saxbyd still serves;
-restart it to apply an edit and start a new watch.
+The watch on the config folder failed or ended, or `config.jsonc`
+is a symlink that was pointed into a new folder after saxbyd started.
+saxbyd still serves; restart it to apply an edit and start a new
+watch.
 
 ###  status says nothing is wrong
 
-saxbyd did not see the save. The usual cause is a `config.jsonc`
-that is a symlink to a file in another folder: only the instance's
-own folder is watched. Restart after editing it.
+saxbyd did not hear of the save. Some file systems send no change
+events, a network share among them. Restart after an edit there.
 
 ##  Requests fail
 
