@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -255,6 +255,16 @@ export const MIGRATIONS = [
     ALTER TABLE decision_log RENAME COLUMN prompt_sha256 TO prompt_hash;
     ALTER TABLE decision_log ADD COLUMN prompt_hash_scheme TEXT NOT NULL
         DEFAULT 'sha256';
+    `,
+    //  ---- v6 --------------------------------------------------------
+    //  Request fields Saxby added from `client_defaults`, as a JSON
+    //  object. An added field shapes the response the way an injected
+    //  prompt does, so the row has to show it: reasoning turned off is
+    //  the difference between a 13 second answer and a half second
+    //  one. NULL means Saxby added nothing. A value the client sent
+    //  itself is not recorded here.
+    `
+    ALTER TABLE decision_log ADD COLUMN client_defaults TEXT;
     `,
 ];
 

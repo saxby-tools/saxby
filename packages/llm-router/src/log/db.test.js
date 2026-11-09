@@ -328,7 +328,7 @@ Deno.test({
         const log = await openDecisionLog(path, { log_prompts: false });
 
         assertEquals(log.migration.from, 4);
-        assertEquals(log.migration.to, 5);
+        assertEquals(log.migration.to, 6);
 
         const old = log.db.prepare(
             "SELECT prompt_hash, prompt_hash_scheme FROM decision_log",
@@ -349,5 +349,30 @@ Deno.test({
 
         log.close();
         await Deno.remove(dir, { recursive: true });
+    },
+});
+
+Deno.test({
+    name: "log — fields Saxby added for a client land on the row",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+        const added = await entryFor(log, "hello");
+        const plain = await entryFor(log, "hello");
+
+        added.clientDefaults = { reasoning_effort: "none" };
+
+        log.record(added);
+        log.record(plain);
+        log.flush();
+
+        const rows = log.db.prepare(
+            "SELECT client_defaults AS d FROM decision_log ORDER BY id",
+        ).all().map((row) => row.d);
+
+        assertEquals(JSON.parse(rows[0]), { reasoning_effort: "none" });
+        assertEquals(rows[1], null);
+
+        log.close();
     },
 });
