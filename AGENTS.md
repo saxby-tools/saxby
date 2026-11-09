@@ -108,9 +108,10 @@ decision log, M5 Tier 3 semantic — **all complete**.
 
 **M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs, the rename
 (v0.9.4), packaging and publishing (v0.9.5), the memory broker
-(v0.9.6) and the decision log privacy release (v0.9.7) are done. What
-remains is one GitHub milestone each: the JSDoc sweep (v0.9.8), then
-the v1.0.0 tag ([Roadmap](docs/roadmap.md)).
+(v0.9.6), the decision log privacy release (v0.9.7) and tailnet
+clients (v0.9.8) are done. What remains is one GitHub milestone each:
+the JSDoc sweep (v0.9.9), then the v1.0.0 tag
+([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `saxby instance list`, the dev
 instance, `saxby probe`), because everything after it assumes them.
@@ -328,15 +329,48 @@ hostname listens on every interface, and until v0.9.2 that put Saxby,
 and through its catch-all Ollama's management API, on the LAN. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
-box makes strangers look local), any `Origin` (a browser), a non-local
+box makes strangers look local; the one exception is the next entry),
+any `Origin` (a browser), a non-local
 `Host` (DNS rebinding) and Ollama's management paths. It judges
 "browser" by `Origin` and `Host` only: Node's `fetch` sends
 `sec-fetch-mode: cors` from server code, and OpenClaw's real requests
 carry it. `host.docker.internal` is allowed because a Docker Desktop
 container reaches the host by that name. Serving other machines — keys,
-a trusted-proxy list, non-loopback binds — is the post-v1 exposure work;
-when it lands, "identified by `User-Agent`, never by API key" must be
-revisited, since its objection is to keys nobody verifies.
+a trusted-proxy list for anything but Tailscale Serve, non-loopback
+binds — is the post-v1 exposure work; when it lands, "identified by
+`User-Agent`, never by API key" must be revisited, since its objection
+is to keys nobody verifies.
+
+**One proxy may be trusted: Tailscale Serve, named in
+`trusted_proxies`.** Off by default, added in v0.9.8 so a phone
+keyboard on the tailnet could reach Saxby with no agent in between.
+It ships with NO token: Saxby still checks no credentials, the
+tailnet's access rules decide who gets in, and every boot says so. A
+shared token is #49; per-client keys stay post-v1. What the guard
+checks is that a proxied request fits Serve and nothing else: a
+loopback connection, the configured `Host`, only the three forwarding
+headers Serve sends, one tailnet address in `X-Forwarded-For`, no
+Funnel header, no `Origin`. Serve deletes a client's own
+`Tailscale-User-*` and Funnel headers and overwrites
+`X-Forwarded-For` (`ipn/ipnlocal/serve.go`, v1.102.2), so a tailnet
+device cannot fake them. **A header cannot prove which proxy sent
+it**: every connection is from 127.0.0.1, and a program on this
+machine can send the same headers — but it could already call Saxby
+directly. Proxied requests reach chat and the model list ONLY, never
+the memory broker, status, explain or the catch-all. The log does not
+yet say who called through the proxy (#50), because a login names a
+person and `log/client.js` stores apps.
+
+**A request field a client cannot send comes from `client_defaults`,
+keyed by client signature.** One field, one value:
+`reasoning_effort: "none"`, the only value safe on every model (see
+Ecosystem facts). Per client rather than per model, because the
+default model also serves chat and code. Per client rather than per
+persona, because a persona route would hinge on Tier 3 recognising
+the client's template every time, and one miss brings back a
+13-second answer with nothing to show why; the `User-Agent` is known
+on every request. The request's own value always wins, and what Saxby
+added is stored on the row.
 
 **The memory broker lives in Saxby, and fails closed.** On Oct. 27,
 2026, an uncapped PyTorch job grew to 122 GiB beside two loaded models
