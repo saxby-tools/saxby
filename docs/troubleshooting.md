@@ -107,8 +107,9 @@ ollama pull bge-m3
 The profile's `dim` does not match the model. Set it to the number
 the message reports.
 
-Routing keeps working on Tiers 1 and 2 either way. Restart after
-fixing it.
+Routing keeps working on Tiers 1 and 2 either way. A fix in the
+config applies when you save it. After a fix outside the config, such
+as pulling the model, restart.
 
 ###  A warning about request.signal
 
@@ -118,6 +119,57 @@ Deno.serve: request.signal aborts on successful responses (legacy behavior). ...
 
 Printed once at boot by compiled binaries. It is expected and
 harmless; [Releasing](releasing.md) explains why.
+
+##  A config edit did nothing
+
+saxbyd applies a saved config live, and keeps the old one when it
+cannot. `saxby status` says which happened; so does the log.
+
+###  The file is broken
+
+```
+⚠️  The config on disk is NOT applied; saxbyd still runs the one loaded 2026-11-09T17:12:50.429Z.
+❌ ~/.config/saxby/config.jsonc is not valid JSON or JSONC:
+Cannot parse JSONC: unexpected token "," in JSONC at position 79
+```
+
+The same messages as [The config is broken](#the-config-is-broken),
+except that saxbyd keeps serving. Fix the file and save again.
+
+###  The edit needs a restart
+
+```
+listen_port changed, and that needs a restart. Restart to apply it: 'saxby service restart'.
+```
+
+`listen_host`, `listen_port`, `log_path` and `memory` are fixed while
+saxbyd runs. Nothing else in that save was applied either. Restart,
+or undo that one change and save again.
+
+###  Tier 3 could not be rebuilt
+
+```
+Tier 3 could not be rebuilt for the new config, and applying it would turn Tier 3 off: ...
+```
+
+The edit added or changed an exemplar, or the `semantic` block, and
+the embedder did not answer. saxbyd kept the old config so Tier 3
+stays on. Check the backend, then save the file again.
+
+###  Edits are not being watched
+
+```
+⚠️  Config edits are NOT being watched: ...
+```
+
+The watch on the config folder failed or ended. saxbyd still serves;
+restart it to apply an edit and start a new watch.
+
+###  status says nothing is wrong
+
+saxbyd did not see the save. The usual cause is a `config.jsonc`
+that is a symlink to a file in another folder: only the instance's
+own folder is watched. Restart after editing it.
 
 ##  Requests fail
 
@@ -262,7 +314,7 @@ A browser extension gets a different message, with the fix in it:
 Refused: the browser extension 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' is not in allowed_origins. Add that origin to the config to let it in.
 ```
 
-Copy the origin from the message into `allowed_origins` and restart;
+Copy the origin from the message into `allowed_origins` and save;
 see [Browser extensions](configuration.md#browser-extensions).
 
 ###  origin_path_not_allowed
