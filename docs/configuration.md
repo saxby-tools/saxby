@@ -106,6 +106,8 @@ and start it after editing the dev instance's config.
 | `trusted_proxies` | `[]` | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies) |
 | `allowed_origins` | `[]` | Browser extensions allowed to call Saxby; see [Browser extensions](#browser-extensions) |
 
+The API token is not in this file; see [The API token](#the-api-token).
+
 Unknown fields are an error, not a warning. A misspelled key such as
 `listen_prot` stops the boot instead of being ignored.
 
@@ -405,6 +407,52 @@ restrict what a client may do.
 its log then stays in the instance's folder. See
 [Instances](instances.md).
 
+##  The API token
+
+A client on the same machine sends Saxby nothing to prove itself. A
+request that does not come straight from this machine must carry the
+API token, as `Authorization: Bearer <token>`. Today that means a
+request through a [trusted proxy](#trusted-proxies).
+
+```bash
+saxby token
+```
+
+That prints the token and nothing else, so it can be piped:
+`saxby token | pbcopy`. Paste it into the client's API key field.
+
+The token is one shared secret per instance, in a file named
+`api-token` beside `config.jsonc`, readable only by you. It is kept
+out of the config on purpose: a config gets pasted into bug reports.
+Saxby writes a random token the first time it starts.
+
+To replace it:
+
+```bash
+saxby token rotate
+```
+
+Then restart Saxby, which reads the token at boot, and give every
+client on another machine the new one.
+
+You may put your own token in the file: one line, no spaces. Saxby
+accepts a short one and warns about it at every boot, because a
+short token can be guessed by anyone who can reach Saxby.
+
+Three things it is not:
+
+- **Not per client.** Every client holds the same token, so it says
+  nothing about who is calling. The decision log still names clients
+  by `User-Agent`. Per-client keys are planned after v1.
+- **Not sent to the backend.** Saxby drops its own token before
+  passing a request on. Any other `Authorization` value is passed on,
+  as before.
+- **Not needed locally.** A local client that sends the wrong key,
+  or none, is served as always.
+
+If Saxby cannot read the file, it says so at boot and serves only
+this machine until that is fixed.
+
 ##  Trusted proxies
 
 Saxby listens on `127.0.0.1` and refuses every request that came
@@ -431,17 +479,13 @@ tailscale serve --bg --https 11435 http://127.0.0.1:11435
 
 Clients then use `https://my-mac.my-tailnet.ts.net:11435/v1`.
 
-**Saxby still checks no credentials.** A token the client sends is
-ignored. Whoever your tailnet's access rules let reach this machine
-on that port can use Saxby, so those rules are the lock. That suits
-one person's tailnet. On a shared one, restrict the port in
-Tailscale first.
-[Issue #49](https://github.com/saxby-tools/saxby/issues/49) tracks a
-token. Every boot prints the trusted proxy, so it is never on
-quietly.
+**Every proxied request needs the API token.** Set it as the
+client's API key; see [The API token](#the-api-token). A request
+without it gets a 401 that says nothing else about this Saxby. Every
+boot prints the trusted proxy, so it is never on quietly.
 
-What Saxby does check is that a proxied request fits Serve and
-nothing else. All of these must hold:
+Saxby also checks that a proxied request fits Serve and nothing
+else. All of these must hold:
 
 - The connection comes from this machine.
 - `Host` is the configured `host`.
@@ -467,7 +511,8 @@ Two limits to know:
   [Issue #50](https://github.com/saxby-tools/saxby/issues/50) tracks
   that.
 - A program on this machine can send the same headers Serve does.
-  It could already call Saxby directly, so this gives it nothing new.
+  It could already call Saxby directly, so this gives it nothing
+  new, and it would need the token to be treated as proxied.
 
 ##  Browser extensions
 
