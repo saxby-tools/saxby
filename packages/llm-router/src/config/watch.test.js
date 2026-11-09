@@ -1,6 +1,6 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
-import { isConfigEvent, watchConfig } from "./watch.js";
+import { isConfigEvent, listWatchTargets, watchConfig } from "./watch.js";
 
 //  =====================================================================
 //  Harness
@@ -59,13 +59,31 @@ function fakeWatch() {
     };
 }
 
-function harness() {
+//  A realPath over a table of links. A path not in the table is its
+//  own real path; MISSING stands for a file that does not exist.
+const MISSING = Symbol("missing");
+
+function fakeRealPath(links) {
+    return (path) => {
+        const target = links[path] ?? path;
+
+        if (target === MISSING) {
+            throw new Deno.errors.NotFound(path);
+        }
+
+        return target;
+    };
+}
+
+function harness(options = {}) {
     const fs = fakeWatch();
     const warned = [];
+    const links = options.links ?? {};
 
     let reloads = 0;
     let pending = null;
     let timersSet = 0;
+    let watchedDirs = null;
 
     const watching = watchConfig({
         dir: DIR,
@@ -74,7 +92,12 @@ function harness() {
 
             return Promise.resolve();
         },
-        watchFs: () => fs,
+        watchFs: (dirs) => {
+            watchedDirs = dirs;
+
+            return fs;
+        },
+        realPath: fakeRealPath(links),
         setTimer: (fn) => {
             pending = fn;
             timersSet += 1;
@@ -93,6 +116,8 @@ function harness() {
         fs,
         watching,
         warned,
+        links,
+        watchedDirs: () => watchedDirs,
         reloads: () => reloads,
         timersSet: () => timersSet,
         hasTimer: () => pending !== null,
@@ -222,6 +247,88 @@ Deno.test("watch — a watch that cannot start says so too", () => {
     assertEquals(warned.length, 1);
 
     watching.close();
+});
+
+//  =====================================================================
+//  A symlinked config
+//  =====================================================================
+
+const DOTFILES = "/home/someone/dotfiles/saxby";
+
+Deno.test("targets — a plain config watches its own folder", () => {
+    const links = { [join(DIR, "config.json")]: MISSING };
+
+    assertEquals(listWatchTargets(DIR, fakeRealPath(links)), {
+        dirs: [DIR],
+        names: ["config.jsonc", "config.json"],
+    });
+});
+
+Deno.test("targets — a linked config adds the real file's folder", () => {
+    const links = {
+        [join(DIR, "config.jsonc")]: join(DOTFILES, "saxby.jsonc"),
+        [join(DIR, "config.json")]: MISSING,
+    };
+
+    assertEquals(listWatchTargets(DIR, fakeRealPath(links)), {
+        dirs: [DIR, DOTFILES],
+        names: ["config.jsonc", "config.json", "saxby.jsonc"],
+    });
+});
+
+Deno.test("targets — a linked instance folder is still one folder", () => {
+    //  ~/.config/saxby is itself a link; the file is not linked again.
+    const links = {
+        [DIR]: DOTFILES,
+        [join(DIR, "config.jsonc")]: join(DOTFILES, "config.jsonc"),
+        [join(DIR, "config.json")]: MISSING,
+    };
+
+    assertEquals(listWatchTargets(DIR, fakeRealPath(links)).dirs, [DIR]);
+});
+
+Deno.test("watch — an edit to a linked config's target reloads", async () => {
+    const h = harness({
+        links: {
+            [join(DIR, "config.jsonc")]: join(DOTFILES, "saxby.jsonc"),
+            [join(DIR, "config.json")]: MISSING,
+        },
+    });
+
+    assertEquals(h.watchedDirs(), [DIR, DOTFILES]);
+
+    h.fs.push("modify", "saxby.jsonc");
+    await turn();
+    h.fire();
+
+    assertEquals(h.reloads(), 1);
+
+    h.watching.close();
+    await turn();
+});
+
+Deno.test("watch — a link moved to a new folder is reported", async () => {
+    const elsewhere = "/home/someone/other";
+
+    const h = harness({
+        links: { [join(DIR, "config.json")]: MISSING },
+    });
+
+    //  Replacing the file with a link is a change in the instance
+    //  folder, so it reloads; the new folder was never watched.
+    h.links[join(DIR, "config.jsonc")] = join(elsewhere, "config.jsonc");
+    h.fs.push("create", "config.jsonc");
+    await turn();
+    h.fire();
+    await turn();
+
+    assertEquals(h.reloads(), 1);
+    assertStringIncludes(h.watching.error(), elsewhere);
+    assertEquals(h.warned.length, 1);
+    assertStringIncludes(h.warned[0], "NOT being watched");
+
+    h.watching.close();
+    await turn();
 });
 
 Deno.test("watch — a real save in a real folder reloads", async () => {

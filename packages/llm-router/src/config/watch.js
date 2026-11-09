@@ -18,10 +18,14 @@
 //  once, loudly, and kept for the status route: a daemon that looks
 //  like it reloads and does not is the worst case.
 //
-//  Not watched: the target of a symlinked config file, when it lives
-//  in another folder. Edits there need a restart.
+//  A config file may be a symlink into another folder, as GNU Stow
+//  and dotfile repos make it. An edit to the real file raises no
+//  event in the instance folder, so the real file's folder is watched
+//  too. Where the link points is read when the watch starts. If it is
+//  later pointed into a different folder, that folder is not watched,
+//  and that is reported the same way as a watch that failed.
 
-import { basename } from "@std/path";
+import { basename, dirname, join } from "@std/path";
 import { CONFIG_FILE_NAMES } from "@saxby/core";
 
 //  Long enough for an editor's write-then-rename, short enough that a
@@ -32,18 +36,60 @@ const SETTLE_MS = 250;
 const KIND_ACCESS = "access";
 
 /**
+ * The folders to watch and the file names that matter in them: the
+ * instance folder and the config names, plus the folder and name of
+ * the real file when a config name is a symlink into another folder.
+ * A config name that does not exist adds nothing.
+ * @param {string} dir - The instance folder.
+ * @param {(path: string) => string} [realPath]
+ * @returns {{ dirs: string[], names: string[] }}
+ */
+export function listWatchTargets(dir, realPath = Deno.realPathSync) {
+    const dirs = new Set([dir]);
+    const names = new Set(CONFIG_FILE_NAMES);
+
+    //  The instance folder may itself be reached through a link, so
+    //  folders are compared by their real paths.
+    let realDir;
+
+    try {
+        realDir = realPath(dir);
+    } catch {
+        return { dirs: [...dirs], names: [...names] };
+    }
+
+    for (const name of CONFIG_FILE_NAMES) {
+        let real;
+
+        try {
+            real = realPath(join(dir, name));
+        } catch {
+            continue;
+        }
+
+        if (dirname(real) === realDir) {
+            continue;
+        }
+
+        dirs.add(dirname(real));
+        names.add(basename(real));
+    }
+
+    return { dirs: [...dirs], names: [...names] };
+}
+
+/**
  * Whether a file system event is a change to the config file.
  * @param {{ kind: string, paths: string[] }} event - A Deno.FsEvent.
+ * @param {string[]} [names] - from listWatchTargets
  * @returns {boolean}
  */
-export function isConfigEvent(event) {
+export function isConfigEvent(event, names = CONFIG_FILE_NAMES) {
     if (event.kind === KIND_ACCESS) {
         return false;
     }
 
-    return event.paths.some((path) =>
-        CONFIG_FILE_NAMES.includes(basename(path))
-    );
+    return event.paths.some((path) => names.includes(basename(path)));
 }
 
 /**
@@ -51,8 +97,9 @@ export function isConfigEvent(event) {
  * @param {Object} options
  * @param {string} options.dir - The instance folder.
  * @param {() => Promise<unknown>} options.reload - Must not reject.
- * @param {(dir: string, options: Object) => AsyncIterable<Object>
+ * @param {(dirs: string[], options: Object) => AsyncIterable<Object>
  *     & { close: () => void }} [options.watchFs]
+ * @param {(path: string) => string} [options.realPath]
  * @param {number} [options.settleMs]
  * @param {(fn: () => void, ms: number) => unknown} [options.setTimer]
  * @param {(timer: unknown) => void} [options.clearTimer]
@@ -65,6 +112,9 @@ export function watchConfig(options) {
     const setTimer = options.setTimer ?? setTimeout;
     const clearTimer = options.clearTimer ?? clearTimeout;
     const warn = options.warn ?? ((line) => console.warn(line));
+    const realPath = options.realPath ?? Deno.realPathSync;
+
+    const targets = listWatchTargets(options.dir, realPath);
 
     let watcher = null;
     let timer = null;
@@ -82,12 +132,33 @@ export function watchConfig(options) {
         );
     }
 
+    //  Run after each reload. A link pointed into a new folder was
+    //  itself a change in the instance folder, so that reload read the
+    //  new file; what is lost is every edit to it after this one.
+    function checkTargets() {
+        if (error !== null) {
+            return;
+        }
+
+        const now = listWatchTargets(options.dir, realPath);
+        const added = now.dirs.filter((dir) => !targets.dirs.includes(dir));
+
+        if (added.length === 0) {
+            return;
+        }
+
+        fail(
+            `the config file now links into ${added.join(", ")}, ` +
+                `which was not being watched when saxbyd started`,
+        );
+    }
+
     function run() {
         timer = null;
 
         //  The reloader runs reloads one at a time and never rejects;
         //  the catch only keeps a bug there from being unhandled here.
-        options.reload().catch((err) => {
+        options.reload().then(checkTargets).catch((err) => {
             warn(`⚠️  Config reload failed: ${err.message}`);
         });
     }
@@ -103,7 +174,7 @@ export function watchConfig(options) {
     async function listen() {
         try {
             for await (const event of watcher) {
-                if (isConfigEvent(event)) {
+                if (isConfigEvent(event, targets.names)) {
                     schedule();
                 }
             }
@@ -129,7 +200,7 @@ export function watchConfig(options) {
     }
 
     try {
-        watcher = watchFs(options.dir, { recursive: false });
+        watcher = watchFs(targets.dirs, { recursive: false });
     } catch (err) {
         fail(err.message);
 
