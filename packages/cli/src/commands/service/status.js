@@ -3,6 +3,7 @@ import {
     fetchInstanceStatus,
     instanceLabel,
     instancePhrase,
+    listConfigWarnings,
 } from "@saxby/core";
 import { prepare } from "./shared.js";
 
@@ -37,6 +38,24 @@ function describeAnswer(holder, instance) {
     return `yes — pid ${holder.pid}, version ${holder.version ?? "unknown"}`;
 }
 
+//  When the running config was read. A saxbyd from before live reload
+//  does not say, and neither does a port nobody answers on.
+function describeConfig(holder, instance) {
+    if (!holder) {
+        return "-";
+    }
+
+    if (holder.instance !== instance) {
+        return "-";
+    }
+
+    if (!holder.config) {
+        return "-";
+    }
+
+    return `loaded ${holder.config.loaded_at}`;
+}
+
 export const statusCommand = new Command()
     .description("Show whether the Saxby service is installed and up.")
     .action(async (options) => {
@@ -50,7 +69,12 @@ export const statusCommand = new Command()
 
         line("Loaded", describeLoaded(service));
         line(`:${config.listen_port}`, describeAnswer(holder, instance));
+        line("Config", describeConfig(holder, instance));
         line("Logs", adapter.logHint(instance));
+
+        for (const warning of listConfigWarnings(holder)) {
+            console.log(`\n⚠️  ${warning}`);
+        }
 
         if (!service.installed) {
             console.log("\nNot installed. Run 'saxby service install'.");
