@@ -23,10 +23,26 @@ import {
 
 const EXIT_FAILURE = 1;
 
-function resolveDir(options) {
+//  The token belongs to an instance that exists. Writing one for a
+//  mistyped name would print a token no saxbyd holds.
+async function resolveDir(options) {
     const instance = resolveInstanceName(options.instance);
+    const dir = getInstanceDir(instance);
 
-    return { instance, dir: getInstanceDir(instance) };
+    try {
+        await Deno.stat(dir);
+    } catch (err) {
+        if (!(err instanceof Deno.errors.NotFound)) {
+            throw err;
+        }
+
+        throw new Error(
+            `No config folder for ${instancePhrase(instance)} at ` +
+                `${dir}. Run 'saxby config generate' for it first.`,
+        );
+    }
+
+    return { instance, dir };
 }
 
 function fail(error) {
@@ -36,7 +52,7 @@ function fail(error) {
 
 async function show(options) {
     try {
-        const { instance, dir } = resolveDir(options);
+        const { instance, dir } = await resolveDir(options);
         const found = await readOrCreateApiToken(dir);
 
         if (found.created) {
@@ -62,7 +78,7 @@ async function show(options) {
 
 async function rotate(options) {
     try {
-        const { instance, dir } = resolveDir(options);
+        const { instance, dir } = await resolveDir(options);
         const token = generateApiToken();
         const path = await writeApiToken(dir, token);
 
