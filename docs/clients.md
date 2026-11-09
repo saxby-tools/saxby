@@ -21,7 +21,9 @@ machine. It listens on `127.0.0.1` only, and it refuses requests that
 came through a proxy, came from a web page, or name a host other than
 `localhost`, `127.0.0.1`, `[::1]` or `host.docker.internal`. Each
 refusal is a 403 explained in [Troubleshooting](troubleshooting.md). Serving
-other machines needs per-client keys, which are planned after v1.
+other machines needs per-client keys, which are planned after v1. The
+one exception is your own devices over Tailscale; see
+[A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale).
 
 Use `saxby/<model>` to skip routing and reach one model directly.
 See [Routing](routing.md).
@@ -183,6 +185,65 @@ to tell them apart.
 
 OpenClaw's memory search can embed text through Ollama directly.
 Those calls do not pass through Saxby and are not logged.
+
+##  A phone keyboard over Tailscale
+
+A phone is not on the same machine, so it needs the one way in: a
+proxy you name in `trusted_proxies`. This example is
+[LeanType](https://github.com/LeanBitLab/LeanType), an Android
+keyboard that sends text to an OpenAI-compatible endpoint for
+proofreading and translation.
+
+###  Connecting
+
+1. Publish Saxby to your tailnet and name the proxy in the config.
+   Both steps are in
+   [Trusted proxies](configuration.md#trusted-proxies).
+2. In LeanType's AI settings:
+
+| Setting | Value |
+| --- | --- |
+| AI Provider | HF/OpenAI-compatible |
+| Model | `saxby` |
+| API Endpoint | `https://my-mac.my-tailnet.ts.net:11435/v1/chat/completions` |
+| API Token | anything non-empty |
+
+Saxby does not check the token. Your tailnet's access rules decide
+who can reach it.
+
+###  Turning reasoning off
+
+LeanType's request is fixed: a model, one user message holding its
+instruction and your text, a temperature and a token limit. A model
+that reasons by default will reason over every sentence, and on the
+reference setup one grammar fix took 13 seconds that way. LeanType
+has no setting that sends `reasoning_effort` (its source, read Nov.
+8, 2026), so set it for the client:
+
+```jsonc
+"client_defaults": {
+    "leantype": { "reasoning_effort": "none" }
+}
+```
+
+The same fixes then took about a second. See
+[Client defaults](configuration.md#client-defaults).
+
+###  Two things to know
+
+- **Its text is stored if `log_prompts` is on.** A keyboard sends
+  whatever you select in any app. With `log_prompts` set to `true`,
+  each piece lands in the decision log as plain text. See
+  [Logging](configuration.md#logging).
+- **A small model may be the wrong saving.** Asking for
+  `saxby/<small-model>` is faster still. On the reference setup a 3B
+  model failed the first test sentence, while the 31B model with
+  reasoning off got every one right.
+
+LeanType leaves `stream` unset, so it is not routed as background
+work; that rule needs an explicit `stream: false`. On the reference
+setup its requests matched no tier and reached the global default
+model.
 
 ##  Scripts and SDKs
 
