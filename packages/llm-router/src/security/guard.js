@@ -35,7 +35,14 @@
 //  header it likes. That program could already call Saxby directly,
 //  so the checks below are about strangers, not about it.
 //
+//  One way in from a browser: an extension whose exact origin the
+//  operator lists in `allowed_origins`. A browser sets Origin itself,
+//  so a web page cannot claim an extension's. Web pages are never let
+//  in: they would also need CORS answers, which Saxby does not give.
+//
 //  Pure: a request in, a refusal or null out. Wired in by main.js.
+
+import { EXTENSION_ORIGIN } from "@saxby/core";
 
 //  Headers proxies add to say who the real caller was. HTTP requires a
 //  proxy to add Via; the rest are the common vendor forms.
@@ -77,11 +84,13 @@ const TAILNET_V6_PREFIX = "fd7a:115c:a1e0:";
 //  Where a proxy on this machine connects from.
 const LOOPBACK = new Set(["127.0.0.1", "::1"]);
 
-//  All a proxied client may reach. Everything else stays local: the
-//  memory broker, the status route with its pid, and the catch-all
-//  that passes Ollama's own API through.
-const PROXIED_CHAT = { method: "POST", path: "/v1/chat/completions" };
-const PROXIED_MODELS = { method: "GET", path: "/v1/models" };
+//  All a proxied client or a browser extension may reach. Everything
+//  else stays with local programs: the memory broker, the status
+//  route with its pid, and the catch-all that passes Ollama's own API
+//  through.
+const CLIENT_CHAT = { method: "POST", path: "/v1/chat/completions" };
+const CLIENT_MODELS = { method: "GET", path: "/v1/models" };
+const CLIENT_ROUTES_HINT = "/v1/chat/completions and /v1/models";
 
 //  Names a local client uses to reach Saxby. host.docker.internal is
 //  how a Docker Desktop container reaches the host; Niko's Open WebUI
@@ -206,20 +215,20 @@ function isTailnetAddress(value) {
     return isTailnetV6(address);
 }
 
-function isProxiedRoute(method, path) {
-    if (method === PROXIED_CHAT.method) {
-        return path === PROXIED_CHAT.path;
+function isClientRoute(method, path) {
+    if (method === CLIENT_CHAT.method) {
+        return path === CLIENT_CHAT.path;
     }
 
-    if (method !== PROXIED_MODELS.method) {
+    if (method !== CLIENT_MODELS.method) {
         return false;
     }
 
-    if (path === PROXIED_MODELS.path) {
+    if (path === CLIENT_MODELS.path) {
         return true;
     }
 
-    return path.startsWith(`${PROXIED_MODELS.path}/`);
+    return path.startsWith(`${CLIENT_MODELS.path}/`);
 }
 
 function refusal(status, code, message) {
@@ -294,13 +303,13 @@ function inspectProxied(request, trustedProxies) {
         );
     }
 
-    if (!isProxiedRoute(method, path)) {
+    if (!isClientRoute(method, path)) {
         return refusal(
             403,
             "proxy_path_not_allowed",
             `Refused: '${method} ${path}' is not served through a ` +
-                `proxy. Proxied clients get /v1/chat/completions and ` +
-                `/v1/models. ${DOCS_HINT}`,
+                `proxy. Proxied clients get ${CLIENT_ROUTES_HINT}. ` +
+                DOCS_HINT,
         );
     }
 
@@ -308,18 +317,68 @@ function inspectProxied(request, trustedProxies) {
 }
 
 /**
+ * Judges a request that carries an Origin header, which only a
+ * browser sends. Null lets it go on to the checks every request gets.
+ * @param {string} origin
+ * @param {{ path: string, method?: string }} request
+ * @param {string[]} allowedOrigins
+ * @returns {{ status: number, code: string, message: string } | null}
+ */
+function inspectOrigin(origin, request, allowedOrigins) {
+    const { method, path } = request;
+    const claimed = origin.toLowerCase();
+
+    if (allowedOrigins.includes(claimed)) {
+        if (isClientRoute(method, path)) {
+            return null;
+        }
+
+        return refusal(
+            403,
+            "origin_path_not_allowed",
+            `Refused: '${method} ${path}' is not served to a browser ` +
+                `extension. Extensions get ${CLIENT_ROUTES_HINT}. ` +
+                DOCS_HINT,
+        );
+    }
+
+    //  Says what to add, since the fix is one config line and the
+    //  origin in hand is the exact value it needs.
+    if (EXTENSION_ORIGIN.test(claimed)) {
+        return refusal(
+            403,
+            "origin_not_allowed",
+            `Refused: the browser extension '${origin}' is not in ` +
+                `allowed_origins. Add that origin to the config to ` +
+                `let it in. ${DOCS_HINT}`,
+        );
+    }
+
+    return refusal(
+        403,
+        "origin_not_allowed",
+        `Refused: the request came from a web page (Origin ` +
+            `'${origin}'). Saxby does not serve browsers. ` +
+            DOCS_HINT,
+    );
+}
+
+/**
  * Decides whether a request may proceed.
  * @param {{ headers: Headers, path: string, method?: string,
  *     remoteHostname?: string,
- *     trustedProxies?: { kind: string, host: string }[] }} request
- *     method and remoteHostname are read only for a proxied request;
- *     trustedProxies is the config's list, empty when left out.
+ *     trustedProxies?: { kind: string, host: string }[],
+ *     allowedOrigins?: string[] }} request
+ *     method is read only for a proxied or browser request, and
+ *     remoteHostname only for a proxied one; trustedProxies and
+ *     allowedOrigins are the config's lists, empty when left out.
  * @returns {{ status: number, code: string, message: string } | null}
  *     null to allow; otherwise what to refuse with.
  */
 export function inspectRequest(request) {
     const { headers, path } = request;
     const trustedProxies = request.trustedProxies ?? [];
+    const allowedOrigins = request.allowedOrigins ?? [];
     const proxyHeader = findProxyHeader(headers);
 
     if (proxyHeader) {
@@ -337,13 +396,11 @@ export function inspectRequest(request) {
     const origin = headers.get("origin");
 
     if (origin !== null) {
-        return refusal(
-            403,
-            "origin_not_allowed",
-            `Refused: the request came from a web page (Origin ` +
-                `'${origin}'). Saxby does not serve browsers. ` +
-                DOCS_HINT,
-        );
+        const verdict = inspectOrigin(origin, request, allowedOrigins);
+
+        if (verdict) {
+            return verdict;
+        }
     }
 
     //  Everything below is about local names, which a proxied request

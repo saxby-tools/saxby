@@ -330,7 +330,7 @@ and through its catch-all Ollama's management API, on the LAN. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
 box makes strangers look local; the one exception is the next entry),
-any `Origin` (a browser), a non-local
+any `Origin` not listed in `allowed_origins` (a browser), a non-local
 `Host` (DNS rebinding) and Ollama's management paths. It judges
 "browser" by `Origin` and `Host` only: Node's `fetch` sends
 `sec-fetch-mode: cors` from server code, and OpenClaw's real requests
@@ -360,6 +360,21 @@ directly. Proxied requests reach chat and the model list ONLY, never
 the memory broker, status, explain or the catch-all. The log does not
 yet say who called through the proxy (#50), because a login names a
 person and `log/client.js` stores apps.
+
+**One kind of browser client may be let in: an extension, by its
+exact origin in `allowed_origins`.** Off by default. A browser sets
+`Origin` itself, so a web page cannot claim an extension's, and that
+is the whole basis for trusting the header. No wildcards:
+`chrome-extension://*`, which extension READMEs tell Ollama users to
+set in `OLLAMA_ORIGINS`, lets in every extension in the browser. No
+web-page
+origins: a page would also need CORS answers, and a guard that passes
+a request whose response the page cannot read has only let the side
+effects through. An allowed extension gets the same two routes as a
+proxied client. Because every extension sends the browser's
+`User-Agent`, its client signature is its id, `ext-<id>` — the one
+place identity comes from a header other than `User-Agent` or an app
+header, and still never from a credential.
 
 **A request field a client cannot send comes from `client_defaults`,
 keyed by client signature.** One field, one value:

@@ -267,18 +267,38 @@ function announceProxies(config) {
 }
 
 /**
+ * Says at boot which browser extensions are let in, for the same
+ * reason: a way in is never silent.
+ */
+function announceOrigins(config) {
+    for (const origin of config.allowed_origins) {
+        console.log(`🧩 Browser extension allowed: ${origin}`);
+    }
+
+    if (config.allowed_origins.length === 0) {
+        return;
+    }
+
+    console.log(
+        "   An extension can use /v1/chat/completions and /v1/models, " +
+            "and nothing else.",
+    );
+}
+
+/**
  * First middleware on every route. Refuses browser and rebinding
  * requests, Ollama's management paths, and any proxied request that
  * does not fit a proxy named in the config, before the request logger
  * or any route sees them (security/guard.js says why).
  */
-async function guardRequests(c, next, trustedProxies) {
+async function guardRequests(c, next, config) {
     const verdict = inspectRequest({
         headers: c.req.raw.headers,
         path: c.req.path,
         method: c.req.method,
         remoteHostname: c.env?.remoteAddr?.hostname,
-        trustedProxies,
+        trustedProxies: config.trusted_proxies,
+        allowedOrigins: config.allowed_origins,
     });
 
     if (!verdict) {
@@ -370,6 +390,7 @@ async function main() {
     }
 
     announceProxies(config);
+    announceOrigins(config);
 
     //  The decision log is observability, never load-bearing. If it
     //  cannot be opened the router still routes — it just stops
@@ -427,7 +448,7 @@ async function main() {
 
     app.use(
         "*",
-        (c, next) => guardRequests(c, next, config.trusted_proxies),
+        (c, next) => guardRequests(c, next, config),
     );
 
     if (!isVerbose()) {

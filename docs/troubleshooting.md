@@ -209,6 +209,25 @@ send requests to `127.0.0.1`, so every request carrying an `Origin`
 header is refused. Server-side apps such as Open WebUI's backend send
 none.
 
+A browser extension gets a different message, with the fix in it:
+
+```
+Refused: the browser extension 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' is not in allowed_origins. Add that origin to the config to let it in.
+```
+
+Copy the origin from the message into `allowed_origins` and restart;
+see [Browser extensions](configuration.md#browser-extensions).
+
+###  origin_path_not_allowed
+
+```
+Refused: 'GET /api/tags' is not served to a browser extension. Extensions get /v1/chat/completions and /v1/models.
+```
+
+An allowed extension asked for something other than chat or the
+model list. If it was `/models` or `/chat/completions` with no
+`/v1`, the extension's base URL is missing `/v1`.
+
 ###  host_not_allowed
 
 ```

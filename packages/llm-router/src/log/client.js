@@ -11,6 +11,12 @@
 //  to nothing. App-specific headers override it only when a client
 //  announces itself more precisely than its HTTP library does.
 //
+//  A browser extension is the one client whose User-Agent says
+//  nothing: it sends the browser's, the same for every extension. Its
+//  Origin names it exactly, and the browser sets that header, not the
+//  extension. So an extension's signature is its id, as "ext-<id>".
+//  The guard has already refused any origin not in `allowed_origins`.
+//
 //  Deliberately NOT used:
 //
 //    Authorization  — overloading a credential field with an identity
@@ -31,6 +37,8 @@
 //  retroactively: the friendly name, the signature it was derived
 //  from, and the raw User-Agent. Nothing is lossy.
 
+import { EXTENSION_ORIGIN } from "@saxby/core";
+
 //  Headers that identify an application more precisely than its HTTP
 //  library's User-Agent does. Presence alone is the signal — the
 //  values are not read, because they identify a PERSON rather than an
@@ -46,10 +54,32 @@ const APP_HEADERS = [
     { header: "x-openwebui-user-jwt", signature: "open-webui" },
 ];
 
+//  Prefix of a browser extension's signature: "ext-<id>". The prefix
+//  keeps a Firefox id, which may start with a digit, in the shape
+//  the config accepts for a signature.
+const EXTENSION_PREFIX = "ext-";
+
 //  Product token, i.e. everything before the first slash or space.
 //  "OpenClaw/2026.6.11 (darwin)" -> "openclaw"
 //  "python-httpx/0.27.0"         -> "python-httpx"
 const UA_PRODUCT = /^([A-Za-z][\w.-]*)/;
+
+/**
+ * Reads a browser extension's id from its Origin header.
+ */
+function readExtensionOrigin(origin) {
+    if (!origin) {
+        return null;
+    }
+
+    const match = origin.toLowerCase().match(EXTENSION_ORIGIN);
+
+    if (!match) {
+        return null;
+    }
+
+    return `${EXTENSION_PREFIX}${match[2]}`;
+}
 
 /**
  * Finds an app header that identifies the client.
@@ -93,12 +123,24 @@ function readUserAgentProduct(userAgent) {
  * @returns {{id, signature, source, userAgent}}
  *   id        friendly name, after mapping
  *   signature normalised token the mapping was keyed on
- *   source    app_header | user_agent | unknown
+ *   source    origin | app_header | user_agent | unknown
  *   userAgent raw header, stored so mappings can be backfilled
  */
 export function identifyClient(getHeader, config) {
     const userAgent = getHeader("user-agent") || null;
     const names = config.client_names || {};
+
+    //  ---- A browser extension: its origin is its name --------------
+    const fromOrigin = readExtensionOrigin(getHeader("origin"));
+
+    if (fromOrigin) {
+        return {
+            id: names[fromOrigin] || fromOrigin,
+            signature: fromOrigin,
+            source: "origin",
+            userAgent,
+        };
+    }
 
     //  ---- Most specific: the app announced itself ------------------
     const fromApp = readAppHeader(getHeader);

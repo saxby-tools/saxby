@@ -243,3 +243,58 @@ Deno.test("config — a signature that could never match is refused", () => {
         assert(message.includes("a client signature is lowercase"), key);
     }
 });
+
+//  =====================================================================
+//  Allowed origins
+//  =====================================================================
+
+const EXTENSION = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+
+Deno.test("config — no browser origin is allowed unless listed", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.allowed_origins, []);
+});
+
+Deno.test("config — a browser extension's origin passes", () => {
+    const origins = [
+        EXTENSION,
+        "moz-extension://1b2c3d4e-0000-4000-8000-123456789abc",
+    ];
+
+    const parsed = validateConfig(config({ allowed_origins: origins }));
+
+    assertEquals(parsed.allowed_origins, origins);
+});
+
+Deno.test("config — anything but one extension is refused", () => {
+    const origins = [
+        "chrome-extension://*",
+        "*",
+        "https://example.com",
+        "http://localhost:3000",
+        `${EXTENSION}/`,
+        `${EXTENSION}/popup.html`,
+        "CHROME-EXTENSION://ABCDEF",
+        "null",
+    ];
+
+    for (const origin of origins) {
+        const message = messageFor(config({ allowed_origins: [origin] }));
+
+        assert(message.includes("allowed_origins.0"), origin);
+        assert(message.includes("one browser extension"), origin);
+    }
+});
+
+Deno.test("config — an extension may have client defaults", () => {
+    const parsed = validateConfig(config({
+        client_defaults: {
+            "ext-abcdefghijklmnopabcdefghijklmnop": {
+                reasoning_effort: "none",
+            },
+        },
+    }));
+
+    assertEquals(Object.keys(parsed.client_defaults).length, 1);
+});

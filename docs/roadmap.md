@@ -123,6 +123,9 @@ known gaps are issues labelled
     - [x] `client_defaults`: a request field a client cannot send,
           set per client
           ([Client defaults](configuration.md#client-defaults)).
+    - [x] `allowed_origins`: a browser extension may be let in by
+          its exact origin
+          ([Browser extensions](configuration.md#browser-extensions)).
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
     - [ ] JSDoc sweep (#26, v0.9.9), consistent across the repo. Mechanical and

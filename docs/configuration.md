@@ -104,6 +104,7 @@ and start it after editing the dev instance's config.
 | `log_path` | instance folder | Where the decision log lives |
 | `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
 | `trusted_proxies` | `[]` | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies) |
+| `allowed_origins` | `[]` | Browser extensions allowed to call Saxby; see [Browser extensions](#browser-extensions) |
 
 Unknown fields are an error, not a warning. A misspelled key such as
 `listen_prot` stops the boot instead of being ignored.
@@ -467,6 +468,57 @@ Two limits to know:
   that.
 - A program on this machine can send the same headers Serve does.
   It could already call Saxby directly, so this gives it nothing new.
+
+##  Browser extensions
+
+Saxby refuses every request from a browser, because any web page you
+visit can send requests to your machine. `allowed_origins` lets in a
+browser extension you chose, by its exact origin:
+
+```jsonc
+"allowed_origins": [
+    "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+]
+```
+
+The easiest way to get the value is to try the extension once. The
+403 it gets back names the origin to add:
+
+```
+Refused: the browser extension 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' is not in allowed_origins. Add that origin to the config to let it in.
+```
+
+Three rules:
+
+- **One extension per entry, spelled out.** `chrome-extension://*`
+  is refused: it would let in every extension installed in the
+  browser. Firefox gives each install its own id, so the value from
+  one browser will not work in another.
+- **Extensions only, never web pages.** A browser sets the `Origin`
+  header itself, so a web page cannot claim an extension's. A web
+  page of your own would also need CORS answers, which Saxby does
+  not give, so `https://` origins are refused in the config.
+- **Chat and the model list only.** An extension reaches
+  `/v1/chat/completions` and `/v1/models`, the same two routes a
+  proxied client gets.
+
+An extension on another machine also needs the way in from that
+machine; see [Trusted proxies](#trusted-proxies).
+
+In the decision log an extension is named by its id, as `ext-<id>`,
+since every extension sends the browser's own `User-Agent`. Use that
+signature in `client_names` and `client_defaults`:
+
+```jsonc
+"client_names": {
+    "ext-abcdefghijklmnopabcdefghijklmnop": "grammar-check"
+},
+"client_defaults": {
+    "ext-abcdefghijklmnopabcdefghijklmnop": { "reasoning_effort": "none" }
+}
+```
+
+Every boot prints the allowed extensions.
 
 ##  Memory
 
