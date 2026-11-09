@@ -593,16 +593,106 @@ Deno.test("token — a connection from another machine needs one", () => {
     }
 });
 
-Deno.test("token — with it, a connection from another machine passes", () => {
+function inspectRemote(method, path, overrides = {}) {
+    return inspectRequest({
+        headers: new Headers(CURL),
+        path,
+        method,
+        remoteHostname: LAN,
+        tokenState: TOKEN_VALID,
+        ...overrides,
+    });
+}
+
+Deno.test("token — with it, another machine gets the client routes", () => {
+    const routes = [
+        ["POST", "/v1/chat/completions"],
+        ["GET", "/v1/models"],
+        ["GET", "/v1/models/saxby"],
+        ["GET", "/saxby/v1/status"],
+    ];
+
+    for (const [method, path] of routes) {
+        assertEquals(inspectRemote(method, path), null, `${method} ${path}`);
+    }
+});
+
+Deno.test("token — it does not make another machine a local program", () => {
+    const routes = [
+        ["POST", "/saxby/v1/reservations"],
+        ["GET", "/saxby/v1/reservations"],
+        ["POST", "/saxby/v1/explain"],
+        ["POST", "/saxby/v1/status"],
+        ["POST", "/api/generate"],
+        ["GET", "/api/tags"],
+        ["POST", "/v1/embeddings"],
+    ];
+
+    for (const [method, path] of routes) {
+        assertEquals(
+            inspectRemote(method, path)?.code,
+            "remote_path_not_allowed",
+            `${method} ${path}`,
+        );
+    }
+});
+
+Deno.test("token — the status route is not for proxies or extensions", () => {
     assertEquals(
-        inspectRequest({
-            headers: new Headers(CURL),
-            path: "/v1/chat/completions",
-            remoteHostname: LAN,
-            tokenState: TOKEN_VALID,
-        }),
-        null,
+        proxiedCode(SERVE, { method: "GET", path: "/saxby/v1/status" }),
+        "proxy_path_not_allowed",
     );
+
+    assertEquals(
+        browserCode(EXTENSION_HEADERS, {
+            method: "GET",
+            path: "/saxby/v1/status",
+        }),
+        "origin_path_not_allowed",
+    );
+});
+
+Deno.test("token — every loopback form counts as this machine", () => {
+    const forms = ["127.0.0.1", "127.0.0.2", "::1", "::ffff:127.0.0.1"];
+
+    for (const remoteHostname of forms) {
+        assertEquals(
+            inspectRequest({
+                headers: new Headers(CURL),
+                path: "/saxby/v1/reservations",
+                method: "POST",
+                remoteHostname,
+                tokenState: TOKEN_MISSING,
+            }),
+            null,
+            remoteHostname,
+        );
+    }
+});
+
+Deno.test("token — a lookalike address is not this machine", () => {
+    const forms = [
+        "127.evil.example",
+        "1270.0.0.1",
+        "::ffff:192.168.1.20",
+        "::ffff:127.evil",
+        "localhost",
+        "",
+    ];
+
+    for (const remoteHostname of forms) {
+        assertEquals(
+            inspectRequest({
+                headers: new Headers(CURL),
+                path: "/v1/models",
+                method: "GET",
+                remoteHostname,
+                tokenState: TOKEN_MISSING,
+            })?.code,
+            "token_required",
+            remoteHostname,
+        );
+    }
 });
 
 Deno.test("token — it comes before anything about the config", () => {
@@ -642,6 +732,7 @@ Deno.test("token — it does not replace the other checks", () => {
         inspectRequest({
             headers: new Headers({ host: "attacker.example" }),
             path: "/v1/models",
+            method: "GET",
             remoteHostname: LAN,
             tokenState: TOKEN_VALID,
         })?.code,
