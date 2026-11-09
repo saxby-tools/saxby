@@ -323,8 +323,8 @@ step. **Support happens on GitHub issues only.** Package pages point
 there; nobody monitors AUR or Homebrew comment threads. If Saxby
 grows, others can maintain fancier packages or forks.
 
-**Saxby serves this machine only, until keys exist.** It checks no
-credentials, so it listens on `127.0.0.1` only — `Deno.serve` with no
+**Saxby asks nothing of this machine and a token of every other.**
+It listens on `127.0.0.1` only — `Deno.serve` with no
 hostname listens on every interface, and until v0.9.2 that put Saxby,
 and through its catch-all Ollama's management API, on the LAN. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
@@ -335,19 +335,36 @@ any `Origin` not listed in `allowed_origins` (a browser), a non-local
 "browser" by `Origin` and `Host` only: Node's `fetch` sends
 `sec-fetch-mode: cors` from server code, and OpenClaw's real requests
 carry it. `host.docker.internal` is allowed because a Docker Desktop
-container reaches the host by that name. Serving other machines — keys,
-a trusted-proxy list for anything but Tailscale Serve, non-loopback
-binds — is the post-v1 exposure work; when it lands, "identified by
-`User-Agent`, never by API key" must be revisited, since its objection
-is to keys nobody verifies.
+container reaches the host by that name. What remains of the post-v1
+exposure work is per-client keys and proxies other than Tailscale
+Serve; when keys land, "identified by `User-Agent`, never by API key"
+must be revisited, since its objection is to keys nobody verifies.
+
+**One shared API token, for any request not straight from this
+machine.** "Straight from this machine" is a loopback connection with
+no forwarding header; everything else — through a trusted proxy, or
+one day over a listener that is not loopback — must send the token.
+One rule, so no second kind of exposure can arrive without it. Local
+clients need nothing, which keeps every existing install working.
+The token is checked BEFORE any other proxied check, so a caller
+without it learns nothing about the config. It lives in `api-token`
+beside the config, never in `config.jsonc`, which gets pasted into
+issues; saxbyd writes a random one at first boot and reads it at
+boot only. The operator may write their own, and a short one is
+warned about at every boot, not refused — nudged, not blocked. If the
+file cannot be read, other machines are refused and local clients
+are served: fail closed for strangers, never for the router. Saxby's
+own token is never forwarded to the backend. It is ONE token, so it
+identifies nobody, and "clients are identified by `User-Agent`"
+stands untouched.
 
 **One proxy may be trusted: Tailscale Serve, named in
 `trusted_proxies`.** Off by default, added in v0.9.8 so a phone
 keyboard on the tailnet could reach Saxby with no agent in between.
-It ships with NO token: Saxby still checks no credentials, the
-tailnet's access rules decide who gets in, and every boot says so. A
-shared token is #49; per-client keys stay post-v1. What the guard
-checks is that a proxied request fits Serve and nothing else: a
+Every proxied request must carry the API token (previous entry);
+v0.9.8 was built without one, and #49 closed that. Per-client keys
+stay post-v1. Beyond the token, the guard checks that a proxied
+request fits Serve and nothing else: a
 loopback connection, the configured `Host`, only the three forwarding
 headers Serve sends, one tailnet address in `X-Forwarded-For`, no
 Funnel header, no `Origin`. Serve deletes a client's own
@@ -356,10 +373,10 @@ Funnel header, no `Origin`. Serve deletes a client's own
 device cannot fake them. **A header cannot prove which proxy sent
 it**: every connection is from 127.0.0.1, and a program on this
 machine can send the same headers — but it could already call Saxby
-directly. Proxied requests reach chat and the model list ONLY, never
-the memory broker, status, explain or the catch-all. The log does not
-yet say who called through the proxy (#50), because a login names a
-person and `log/client.js` stores apps.
+directly, and it is why the token exists. Proxied requests reach chat
+and the model list ONLY, never the memory broker, status, explain or
+the catch-all. The log does not yet say who called through the proxy
+(#50), because a login names a person and `log/client.js` stores apps.
 
 **One kind of browser client may be let in: an extension, by its
 exact origin in `allowed_origins`.** Off by default. A browser sets
