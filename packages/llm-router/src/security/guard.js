@@ -83,16 +83,27 @@ const TAILNET_V4_SECOND_MIN = 64;
 const TAILNET_V4_SECOND_MAX = 127;
 const TAILNET_V6_PREFIX = "fd7a:115c:a1e0:";
 
-//  Where a proxy on this machine connects from.
-const LOOPBACK = new Set(["127.0.0.1", "::1"]);
+//  A connection from this machine: all of 127.0.0.0/8, ::1, and an
+//  IPv4 loopback address as a dual-stack listener reports it,
+//  "::ffff:127.0.0.1".
+const LOOPBACK_V4_PREFIX = "127.";
+const LOOPBACK_V6 = "::1";
+const MAPPED_V4_PREFIX = "::ffff:";
 
-//  All a proxied client or a browser extension may reach. Everything
-//  else stays with local programs: the memory broker, the status
-//  route with its pid, and the catch-all that passes Ollama's own API
+//  All a client that is not on this machine may reach, and a browser
+//  extension too. Everything else stays with local programs: the
+//  memory broker and the catch-all that passes Ollama's own API
 //  through.
 const CLIENT_CHAT = { method: "POST", path: "/v1/chat/completions" };
 const CLIENT_MODELS = { method: "GET", path: "/v1/models" };
 const CLIENT_ROUTES_HINT = "/v1/chat/completions and /v1/models";
+
+//  One more for a direct connection from another address: the status
+//  route. `saxby` asks it where saxbyd listens, and when that is one
+//  interface and not loopback, its own request arrives from that
+//  interface's address. A proxied client and an extension never get
+//  it.
+const REMOTE_STATUS = { method: "GET", path: "/saxby/v1/status" };
 
 //  Names a local client uses to reach Saxby. host.docker.internal is
 //  how a Docker Desktop container reaches the host; Niko's Open WebUI
@@ -250,16 +261,56 @@ function refusal(status, code, message) {
 }
 
 /**
+ * Whether a connection's address is this machine's loopback. The
+ * address comes from the socket, never from a header. Anything that
+ * is not plainly loopback, an unknown address included, is not.
+ * @param {string | undefined} remoteHostname
+ * @returns {boolean}
+ */
+function isLoopbackAddress(remoteHostname) {
+    if (typeof remoteHostname !== "string") {
+        return false;
+    }
+
+    let address = remoteHostname.toLowerCase();
+
+    if (address === LOOPBACK_V6) {
+        return true;
+    }
+
+    if (address.startsWith(MAPPED_V4_PREFIX)) {
+        address = address.slice(MAPPED_V4_PREFIX.length);
+    }
+
+    if (!IPV4.test(address)) {
+        return false;
+    }
+
+    return address.startsWith(LOOPBACK_V4_PREFIX);
+}
+
+/**
  * Whether a request comes straight from this machine: a loopback
- * connection that no proxy forwarded. An unknown address is not
- * loopback.
+ * connection that no proxy forwarded.
  */
 function isDirect(remoteHostname, proxyHeader) {
     if (proxyHeader) {
         return false;
     }
 
-    return LOOPBACK.has(remoteHostname);
+    return isLoopbackAddress(remoteHostname);
+}
+
+function isRemoteRoute(method, path) {
+    if (isClientRoute(method, path)) {
+        return true;
+    }
+
+    if (method !== REMOTE_STATUS.method) {
+        return false;
+    }
+
+    return path === REMOTE_STATUS.path;
 }
 
 /**
@@ -320,7 +371,7 @@ function inspectProxied(request, trustedProxies) {
     //  True of every connection today, since Saxby listens on loopback
     //  only. Checked so that a later non-loopback listener cannot
     //  inherit this trust by accident.
-    if (!LOOPBACK.has(remoteHostname)) {
+    if (!isLoopbackAddress(remoteHostname)) {
         return notTrusted(
             `Refused: a proxied request must reach Saxby from this ` +
                 `machine, and this one came from ` +
@@ -462,7 +513,9 @@ export function inspectRequest(request) {
         }
     }
 
-    if (!isDirect(request.remoteHostname, proxyHeader)) {
+    const direct = isDirect(request.remoteHostname, proxyHeader);
+
+    if (!direct) {
         const verdict = inspectToken(tokenState);
 
         if (verdict) {
@@ -484,6 +537,21 @@ export function inspectRequest(request) {
     //  never carries. It has its own checks, and passes or fails there.
     if (proxyHeader) {
         return inspectProxied(request, trustedProxies);
+    }
+
+    //  A connection from another address, token in hand. The token
+    //  says the caller is allowed in, not that it is a local program,
+    //  so it gets the client routes and not the whole surface.
+    if (!direct) {
+        if (!isRemoteRoute(request.method, path)) {
+            return refusal(
+                403,
+                "remote_path_not_allowed",
+                `Refused: '${request.method} ${path}' is served only ` +
+                    `to programs on the machine running Saxby. Other ` +
+                    `machines get ${CLIENT_ROUTES_HINT}. ${DOCS_HINT}`,
+            );
+        }
     }
 
     const host = headers.get("host");
