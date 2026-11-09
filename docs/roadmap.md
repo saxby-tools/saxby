@@ -114,9 +114,18 @@ known gaps are issues labelled
     - [x] Prompt text opt-in, detector evidence without user text, a
           keyed prompt hash, owner-only files, `secure_delete`
           ([Logging](configuration.md#logging)).
+  - [x] **Tailnet clients** *(not in the original plan: added on
+        Nov. 8, 2026, for a phone keyboard; ships in v0.9.8)*
+    - [x] `trusted_proxies`: Tailscale Serve may pass requests in,
+          for chat and the model list only
+          ([Trusted proxies](configuration.md#trusted-proxies)).
+          Known gaps: #49, #50, #51 and #52.
+    - [x] `client_defaults`: a request field a client cannot send,
+          set per client
+          ([Client defaults](configuration.md#client-defaults)).
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
-    - [ ] JSDoc sweep (#26, v0.9.8), consistent across the repo. Mechanical and
+    - [ ] JSDoc sweep (#26, v0.9.9), consistent across the repo. Mechanical and
           verifiable with `deno check` — safe to start any time, and
           independent of the phases above.
     - [x] Create `docs/` — [Getting started](getting-started.md),
