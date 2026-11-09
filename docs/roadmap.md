@@ -126,6 +126,11 @@ known gaps are issues labelled
     - [x] `allowed_origins`: a browser extension may be let in by
           its exact origin
           ([Browser extensions](configuration.md#browser-extensions)).
+  - [x] **Live config reload** *(not in the original plan: pulled
+        forward from the post-v1 backlog on Nov. 9, 2026)*
+    - [x] A saved config is applied without a restart, whole or not
+          at all, and `saxby status` says when one was declined
+          ([Edits apply on save](configuration.md#edits-apply-on-save)).
   - [ ] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
     - [ ] JSDoc sweep (#26, v0.9.9), consistent across the repo. Mechanical and
