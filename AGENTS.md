@@ -373,7 +373,10 @@ status route for a direct connection, which is `saxby` asking a
 daemon bound to one interface. **Loopback is the whole definition of
 local, so a TCP-level forwarder defeats all of it**: `ssh -L`, `socat`
 and `tailscale serve --tcp` add no header, and what they carry looks
-local. That was true before the token and is documented, not solved.
+local. Docker Desktop is one too: a container that calls
+`host.docker.internal` arrives on the host's loopback, so it needs
+no token and reaches the broker (checked Nov. 9, 2026, on macOS).
+That was true before the token and is documented, not solved.
 
 **One proxy may be trusted: Tailscale Serve, named in
 `trusted_proxies`.** Off by default, added in v0.9.8 so a phone
