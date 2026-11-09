@@ -398,6 +398,13 @@ Ollama's `/v1/*` endpoints IGNORE per-request `options` (`num_ctx`)
 and `keep_alive`; only `/api/*` accepts them. Per-persona context
 sizing would need an optional Ollama capability layer. Deferred.
 
+Ollama's `/v1/chat/completions` honours `reasoning_effort`. `"none"`
+turns reasoning off and is accepted by every model; any other value
+gets a 400, "does not support thinking", from a model with no
+reasoning. `think: false` is IGNORED on `/v1` — the model reasons
+anyway. Checked on 0.40.15 with a 31B reasoning model and a 3B model
+without.
+
 `OLLAMA_MAX_LOADED_MODELS` is a ceiling, not a reservation — models
 load concurrently only if they also fit in available memory.
 
