@@ -130,3 +130,61 @@ Deno.test("config — an embedder profile may carry a size", () => {
 
     assertEquals(parsed.semantic.profiles["bge-m3"].size_gib, 0.7);
 });
+
+//  =====================================================================
+//  Trusted proxies
+//  =====================================================================
+
+function proxy(fields = {}) {
+    return {
+        trusted_proxies: [{
+            kind: "tailscale-serve",
+            host: "box.example.ts.net",
+            ...fields,
+        }],
+    };
+}
+
+Deno.test("config — no proxy is trusted unless one is named", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.trusted_proxies, []);
+});
+
+Deno.test("config — a Tailscale Serve proxy passes", () => {
+    const parsed = validateConfig(config(proxy()));
+
+    assertEquals(parsed.trusted_proxies, [{
+        kind: "tailscale-serve",
+        host: "box.example.ts.net",
+    }]);
+});
+
+Deno.test("config — an unknown proxy kind is refused", () => {
+    const message = messageFor(config(proxy({ kind: "caddy" })));
+
+    assert(message.includes("trusted_proxies.0.kind"));
+    assert(message.includes("tailscale-serve"));
+});
+
+Deno.test("config — a proxy host with a scheme or port is refused", () => {
+    const hosts = [
+        "https://box.example.ts.net",
+        "box.example.ts.net:11435",
+        "",
+    ];
+
+    for (const host of hosts) {
+        const message = messageFor(config(proxy({ host })));
+
+        assert(message.includes("trusted_proxies.0.host"), host);
+    }
+});
+
+Deno.test("config — a proxy with no host is refused", () => {
+    const message = messageFor(config({
+        trusted_proxies: [{ kind: "tailscale-serve" }],
+    }));
+
+    assert(message.includes("trusted_proxies.0.host"));
+});
