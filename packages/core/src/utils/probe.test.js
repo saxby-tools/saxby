@@ -1,5 +1,11 @@
 import { assertEquals } from "@std/assert";
-import { isPortHeld, probeHostFor } from "./probe.js";
+import {
+    fetchInstanceStatus,
+    fetchSaxbyStatus,
+    isPortHeld,
+    probeHostFor,
+    probeTokenFor,
+} from "./probe.js";
 
 Deno.test("probe — a wildcard bind is probed on loopback", () => {
     for (const host of ["0.0.0.0", "::", "[::]"]) {
@@ -33,4 +39,118 @@ Deno.test("probe — a port freed again is not held", () => {
     listener.close();
 
     assertEquals(isPortHeld(port), false);
+});
+
+//  =====================================================================
+//  The API token on a probe
+//  =====================================================================
+//  A stand-in saxbyd that records the Authorization header it is sent.
+//  Port 0 again, so nothing collides with a running one.
+
+function fakeDaemon(hostname) {
+    const seen = [];
+
+    const server = Deno.serve(
+        { hostname, port: 0, onListen: () => {} },
+        (request) => {
+            seen.push(request.headers.get("authorization"));
+
+            return Response.json({ instance: null, port: 1, pid: 1 });
+        },
+    );
+
+    return { seen, port: server.addr.port, stop: () => server.shutdown() };
+}
+
+async function withConfigRoot(fn) {
+    const root = await Deno.makeTempDir();
+    const before = Deno.env.get("XDG_CONFIG_HOME");
+
+    Deno.env.set("XDG_CONFIG_HOME", root);
+
+    try {
+        await Deno.mkdir(`${root}/saxby`);
+        await Deno.writeTextFile(`${root}/saxby/api-token`, "the-token\n");
+        await fn();
+    } finally {
+        if (before === undefined) {
+            Deno.env.delete("XDG_CONFIG_HOME");
+        } else {
+            Deno.env.set("XDG_CONFIG_HOME", before);
+        }
+
+        await Deno.remove(root, { recursive: true });
+    }
+}
+
+Deno.test("probe — a token is sent only when one is given", async () => {
+    const daemon = fakeDaemon("127.0.0.1");
+
+    try {
+        await fetchSaxbyStatus(daemon.port);
+        await fetchSaxbyStatus(daemon.port, "127.0.0.1", "the-token");
+
+        assertEquals(daemon.seen, [null, "Bearer the-token"]);
+    } finally {
+        await daemon.stop();
+    }
+});
+
+Deno.test("probe — a daemon on 127.0.0.1 is sent no token", async () => {
+    const daemon = fakeDaemon("127.0.0.1");
+
+    try {
+        await withConfigRoot(async () => {
+            for (const listen_host of ["127.0.0.1", "0.0.0.0"]) {
+                const config = { listen_port: daemon.port, listen_host };
+                const status = await fetchInstanceStatus(config, null);
+
+                assertEquals(status.pid, 1, listen_host);
+            }
+        });
+
+        assertEquals(daemon.seen, [null, null]);
+    } finally {
+        await daemon.stop();
+    }
+});
+
+//  The test task may reach 127.0.0.1 only, so a daemon on another
+//  address cannot be stood up here. What decides whether a token is
+//  sent is probeTokenFor, tested on its own.
+Deno.test("probe — a daemon asked anywhere else gets the token", async () => {
+    await withConfigRoot(async () => {
+        for (const host of ["10.0.0.5", "::1", "localhost", "127.0.0.2"]) {
+            assertEquals(await probeTokenFor(host, null), "the-token", host);
+        }
+
+        for (const host of ["127.0.0.1", "0.0.0.0", "::", "[::]"]) {
+            assertEquals(await probeTokenFor(host, null), null, host);
+        }
+    });
+});
+
+Deno.test("probe — a token that cannot be read is no token", async () => {
+    const root = await Deno.makeTempDir();
+    const before = Deno.env.get("XDG_CONFIG_HOME");
+
+    Deno.env.set("XDG_CONFIG_HOME", root);
+
+    try {
+        assertEquals(await probeTokenFor("10.0.0.5", null), null);
+        assertEquals(await probeTokenFor("10.0.0.5", "nosuch"), null);
+
+        await Deno.mkdir(`${root}/saxby`);
+        await Deno.writeTextFile(`${root}/saxby/api-token`, "two words\n");
+
+        assertEquals(await probeTokenFor("10.0.0.5", null), null);
+    } finally {
+        if (before === undefined) {
+            Deno.env.delete("XDG_CONFIG_HOME");
+        } else {
+            Deno.env.set("XDG_CONFIG_HOME", before);
+        }
+
+        await Deno.remove(root, { recursive: true });
+    }
 });
