@@ -295,6 +295,32 @@ it, the daemon reads it, `saxby probe` and `saxby instance list` read
 it. A CLI importing the daemon's internals would point the dependency
 the wrong way.
 
+**A saved config is applied live, whole or not at all.** saxbyd
+watches the instance folder and reloads the config on a save
+([`config/reload.js`](packages/llm-router/src/config/reload.js)). The
+new config is validated and given its Tier 3 vectors off to the side,
+then swapped in with one assignment. It is replaced, never edited, so
+a request in flight keeps the config it started with. A file that
+cannot be applied leaves the old config serving, and the reason is
+printed AND kept on `/saxby/v1/status` for `saxby status` to show:
+whoever saved the file is looking at an editor, not at the log, and a
+declined edit nobody hears about is the silent fallback again.
+`listen_host`, `listen_port`, `log_path` and `memory` need a restart,
+and an edit that touches one is declined whole, not half applied, so
+the running config is always exactly one version of the file.
+`memory` is on that list because the broker's sweep timer and
+heartbeat interval are tied to jobs already holding reservations;
+pins and sizes do reload, since the budget is worked out fresh at
+each decision, and the ledger is never touched. **A reload never
+turns off a working Tier 3**: if the embedder cannot embed a new
+exemplar, the edit is declined. The guard lists reload too, with the
+lines a boot prints, because whoever can write the file is already a
+local program. The API token stays boot-only. The FOLDER is watched,
+not the file, since editors save by rename and the decision log's
+writes in the same folder are filtered out by name. The save is the
+only trigger: no signal and no route, until something shows the
+watch is not enough.
+
 **License is AGPL-3.0-or-later.** Saxby is a network service, and
 plain GPL never triggers for software that is only run, not
 distributed.
@@ -574,10 +600,10 @@ fallback with credential substitution.
 **Infrastructure:** `packages/dashboard` (read-only, Evidence.dev);
 first-class `/v1/embeddings` route so embedding traffic is logged;
 semantic search over the prompt archive (prompts are already
-embedded); hot reload of `$XDG_CONFIG_HOME/saxby`; middleware hooks
-for response transforms; per-persona `num_ctx` via the Ollama-native
-capability layer; a multilingual extractor, which the canonical tag
-vocabulary was designed to accept as a drop-in.
+embedded); middleware hooks for response transforms; per-persona
+`num_ctx` via the Ollama-native capability layer; a multilingual
+extractor, which the canonical tag vocabulary was designed to accept
+as a drop-in.
 
 **Discovery and UX:** user-defined custom tags, so specialised fields
 can adapt personas without forking; model capability auto-discovery
