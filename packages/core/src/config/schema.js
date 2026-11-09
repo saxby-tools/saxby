@@ -202,9 +202,8 @@ export const SaxbyConfigSchema = v.strictObject({
     log_path: v.optional(v.string()),
     memory: v.optional(MemorySchema, {}),
     //  Empty unless the operator names one, and then every proxied
-    //  request is still refused unless it fits that proxy exactly.
-    //  Saxby checks no credentials, so naming a proxy hands the
-    //  question of who gets in to that proxy.
+    //  request is still refused unless it fits that proxy exactly and
+    //  carries the API token (config/token.js).
     trusted_proxies: v.optional(v.array(TrustedProxySchema), []),
     //  Browser extensions that may call Saxby, each by its exact
     //  origin. Empty by default: every request from a browser is
