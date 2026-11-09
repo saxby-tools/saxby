@@ -6,6 +6,7 @@ import { instanceCommand } from "./commands/instance/index.js";
 import { probeCommand } from "./commands/probe.js";
 import { reserveCommand } from "./commands/reserve.js";
 import { serviceCommand } from "./commands/service/index.js";
+import { statusCommand } from "./commands/status.js";
 import { tokenCommand } from "./commands/token.js";
 import packageConfig from "../deno.json" with { type: "json" };
 
@@ -26,6 +27,7 @@ await new Command()
     .command("probe", probeCommand)
     .command("reserve", reserveCommand)
     .command("service", serviceCommand)
+    .command("status", statusCommand)
     .command("token", tokenCommand)
     .command("vram-guard-mac", vramGuardMacCommand)
     .command("completions", new CompletionsCommand())

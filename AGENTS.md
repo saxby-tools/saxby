@@ -324,26 +324,36 @@ there; nobody monitors AUR or Homebrew comment threads. If Saxby
 grows, others can maintain fancier packages or forks.
 
 **Saxby asks nothing of this machine and a token of every other.**
-It listens on `127.0.0.1` only — `Deno.serve` with no
-hostname listens on every interface, and until v0.9.2 that put Saxby,
-and through its catch-all Ollama's management API, on the LAN. A guard
+It listens on `127.0.0.1` unless `listen_host` says otherwise —
+`Deno.serve` with no hostname listens on every interface, and until
+v0.9.2 that put Saxby, and through its catch-all Ollama's management
+API, on the LAN. v0.9.2 refused every other bind. The Docker image
+made that a config field: a container's loopback is unreachable from
+outside it, so a refusal meant no image. A wider bind is the
+operator's call, named at every boot rather than refused — their
+machine, their decision; what protects it is the API token (next
+entry), not the warning. A guard
 ([`security/guard.js`](packages/llm-router/src/security/guard.js)) runs
 before every route and refuses forwarding headers (a proxy on the same
-box makes strangers look local; the one exception is the next entry),
-any `Origin` not listed in `allowed_origins` (a browser), a non-local
-`Host` (DNS rebinding) and Ollama's management paths. It judges
-"browser" by `Origin` and `Host` only: Node's `fetch` sends
-`sec-fetch-mode: cors` from server code, and OpenClaw's real requests
-carry it. `host.docker.internal` is allowed because a Docker Desktop
-container reaches the host by that name. What remains of the post-v1
-exposure work is per-client keys and proxies other than Tailscale
-Serve; when keys land, "identified by `User-Agent`, never by API key"
-must be revisited, since its objection is to keys nobody verifies.
+box makes strangers look local; the one exception is two entries
+down), any `Origin` not listed in `allowed_origins` (a browser), a
+`Host` that is neither a local name nor in `allowed_hosts` (DNS
+rebinding; a browser cannot forge `Host`, so a listed name loosens
+nothing) and Ollama's management paths. It judges "browser" by
+`Origin` and `Host` only: Node's `fetch` sends `sec-fetch-mode: cors`
+from server code, and OpenClaw's real requests carry it.
+`host.docker.internal` is allowed because a Docker Desktop container
+reaches the host by that name; a Compose service name goes in
+`allowed_hosts`. What remains of the post-v1 exposure work is
+per-client keys and proxies other than Tailscale Serve; when keys
+land, "identified by `User-Agent`, never by API key" must be
+revisited, since its objection is to keys nobody verifies.
 
 **One shared API token, for any request not straight from this
 machine.** "Straight from this machine" is a loopback connection with
 no forwarding header; everything else — through a trusted proxy, or
-one day over a listener that is not loopback — must send the token.
+over a listener that is not loopback, which is every client of a
+container — must send the token.
 One rule, so no second kind of exposure can arrive without it. Local
 clients need nothing, which keeps every existing install working.
 The token is checked BEFORE any other proxied check, so a caller
@@ -439,6 +449,24 @@ paths, so a changed PATH can't swap one out; Linux needs only `kill`.
 **The list is closed**: adding a program needs a stated reason here.
 It lives in `SAXBYD_RUN` in [`scripts/build.js`](scripts/build.js),
 and `deno task dev` takes the same flags.
+
+**The Docker image is the release's own binaries on a bare base, and
+every client of it needs the token.** `saxbytools/saxby` is
+distroless `cc`, because Deno-compiled binaries need glibc and libgcc
+and nothing else; it runs as `nonroot`, with one volume at `/data`
+and `XDG_CONFIG_HOME=/data`, since config, log, vectors and token are
+one tree. The workflow copies the release's Linux tarballs in rather
+than compiling a fifth time, so the image and the tarball hold the
+same bytes. In a container saxbyd binds `0.0.0.0` by config, never by
+an env var or a second build of the binary. The container's own
+loopback is the only thing local to it, so the host through a
+published port and the next container over both send the token; that
+is the right default where `-p 11435:11435` reaches every interface.
+Tags are `X.Y.Z` and `X.Y`, with no `latest` before v1.0.0, since
+every v0.* release is a pre-release. Signed by digest with cosign,
+keyless. The memory broker stays a feature of a native install: in a
+container it cannot see the host's processes, so it fails closed and
+says why.
 
 **Rejected and why:** a hosted router model (opaque dispatcher —
 Saxby's own job); a hosted typed-classification API (unpublished

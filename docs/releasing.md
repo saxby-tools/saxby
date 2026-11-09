@@ -170,6 +170,19 @@ that package in an Arch container. It also publishes the four
 GitHub's OIDC token, which works only for packages linked to this
 repository on jsr.io.
 
+**Publishing also builds the Docker image.**
+[`.github/workflows/docker.yml`](../.github/workflows/docker.yml)
+runs on the same event. It downloads the release's two Linux
+tarballs, checks them against their checksums, and copies the
+binaries into `saxbytools/saxby` for `linux/amd64` and `linux/arm64`,
+so the image and the tarballs hold the same bytes. It pushes the tags
+`X.Y.Z` and `X.Y`, never `latest` before v1.0.0, then signs the image
+by digest with cosign. It needs the `DOCKER_PAT` secret.
+
+Run it by hand first. From the Actions tab, "docker" and "Run
+workflow" compiles the branch's Linux binaries and builds the image
+for both platforms. That is a dry run: it pushes nothing.
+
 Plain `vX.Y.Z` tags publish, `v0.9.x` included. A tag with a suffix,
 such as `v1.0.0-rc.1`, publishes nothing. It needs two repository
 secrets:

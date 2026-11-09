@@ -1,5 +1,9 @@
 import { Command } from "@cliffy/command";
-import { fetchSaxbyStatus, instanceLabel, instancePhrase } from "@saxby/core";
+import {
+    fetchInstanceStatus,
+    instanceLabel,
+    instancePhrase,
+} from "@saxby/core";
 import { prepare } from "./shared.js";
 
 const LABEL_WIDTH = 10;
@@ -38,7 +42,7 @@ export const statusCommand = new Command()
     .action(async (options) => {
         const { instance, adapter, config } = await prepare(options.instance);
         const service = await adapter.status(instance);
-        const holder = await fetchSaxbyStatus(config.listen_port);
+        const holder = await fetchInstanceStatus(config, instance);
 
         line("Instance", instanceLabel(instance));
         line("Service", `${adapter.name(instance)} (${adapter.displayName})`);

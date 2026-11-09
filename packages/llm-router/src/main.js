@@ -12,6 +12,7 @@ import {
     isWeakApiToken,
     loadConfig,
     OllamaAdapter,
+    probeHostFor,
     readOrCreateApiToken,
     resolveInstanceName,
     validateTagContract,
@@ -24,16 +25,15 @@ import { isProcessAlive } from "./memory/liveness.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
-import { inspectRequest, TOKEN_VALID } from "./security/guard.js";
+import {
+    buildAllowedHosts,
+    inspectRequest,
+    TOKEN_VALID,
+} from "./security/guard.js";
+import { isInContainer, isLoopbackHost } from "./security/listen.js";
 import { tokenStateFor } from "./security/token.js";
 import { parseCommand, readInstanceFlag, USAGE } from "./args.js";
 import packageConfig from "../deno.json" with { type: "json" };
-
-//  Loopback only. Docker Desktop's host.docker.internal and
-//  `tailscale serve` both reach loopback; a proxy is let through only
-//  when `trusted_proxies` names it and the request carries the API
-//  token (security/guard.js).
-const LISTEN_HOSTNAME = "127.0.0.1";
 
 //  Sent with a 401, as HTTP requires, so a client knows what to send.
 const AUTHENTICATE_HEADER = 'Bearer realm="saxby"';
@@ -230,9 +230,13 @@ async function announceBroker(broker) {
  * Under launchd KeepAlive this message repeats every respawn, which
  * is the loudness a second supervisor deserves.
  */
-async function describePortClash(port, instance) {
+async function describePortClash(config, instance) {
+    const port = config.listen_port;
     const header = `❌ Port ${port} is already in use.`;
-    const holder = await fetchSaxbyStatus(port);
+    const holder = await fetchSaxbyStatus(
+        port,
+        probeHostFor(config.listen_host),
+    );
 
     if (!holder) {
         return `${header}\n` +
@@ -330,13 +334,53 @@ function announceOrigins(config) {
 }
 
 /**
+ * Says what the bind means, once, before listening. A bind beyond
+ * loopback is the operator's call (AGENTS.md), so it is named, not
+ * refused: what protects it is the API token, which every request
+ * from another machine must carry. A loopback bind inside a container
+ * is the usual first-run mistake: the published port never answers.
+ */
+async function announceListen(config, apiToken) {
+    const where = `${config.listen_host}:${config.listen_port}`;
+
+    if (!isLoopbackHost(config.listen_host)) {
+        console.log(
+            `🌐 Listening on ${where}, beyond loopback. A request from ` +
+                `another machine needs the API token ('saxby token') ` +
+                `and reaches /v1/chat/completions and /v1/models only.`,
+        );
+
+        if (apiToken === null) {
+            console.warn(
+                `⚠️  With no API token, nothing beyond this machine ` +
+                    `can be served on ${where}.`,
+            );
+        }
+
+        return;
+    }
+
+    if (await isInContainer()) {
+        console.log(
+            `ℹ️  Running in a container with listen_host ` +
+                `${config.listen_host}: a published port will not ` +
+                `answer. Set listen_host to 0.0.0.0 ` +
+                `(docs/docker.md).`,
+        );
+    }
+}
+
+/**
  * First middleware on every route. Refuses browser and rebinding
  * requests, Ollama's management paths, any request from another
  * machine without the API token, and any proxied request that does
  * not fit a proxy named in the config, before the request logger or
  * any route sees them (security/guard.js says why).
+ * @param {{ config: Object, apiToken: string | null,
+ *     allowedHosts: Set<string> }} access - fixed at boot
  */
-async function guardRequests(c, next, config, apiToken) {
+async function guardRequests(c, next, access) {
+    const { config, apiToken, allowedHosts } = access;
     const tokenState = tokenStateFor(c.req.header("authorization"), apiToken);
 
     //  The routes must never pass Saxby's own token on to the backend.
@@ -352,6 +396,7 @@ async function guardRequests(c, next, config, apiToken) {
         remoteHostname: c.env?.remoteAddr?.hostname,
         trustedProxies: config.trusted_proxies,
         allowedOrigins: config.allowed_origins,
+        allowedHosts,
         tokenState,
     });
 
@@ -506,10 +551,19 @@ async function main() {
 
     const app = new Hono();
 
-    app.use(
-        "*",
-        (c, next) => guardRequests(c, next, config, apiToken),
-    );
+    const access = {
+        config,
+        apiToken,
+        allowedHosts: buildAllowedHosts(config.allowed_hosts),
+    };
+
+    app.use("*", (c, next) => guardRequests(c, next, access));
+
+    if (config.allowed_hosts.length > 0) {
+        const names = config.allowed_hosts.join(", ");
+
+        console.log(`🛡️  Host names also accepted: ${names}`);
+    }
 
     if (!isVerbose()) {
         const requestLogger = logger();
@@ -578,9 +632,11 @@ async function main() {
         });
     });
 
+    await announceListen(config, apiToken);
+
     try {
         Deno.serve(
-            { hostname: LISTEN_HOSTNAME, port: config.listen_port },
+            { hostname: config.listen_host, port: config.listen_port },
             app.fetch,
         );
     } catch (error) {
@@ -588,7 +644,7 @@ async function main() {
             throw error;
         }
 
-        console.error(await describePortClash(config.listen_port, instance));
+        console.error(await describePortClash(config, instance));
         Deno.exit(1);
     }
 }

@@ -209,6 +209,9 @@ any time:
 saxby service status
 ```
 
+For a script, `saxby status` prints one line and exits 1 when nothing
+answers on the instance's port.
+
 See [Services](services.md) for logs, restarts and updating to a new
 build.
 

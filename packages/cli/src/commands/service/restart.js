@@ -22,11 +22,7 @@ export const restartCommand = new Command()
             fail(err.message);
         }
 
-        const answer = await waitForAnswer(
-            config.listen_port,
-            instance,
-            before.pid,
-        );
+        const answer = await waitForAnswer(config, instance, before.pid);
 
         reportAnswer(answer, adapter, instance);
     });

@@ -119,6 +119,10 @@ default  11435  running  13995  0.1.0    installed  ~/.config/saxby
 dev      11436  running  80797  0.1.0    -          ~/.config/saxby/instances/dev
 ```
 
+For one instance, `saxby -i dev status` prints a line and exits 1
+when its saxbyd does not answer, which is what a script or a container
+health check wants.
+
 STATE is one of four values:
 
 | State | Meaning |

@@ -1,5 +1,5 @@
 import {
-    fetchSaxbyStatus,
+    fetchInstanceStatus,
     instancePhrase,
     loadConfig,
     resolveInstanceName,
@@ -59,13 +59,17 @@ export async function prepare(flag) {
  * Polls /saxby/v1/status until this instance answers from a process
  * other than `previousPid`, so a restart is not mistaken for success
  * while the old process is still up.
+ * @param {{ listen_port: number, listen_host: string }} config - says
+ *     where the daemon listens.
+ * @param {string | null} instance
+ * @param {number | null} [previousPid]
  * @returns {Promise<Object | null>} The status, or null on timeout.
  */
-export async function waitForAnswer(port, instance, previousPid = null) {
+export async function waitForAnswer(config, instance, previousPid = null) {
     const deadline = Date.now() + ANSWER_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
-        const holder = await fetchSaxbyStatus(port);
+        const holder = await fetchInstanceStatus(config, instance);
 
         const isNew = holder !== null &&
             holder.instance === instance &&

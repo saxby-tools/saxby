@@ -25,13 +25,16 @@ saxby token
 
 See [The API token](configuration.md#the-api-token).
 
-Saxby listens on `127.0.0.1` only, and it refuses requests that came
-from a web page or name a host other than `localhost`, `127.0.0.1`,
-`[::1]` or `host.docker.internal`. Each refusal is explained in
-[Troubleshooting](troubleshooting.md). The way in from another
-machine is your own tailnet; see
-[A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale).
-A browser extension you choose can be let in too; see
+Saxby listens on `127.0.0.1` by default, and it refuses requests that
+came from a web page or name a host other than `localhost`,
+`127.0.0.1`, `[::1]`, `host.docker.internal` or a name in
+`allowed_hosts`. Each refusal is explained in
+[Troubleshooting](troubleshooting.md). There are two ways in from
+another machine: your own tailnet, as in
+[A phone keyboard over Tailscale](#a-phone-keyboard-over-tailscale),
+and a wider bind, which is yours to set; see
+[Listening](configuration.md#listening). A browser extension you
+choose can be let in too; see
 [A browser extension](#a-browser-extension).
 
 Use `saxby/<model>` to skip routing and reach one model directly.
@@ -70,9 +73,10 @@ HOST=127.0.0.1
 `HOST=127.0.0.1` keeps Open WebUI's own port (8080, under host
 networking) on loopback too. Without it, host networking puts Open
 WebUI on every network interface. That is Open WebUI's exposure, not
-Saxby's, but it is fixed in the same place. Podman's
-`host.containers.internal` is not accepted; use host networking there
-as well.
+Saxby's, but it is fixed in the same place. With Podman, add
+`host.containers.internal` to `allowed_hosts` instead
+([Listening](configuration.md#listening)); the bridge-network problem
+above still applies.
 
 **Turn off Open WebUI's own Ollama connection** with
 `ENABLE_OLLAMA_API=false`. Otherwise Open WebUI talks to Ollama

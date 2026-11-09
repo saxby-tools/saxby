@@ -278,14 +278,18 @@ model list. If it was `/models` or `/chat/completions` with no
 ###  host_not_allowed
 
 ```
-Refused: Host 'attacker.example' is not a local name. Use 127.0.0.1 or localhost.
+Refused: Host 'attacker.example' is not a local name. Use 127.0.0.1 or localhost, or add it to allowed_hosts in config.jsonc.
 ```
 
-The request named a host other than `localhost`, `127.0.0.1`, `[::1]`
-or `host.docker.internal`. A site that points its own name at your
-machine — DNS rebinding — is refused this way. If a container sends
-another name, such as Podman's `host.containers.internal`, use host
-networking; see [Clients](clients.md).
+The request named a host other than `localhost`, `127.0.0.1`, `[::1]`,
+`host.docker.internal` or a name in `allowed_hosts`. A site that
+points its own name at your machine — DNS rebinding — is refused this
+way. A container that reaches Saxby by another name, such as a
+Compose service name or Podman's `host.containers.internal`, needs
+that name in `allowed_hosts`; see
+[Listening](configuration.md#listening). The same refusal answers a
+request sent to a machine address, `http://192.168.1.20:11435`, even
+when `listen_host` is `0.0.0.0`: the address is the `Host`.
 
 ###  management_not_allowed
 
@@ -298,10 +302,28 @@ job, not a router's. Run `ollama pull` or call Ollama on port 11434.
 
 ###  Another machine cannot connect
 
-Saxby listens on `127.0.0.1` only, so nothing beyond this machine
-can reach it directly. The way in is Tailscale Serve, for devices on
-your own tailnet, with the API token; see
-[Trusted proxies](configuration.md#trusted-proxies).
+Saxby listens on `127.0.0.1` by default, so nothing beyond this
+machine can reach it directly. There are two ways in, and both need
+the API token:
+
+- Tailscale Serve, for devices on your own tailnet; see
+  [Trusted proxies](configuration.md#trusted-proxies).
+- A wider bind with `listen_host`. The other machine's request then
+  also needs its `Host` in `allowed_hosts`; see
+  [Listening](configuration.md#listening) before you set either.
+
+###  A container's published port does not answer
+
+```
+ℹ️  Running in a container with listen_host 127.0.0.1: a published port will not answer. Set listen_host to 0.0.0.0 (docs/docker.md).
+```
+
+A container's loopback is its own, so a loopback bind is unreachable
+from the host through `-p` or `ports:`. Generate the config with
+`--listen-host 0.0.0.0`, or set `listen_host` in it, and publish the
+port to the host's loopback: `127.0.0.1:11435:11435`, not
+`11435:11435`, which puts it on every host interface. See
+[Docker](docker.md).
 
 ##  Requests go to the wrong model
 

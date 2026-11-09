@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { findServiceAdapter } from "../../services/index.js";
 import {
-    fetchSaxbyStatus,
+    fetchInstanceStatus,
     getHomeDir,
     getInstanceDir,
     instanceLabel,
@@ -9,6 +9,7 @@ import {
     isPortHeld,
     listInstances,
     loadConfig,
+    probeHostFor,
 } from "@saxby/core";
 
 const COLUMNS = [
@@ -80,9 +81,10 @@ async function describeInstance(name) {
 
     row.port = String(config.listen_port);
 
-    const holder = await fetchSaxbyStatus(config.listen_port);
+    const probeHost = probeHostFor(config.listen_host);
+    const holder = await fetchInstanceStatus(config, name);
 
-    if (!holder && isPortHeld(config.listen_port)) {
+    if (!holder && isPortHeld(config.listen_port, probeHost)) {
         row.state = "blocked";
         row.error = `port ${row.port} is held by a process that is ` +
             `not saxbyd`;

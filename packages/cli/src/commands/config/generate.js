@@ -36,6 +36,16 @@ const HEADER_COMMENT = [
 
 const CONFIG_COMMENTS = {
     listen_port: ["The port Saxby will listen on (default: 11435)."],
+    listen_host: [
+        "The address Saxby binds. 127.0.0.1 reaches this machine only;",
+        "0.0.0.0 reaches every interface, which a container needs and",
+        "saxbyd names at boot. Clients on other machines need the",
+        "API token: saxby token.",
+    ],
+    allowed_hosts: [
+        "Host names accepted besides localhost, 127.0.0.1, [::1] and",
+        "host.docker.internal, such as a Compose service name.",
+    ],
     upstream_url: ["Upstream OpenAI-compatible provider endpoint."],
     global_default_model: [
         "Fallback model used when no persona or capability matches.",
@@ -103,6 +113,19 @@ function renderJsoncConfig(payload) {
     return out.join("\n") + "\n";
 }
 
+/**
+ * "saxby, host.containers.internal" -> ["saxby", "host.containers.internal"].
+ * @param {string | undefined} value
+ * @returns {string[]}
+ */
+function parseNameList(value) {
+    if (!value) {
+        return [];
+    }
+
+    return value.split(",").map((name) => name.trim()).filter(Boolean);
+}
+
 export const generateCommand = new Command()
     .description("Interactively generate a Saxby configuration.")
     .option(
@@ -117,6 +140,16 @@ export const generateCommand = new Command()
     .option(
         "-H, --host <url:string>",
         "Override the backend host URL to target.",
+    )
+    .option(
+        "--listen-host <address:string>",
+        "Address saxbyd binds. Default 127.0.0.1; a container needs " +
+            "0.0.0.0.",
+    )
+    .option(
+        "--allowed-hosts <names:string>",
+        "Comma-separated Host names to accept besides the local ones, " +
+            "such as a Compose service name.",
     )
     .action(async (options) => {
         let instance;
@@ -397,10 +430,20 @@ export const generateCommand = new Command()
                 };
             }
 
+            //  Flags only, never prompted: the defaults are right on a
+            //  machine, and a container's first run passes both.
+            const allowedHosts = parseNameList(options.allowedHosts);
+
             // 4e. Construct Final Payload
             configPayload = {
                 // parsedPort is captured from the Input.prompt in step 3.5
                 listen_port: isNaN(parsedPort) ? defaultPort : parsedPort,
+                ...(options.listenHost
+                    ? { listen_host: options.listenHost }
+                    : {}),
+                ...(allowedHosts.length > 0
+                    ? { allowed_hosts: allowedHosts }
+                    : {}),
                 upstream_url: targetUrl,
                 global_default_model: globalDefault,
                 catalog,
