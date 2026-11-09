@@ -39,7 +39,8 @@ const CONFIG_COMMENTS = {
     listen_host: [
         "The address Saxby binds. 127.0.0.1 reaches this machine only;",
         "0.0.0.0 reaches every interface, which a container needs and",
-        "saxbyd warns about at boot. Saxby checks no credentials.",
+        "saxbyd names at boot. Clients on other machines need the",
+        "API token: saxby token.",
     ],
     allowed_hosts: [
         "Host names accepted besides localhost, 127.0.0.1, [::1] and",
