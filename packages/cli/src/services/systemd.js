@@ -39,10 +39,23 @@ function systemctl(args) {
     return runOrThrow("systemctl", ["--user", ...args]);
 }
 
+/**
+ * The ServiceAdapter for Linux: saxbyd as a `systemd --user` unit,
+ * driven through `systemctl --user`. Static, like the backend
+ * adapters; nothing is instantiated.
+ */
 export class SystemdAdapter {
+    /** The adapter's key, as a config or a log names it. */
     static id = "systemd";
+
+    /** What `saxby service status` prints as the supervisor. */
     static displayName = "systemd --user";
 
+    /**
+     * True on Linux. Whether this session has a user manager is
+     * preflight's question, since a container may not.
+     * @returns {boolean}
+     */
     static isSupported() {
         return Deno.build.os === "linux";
     }
@@ -70,6 +83,12 @@ export class SystemdAdapter {
         }
     }
 
+    /**
+     * The unit name for an instance: `saxbyd.service` for the default
+     * instance, `saxbyd-<name>.service` for a named one.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static name(instance) {
         if (!instance) {
             return `${UNIT_BASE}.service`;
@@ -78,10 +97,22 @@ export class SystemdAdapter {
         return `${UNIT_BASE}-${instance}.service`;
     }
 
+    /**
+     * Where the instance's unit file lives, under the user's
+     * systemd/user config directory.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static path(instance) {
         return join(getConfigDir(), UNIT_DIR, this.name(instance));
     }
 
+    /**
+     * The command to run when the service does not answer. Logs go to
+     * the journal, so this is a `journalctl` line, not a file.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static logHint(instance) {
         return `journalctl --user -u ${this.name(instance)}`;
     }
@@ -116,6 +147,17 @@ export class SystemdAdapter {
         return lines.join("\n");
     }
 
+    /**
+     * Writes the unit file, enables it and restarts it, so a reinstall
+     * picks up the new unit rather than keeping the old process.
+     * @param {Object} spec
+     * @param {string | null} spec.instance
+     * @param {string} spec.binary - Absolute path to saxbyd.
+     * @param {Object<string, string>} spec.environment - Variables the
+     *     service runs with.
+     * @returns {Promise<void>}
+     * @throws {Error} when systemctl fails, with its own stderr.
+     */
     static async install({ instance, binary, environment }) {
         const unit = this.name(instance);
         const unitPath = this.path(instance);
@@ -133,6 +175,12 @@ export class SystemdAdapter {
         await systemctl(["restart", unit]);
     }
 
+    /**
+     * Stops and disables the unit, removes its file and reloads the
+     * manager. A unit systemd never knew is not an error.
+     * @param {string | null} instance
+     * @returns {Promise<void>}
+     */
     static async uninstall(instance) {
         const unit = this.name(instance);
 
@@ -141,11 +189,21 @@ export class SystemdAdapter {
         await systemctl(["daemon-reload"]);
     }
 
+    /**
+     * Restarts the unit with `systemctl --user restart`.
+     * @param {string | null} instance
+     * @returns {Promise<void>}
+     * @throws {Error} when systemctl fails, with its own stderr.
+     */
     static async restart(instance) {
         await systemctl(["restart", this.name(instance)]);
     }
 
     /**
+     * Whether the unit file exists, whether the unit is active, and
+     * its main pid while it runs. `loaded` is "active" here, since a
+     * user unit that is not running is not held by the manager.
+     * @param {string | null} instance
      * @returns {Promise<{installed: boolean, loaded: boolean,
      *     pid: number | null}>}
      */
