@@ -63,9 +63,20 @@ const SUBJECT_LOAD = "load";
 
 //  What a refused or failed request was refused for. The reservation
 //  route maps each to an HTTP status.
+
+/** The budget could not hold the request within its wait. */
 export const CODE_MEMORY = "memory_unavailable";
+
+/** None of the job's processes is alive, so nothing can hold it. */
 export const CODE_PID = "pid_not_alive";
+
+/**
+ * saxbyd cannot check processes on this machine, as in a container,
+ * so it could never release the reservation. Refused, not admitted.
+ */
 export const CODE_LIVENESS = "liveness_unknown";
+
+/** The client left before its wait ended. */
 export const CODE_ABANDONED = "abandoned";
 
 const NO_PROBE_READING = {
@@ -197,6 +208,10 @@ function seconds(ms) {
 //  ---------------------------------------------------------------------
 
 /**
+ * Builds the broker: the one place that judges whether a job may
+ * reserve memory or a model may load, from a budget read fresh at
+ * each decision. Returns the reservation API the routes call plus
+ * start and stop for the sweep timer.
  * @param {Object} options
  * @param {Object} options.config - A validated Saxby config.
  * @param {import("@saxby/core").MemoryProbe | null} options.probe

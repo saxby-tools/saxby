@@ -26,10 +26,17 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
+/**
+ * The schema version a fully migrated file carries in its meta table.
+ * Equals the number of migrations.
+ */
 export const SCHEMA_VERSION = 7;
 
-//  Applied in order; index is the version they upgrade TO.
-//  Never edit a shipped migration — append a new one.
+/**
+ * The migrations, applied in order; the index plus one is the version
+ * each upgrades TO. Never edit a shipped migration — append a new one.
+ * @type {string[]}
+ */
 export const MIGRATIONS = [
     //  ---- v1 --------------------------------------------------------
     `
@@ -300,10 +307,12 @@ export const MIGRATIONS = [
 //  ---------------------------------------------------------------------
 //  Convenience views
 //  ---------------------------------------------------------------------
-//  Rebuilt on every open (CREATE OR REPLACE is not available in
-//  SQLite, so they are dropped first). Views are not data, so
-//  recreating them is free and keeps them in sync with the code.
-
+/**
+ * The convenience views, rebuilt on every open (CREATE OR REPLACE is
+ * not available in SQLite, so they are dropped first). Views are not
+ * data, so recreating them is free and keeps them in sync with the
+ * code.
+ */
 export const VIEWS = `
     DROP VIEW IF EXISTS v_routing_funnel;
     CREATE VIEW v_routing_funnel AS

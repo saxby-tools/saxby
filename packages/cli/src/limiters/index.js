@@ -29,7 +29,11 @@ export { MpsWatermarkLimiter };
  *     { env: Record<string, string> } | { problem: string }} environment
  */
 
-/** @type {MemoryLimiter[]} */
+/**
+ * Every limiter Saxby knows, for any platform. findMemoryLimiters
+ * narrows it to the ones that apply here.
+ * @type {MemoryLimiter[]}
+ */
 export const MEMORY_LIMITERS = [MpsWatermarkLimiter];
 
 /**

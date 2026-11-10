@@ -12,15 +12,22 @@
 
 import { CODE_ABANDONED } from "./broker.js";
 
-//  The client left while its load waited. Nginx's code for it; HTTP
-//  has none.
+/**
+ * The status for a client that left while its load waited. Nginx's
+ * code for it; HTTP has none.
+ */
 export const STATUS_CLIENT_LEFT = 499;
 
-//  Memory could not hold the model within the wait.
+/** The status when memory could not hold the model within the wait. */
 export const STATUS_MEMORY_REFUSED = 503;
 
+/** The gate's outcome when the load may go ahead. */
 export const OUTCOME_ADMITTED = "admitted";
+
+/** The gate's outcome when the client left during the wait. */
 export const OUTCOME_ABANDONED = "abandoned";
+
+/** The gate's outcome when the broker said no. */
 export const OUTCOME_REFUSED = "refused";
 
 /**

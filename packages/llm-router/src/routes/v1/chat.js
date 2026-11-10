@@ -155,6 +155,13 @@ function applySystemPrefix(body, targetModel, config) {
 //  Route
 //  ---------------------------------------------------------------------
 
+/**
+ * Mounts POST /v1/chat/completions: the route every chat request
+ * takes through the pipeline, the memory gate and the proxy, with a
+ * decision-log row for each, bypass and raw passthrough included.
+ * @param {import("hono").Hono} app
+ * @returns {void}
+ */
 export function registerChatRoutes(app) {
     app.post("/v1/chat/completions", async (c) => {
         const config = c.get("config");

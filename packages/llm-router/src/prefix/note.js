@@ -58,8 +58,11 @@ const DATE_OPTIONS = {
     hour12: true,
 };
 
-//  Word for word the line the lab's round 2 ran with. Static, so a
-//  system prompt that holds it shares a prefix cache across turns.
+/**
+ * The system-prompt line that tells the model what the time note is,
+ * word for word the line the lab's round 2 ran with. Static, so a
+ * system prompt that holds it shares a prefix cache across turns.
+ */
 export const EXPLAINER = "User messages may start with a bracketed note " +
     "about the current time, added by the system. Use it. Never write " +
     "these notes yourself. If the time or place is unclear and it " +
