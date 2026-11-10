@@ -1,4 +1,7 @@
-//  What a shell reports for a command that does not exist.
+/**
+ * What a shell reports for a command that does not exist. runCommand
+ * returns it for a missing program, so callers test one code.
+ */
 export const COMMAND_NOT_FOUND = 127;
 
 /**

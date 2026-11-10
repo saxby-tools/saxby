@@ -11,7 +11,11 @@ import { generateOllamaConfig } from "./ollama/generate.js";
  * @property {(url?: string) => Promise<Object>} generate - The TUI wizard
  */
 
-/** @type {AdapterRegistryEntry[]} */
+/**
+ * Every backend `saxby config generate` can scaffold a config for,
+ * each paired with the wizard that asks the questions.
+ * @type {AdapterRegistryEntry[]}
+ */
 export const ADAPTERS = [
     {
         adapter: OllamaAdapter,

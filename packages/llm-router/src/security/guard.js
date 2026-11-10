@@ -132,11 +132,23 @@ const DOCS_HINT = "See docs/troubleshooting.md.";
 
 //  How the caller's token compares with this instance's. main.js
 //  works it out (security/token.js) so this file stays pure.
-//  UNAVAILABLE means saxbyd could not read its own token file: then
-//  nothing can be checked, and only local clients are served.
+
+/** Token state: the caller sent this instance's token. */
 export const TOKEN_VALID = "valid";
+
+/** Token state: the caller sent a token, and it is not this one. */
 export const TOKEN_INVALID = "invalid";
+
+/**
+ * Token state: the caller sent no token. The default, so a request
+ * nobody classified is treated as a stranger.
+ */
 export const TOKEN_MISSING = "missing";
+
+/**
+ * Token state: saxbyd could not read its own token file. Then nothing
+ * can be checked, and only local clients are served.
+ */
 export const TOKEN_UNAVAILABLE = "unavailable";
 
 const TOKEN_HINT = "Run 'saxby token' on the machine running Saxby " +

@@ -72,17 +72,39 @@ async function bootout(label) {
     }
 }
 
+/**
+ * The ServiceAdapter for macOS: saxbyd as a per-user LaunchAgent,
+ * driven through `launchctl` in the user's GUI domain. Static, like
+ * the backend adapters; nothing is instantiated.
+ */
 export class LaunchdAdapter {
+    /** The adapter's key, as a config or a log names it. */
     static id = "launchd";
+
+    /** What `saxby service status` prints as the supervisor. */
     static displayName = "launchd";
 
+    /**
+     * True on macOS, the only platform with launchd.
+     * @returns {boolean}
+     */
     static isSupported() {
         return Deno.build.os === "darwin";
     }
 
-    //  launchd is always present on macOS; nothing to check.
+    /**
+     * Nothing to check: launchd is always present on macOS.
+     * @returns {Promise<void>}
+     */
     static async preflight() {}
 
+    /**
+     * The launchd label for an instance: `tools.saxby.router` for the
+     * default instance, with the instance name appended for a named
+     * one.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static name(instance) {
         if (!instance) {
             return ROUTER_LABEL;
@@ -91,12 +113,23 @@ export class LaunchdAdapter {
         return `${ROUTER_LABEL}.${instance}`;
     }
 
+    /**
+     * Where the instance's plist lives, under ~/Library/LaunchAgents.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static path(instance) {
         const label = this.name(instance);
 
         return join(getHomeDir(), AGENTS_DIR, `${label}.plist`);
     }
 
+    /**
+     * The file to read when the service does not answer: its stdout
+     * log under ~/Library/Logs/saxby.
+     * @param {string | null} instance
+     * @returns {string}
+     */
     static logHint(instance) {
         return logPaths(this.name(instance)).out;
     }
@@ -129,6 +162,17 @@ export class LaunchdAdapter {
         return generatePlist(options);
     }
 
+    /**
+     * Writes the plist and bootstraps it, which starts saxbyd. A label
+     * already loaded is unloaded first, so a reinstall is an update.
+     * @param {Object} spec
+     * @param {string | null} spec.instance
+     * @param {string} spec.binary - Absolute path to saxbyd.
+     * @param {Object<string, string>} spec.environment - Variables the
+     *     service runs with.
+     * @returns {Promise<void>}
+     * @throws {Error} when launchctl refuses, with its own stderr.
+     */
     static async install({ instance, binary, environment }) {
         const label = this.name(instance);
         const plistPath = this.path(instance);
@@ -148,6 +192,12 @@ export class LaunchdAdapter {
         await runOrThrow("launchctl", ["bootstrap", domain(), plistPath]);
     }
 
+    /**
+     * Unloads the job, waiting until launchd has let it go, and
+     * removes the plist. A plist already gone is not an error.
+     * @param {string | null} instance
+     * @returns {Promise<void>}
+     */
     static async uninstall(instance) {
         const label = this.name(instance);
 
@@ -158,6 +208,13 @@ export class LaunchdAdapter {
         await Deno.remove(this.path(instance)).catch(() => {});
     }
 
+    /**
+     * Kills and relaunches the loaded job with `launchctl kickstart`.
+     * @param {string | null} instance
+     * @returns {Promise<void>}
+     * @throws {Error} when the plist exists but nothing is loaded,
+     *     since kickstart would only say "Could not find service".
+     */
     static async restart(instance) {
         const label = this.name(instance);
 
@@ -180,6 +237,10 @@ export class LaunchdAdapter {
     }
 
     /**
+     * Whether the plist exists, whether launchd has the job loaded,
+     * and the pid while it runs. Loaded without a pid means the job
+     * exited and launchd still knows it.
+     * @param {string | null} instance
      * @returns {Promise<{installed: boolean, loaded: boolean,
      *     pid: number | null}>}
      */

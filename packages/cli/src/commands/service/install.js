@@ -97,6 +97,13 @@ function collectEnvironment() {
     return environment;
 }
 
+/**
+ * `saxby service install [--bin <path>]`: writes the service file for
+ * this instance, with the binary's absolute path fixed in it, and
+ * starts the service. Refuses while another saxbyd or some other
+ * program holds the port, since the new service would crash-loop
+ * against it. Reinstalling over our own service is an update.
+ */
 export const installCommand = new Command()
     .description("Install and start Saxby as a user service.")
     .option(
