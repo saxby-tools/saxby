@@ -4,7 +4,14 @@ import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
 import { identifyClient } from "../../log/client.js";
-import { CODE_ABANDONED } from "../../memory/broker.js";
+import {
+    admitLoad,
+    createLoadHold,
+    OUTCOME_ABANDONED,
+    OUTCOME_REFUSED,
+    STATUS_CLIENT_LEFT,
+    STATUS_MEMORY_REFUSED,
+} from "../../memory/gate.js";
 
 //  The request fields `client_defaults` may fill in. The config schema
 //  allows the same list and no more, so a default is never a way to
@@ -343,22 +350,13 @@ export function registerChatRoutes(app) {
 
         //  ---- Closing the row ---------------------------------------
 
-        //  Set when the memory broker let a model load through. Freed
+        //  Taken when the memory broker let a model load through. Freed
         //  at the first byte, when the backend lists the model and its
         //  size counts as loaded instead, or when the request ends.
-        let loadHold = null;
-
-        function releaseLoadHold() {
-            if (!loadHold) {
-                return;
-            }
-
-            loadHold.release();
-            loadHold = null;
-        }
+        const loadHold = createLoadHold();
 
         function closeRow(outcome) {
-            releaseLoadHold();
+            loadHold.release();
 
             if (!logId) {
                 return;
@@ -380,38 +378,32 @@ export function registerChatRoutes(app) {
         //  the backend. While a job holds a reservation, that load must
         //  fit first (docs/memory-broker.md). Bypass and raw requests
         //  are gated too: they load models just the same. With no job
-        //  held, the check is one synchronous call and no await.
+        //  held, the check is one synchronous call and no await. The
+        //  catch-all takes the same gate (routes/catch-all.js).
         if (broker.hasJobs()) {
-            const gate = await broker.gateLoad(targetModel, {
+            const gate = await admitLoad(broker, targetModel, {
                 requestId: tracer.id,
                 signal: c.req.raw.signal,
             });
 
-            if (gate.code === CODE_ABANDONED) {
+            if (gate.outcome === OUTCOME_ABANDONED) {
                 tracer.aborted();
                 closeRow("aborted");
 
-                return c.body(null, 499);
+                return c.body(null, STATUS_CLIENT_LEFT);
             }
 
             //  A new decision-log outcome beside 'refused': routing
             //  found a model, but memory could not hold it. The
             //  memory_events row with this request_id says why.
-            if (!gate.admitted) {
+            if (gate.outcome === OUTCOME_REFUSED) {
                 tracer.warn(gate.reason);
                 closeRow("memory_refused");
 
-                return c.json({
-                    error: {
-                        message: `Saxby is holding GPU memory for a ` +
-                            `running job: ${gate.reason}`,
-                        type: "server_error",
-                        code: gate.code,
-                    },
-                }, 503);
+                return c.json(gate.body, STATUS_MEMORY_REFUSED);
             }
 
-            loadHold = gate.hold;
+            loadHold.take(gate.hold);
         }
 
         const upstreamUrl = `${config.upstream_url}/v1/chat/completions`;
@@ -430,7 +422,7 @@ export function registerChatRoutes(app) {
                 tracer.aborted();
                 closeRow("aborted");
 
-                return c.body(null, 499);
+                return c.body(null, STATUS_CLIENT_LEFT);
             }
 
             tracer.warn(`upstream ${config.upstream_url}: ${err.message}`);
@@ -454,7 +446,7 @@ export function registerChatRoutes(app) {
             onFirstByte: () => {
                 tracer.firstByte();
                 ttfbMs = Math.round(performance.now() - startedAt);
-                releaseLoadHold();
+                loadHold.release();
             },
 
             onUsage: (reported) => {
