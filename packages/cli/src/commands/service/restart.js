@@ -1,8 +1,12 @@
 import { Command } from "@cliffy/command";
 import { fail, prepare, reportAnswer, waitForAnswer } from "./shared.js";
 
-//  The second half of deploying a build: the binary on disk changes,
-//  the running process does not until it restarts.
+/**
+ * `saxby service restart`: the second half of deploying a build. The
+ * binary on disk changes; the running process does not until it
+ * restarts. Waits until a new process answers on the port, so an old
+ * one still shutting down is not reported as success.
+ */
 export const restartCommand = new Command()
     .description("Restart the Saxby service, e.g. after a deploy.")
     .action(async (options) => {
