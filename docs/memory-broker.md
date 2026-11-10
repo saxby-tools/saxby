@@ -12,9 +12,10 @@ The job waits until 12 GiB is free, then runs with PyTorch capped at
 it can't get the memory in time, it is refused with a reason. If
 saxbyd can't be asked at all, the job does not run.
 
-While a job holds memory, Saxby also makes chat requests wait before
-they load a model that would not fit. With no job running, chat
-requests skip the broker entirely.
+While a job holds memory, Saxby also makes requests wait before they
+load a model that would not fit, whether they come to its chat route
+or to one of Ollama's own inference paths through the catch-all. With
+no job running, requests skip the broker entirely.
 
 ##  Why it exists
 
@@ -173,8 +174,8 @@ loads.
 
 Ollama decides whether a model fits by looking at memory that is free
 right now. A job that has reserved 40 GiB but not used it yet looks
-free. So while a job holds a reservation, Saxby checks each chat
-request before it is sent to the backend:
+free. So while a job holds a reservation, Saxby checks each request
+that names a model before it is sent to the backend:
 
 - **No job held:** not checked. No call to the backend, no wait.
 - **The model is loaded:** sent at once.
@@ -199,6 +200,31 @@ A model's size comes from the backend's last report or the catalog's
 
 `saxby/<model>` bypass requests and raw model names are checked the
 same way. They load models too.
+
+###  Which paths are gated
+
+Saxby's own chat route, `POST /v1/chat/completions`, and the six
+paths the catch-all forwards whose body names a model:
+
+| Path | What it is |
+| --- | --- |
+| `/api/chat`, `/api/generate` | Ollama's own chat and completion |
+| `/api/embed`, `/api/embeddings` | Ollama's own embedding |
+| `/v1/completions`, `/v1/embeddings` | OpenAI-style, passed through |
+
+On the catch-all paths, a JSON POST is read for its `model` field
+only while a job holds memory. With no job held, and on every other
+path, the request streams through untouched. A body that is not
+JSON, or names no model, is forwarded as it came: the broker cannot
+judge a load it cannot name, and the backend answers for the request.
+
+A catch-all request has no decision-log row, so a refused one has no
+`memory_refused` outcome there, but its `memory_events` row is
+written like any other. Logging `/v1/embeddings` as a route of its
+own is post-v1 backlog.
+
+Clients that call Ollama directly, on its own port, never pass
+through Saxby and cannot be gated by it (see [Limits](#limits)).
 
 Once a load is let through, its size is held in the ledger until the
 response's first byte arrives. By then the backend lists the model,
@@ -319,7 +345,7 @@ observed beside the budget, so the margin can be tuned against
 evidence later.
 
 **The wait** is long enough for a short job ahead to finish. It
-applies to chat requests too, so a client waits this long before it
+applies to model loads too, so a client waits this long before it
 gets a 503.
 
 **The heartbeat** sets how long a dead job's memory stays held: at
@@ -450,12 +476,12 @@ Not built yet:
 
 ##  Limits
 
-- **Only Saxby's chat route is gated.** Clients that call Ollama
-  directly, and Ollama's native paths sent through Saxby's catch-all
-  (`/api/chat`, `/api/generate`, `/api/embed`, `/v1/embeddings`,
-  `/v1/completions`), can still load a model while a job runs. Their
-  models do count as loaded once they are.
-  [Issue #33](https://github.com/saxby-tools/saxby/issues/33).
+- **Clients that call Ollama directly cannot be gated.** A client
+  pointed at Ollama's own port, such as OpenClaw's memory search,
+  never passes through Saxby, so it can still load a model while a
+  job runs. Its models do count as loaded once they are. Point every
+  client at Saxby, which gates its own routes and the inference paths
+  it forwards ([Which paths are gated](#which-paths-are-gated)).
 - **MLX jobs are not capped** once they run.
   [Issue #34](https://github.com/saxby-tools/saxby/issues/34).
 - **Waiters are not in line.** Each waiting job or load checks again
