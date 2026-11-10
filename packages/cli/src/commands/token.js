@@ -101,6 +101,12 @@ const rotateCommand = new Command()
     )
     .action(rotate);
 
+/**
+ * `saxby token`: prints this instance's API token to stdout and
+ * nothing else there, so it pipes into a clipboard. Writes one first
+ * if none exists, and warns on stderr when it is short enough to
+ * guess. `saxby token rotate` replaces it.
+ */
 export const tokenCommand = new Command()
     .description(
         "Print the API token that clients on other machines must send.",

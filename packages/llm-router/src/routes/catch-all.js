@@ -1,0 +1,261 @@
+//  =====================================================================
+//  The catch-all
+//  =====================================================================
+//  Whatever no route serves goes to the backend as it arrived, minus
+//  the headers that break the forwarding and Saxby's own API token.
+//  Local programs only: the guard keeps proxied, remote and extension
+//  clients to chat and the model list before any route runs, so
+//  nothing here loosens that (security/guard.js).
+//
+//  Six of the paths it forwards load the model their body names:
+//  Ollama's own inference paths and the two OpenAI-style ones Saxby
+//  does not serve itself. While a `saxby reserve` job holds memory, a
+//  JSON POST to one of them is read, its `model` is asked of the
+//  broker, and it is forwarded once the load fits: the gate the chat
+//  route takes (memory/gate.js). Through v0.9.8 these paths were not
+//  gated, so a load could land on memory a job had reserved but not
+//  used yet (issue #33).
+//
+//  The body is read only then. With no job held, and on every other
+//  path and method, the request streams through untouched and nothing
+//  is awaited before it is forwarded. A body that is not JSON, or
+//  names no model, is forwarded as it came: the broker cannot judge a
+//  load it cannot name, and the backend will say what is wrong with
+//  the request.
+
+import { observeResponse } from "../observability/stream.js";
+import { startTrace } from "../observability/trace.js";
+import {
+    admitLoad,
+    createLoadHold,
+    OUTCOME_ABANDONED,
+    OUTCOME_REFUSED,
+    STATUS_CLIENT_LEFT,
+    STATUS_MEMORY_REFUSED,
+} from "../memory/gate.js";
+
+//  The paths whose POST loads the model its body names.
+const GATED_PATHS = new Set([
+    "/api/chat",
+    "/api/generate",
+    "/api/embed",
+    "/api/embeddings",
+    "/v1/completions",
+    "/v1/embeddings",
+]);
+
+const GATED_METHOD = "POST";
+
+//  A request with no body to forward.
+const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
+
+//  accept-encoding would make the backend gzip a stream that is
+//  re-framed on the way back; content-length is wrong once the body
+//  is re-sent; host names Saxby, not the backend.
+const DROPPED_REQUEST_HEADERS = [
+    "accept-encoding",
+    "content-length",
+    "host",
+];
+
+//  fetch() already decompressed the body, so a surviving
+//  content-encoding tells the client to gunzip plaintext.
+const DROPPED_RESPONSE_HEADERS = ["content-encoding", "content-length"];
+
+/**
+ * The client's headers as they arrived, minus what breaks the
+ * forwarding. Saxby's own API token stops here (main.js sets the
+ * flag); any other Authorization value is the client's business with
+ * the backend.
+ */
+function buildUpstreamHeaders(c) {
+    const headers = new Headers(c.req.raw.headers);
+
+    for (const name of DROPPED_REQUEST_HEADERS) {
+        headers.delete(name);
+    }
+
+    if (c.get("sentApiToken")) {
+        headers.delete("authorization");
+    }
+
+    return headers;
+}
+
+/**
+ * Sends the request to the backend at the same path and query.
+ * @param {ReadableStream | string | undefined} body - the client's
+ *     body as it arrived, or as it was read for the gate
+ */
+function forward(c, body) {
+    const url = new URL(c.req.url);
+    const upstreamUrl = c.get("config").upstream_url;
+    const bodyless = BODYLESS_METHODS.has(c.req.method);
+
+    const upstreamReq = new Request(
+        `${upstreamUrl}${url.pathname}${url.search}`,
+        {
+            method: c.req.method,
+            headers: buildUpstreamHeaders(c),
+            body: bodyless ? undefined : body,
+            duplex: bodyless ? undefined : "half",
+        },
+    );
+
+    return fetch(upstreamReq);
+}
+
+function buildDownstreamHeaders(upstreamRes) {
+    const headers = new Headers(upstreamRes.headers);
+
+    for (const name of DROPPED_RESPONSE_HEADERS) {
+        headers.delete(name);
+    }
+
+    return headers;
+}
+
+function respond(upstreamRes, body) {
+    return new Response(body, {
+        status: upstreamRes.status,
+        headers: buildDownstreamHeaders(upstreamRes),
+    });
+}
+
+/**
+ * The ungated path: the body streams through, nothing is read.
+ */
+async function forwardAsIs(c) {
+    const upstreamRes = await forward(c, c.req.raw.body);
+
+    return respond(upstreamRes, upstreamRes.body);
+}
+
+/**
+ * Synchronous, so the fast path stays one check with no await.
+ */
+function isGatedLoad(c) {
+    if (c.req.method !== GATED_METHOD) {
+        return false;
+    }
+
+    if (!GATED_PATHS.has(c.req.path)) {
+        return false;
+    }
+
+    return c.get("broker").hasJobs();
+}
+
+/**
+ * The model a JSON body names, or null when the body is not JSON or
+ * names none.
+ */
+function readModel(text) {
+    let body;
+
+    try {
+        body = JSON.parse(text);
+    } catch {
+        return null;
+    }
+
+    if (typeof body?.model !== "string") {
+        return null;
+    }
+
+    if (body.model === "") {
+        return null;
+    }
+
+    return body.model;
+}
+
+/**
+ * The gated path: reads the body for its model, asks the broker, and
+ * holds the load until the response's first byte, when the backend
+ * lists the model and its size counts as loaded instead.
+ */
+async function forwardGated(c) {
+    const broker = c.get("broker");
+    const text = await c.req.text();
+    const model = readModel(text);
+
+    if (model === null) {
+        const upstreamRes = await forward(c, text);
+
+        return respond(upstreamRes, upstreamRes.body);
+    }
+
+    const tracer = startTrace("proxy");
+
+    const gate = await admitLoad(broker, model, {
+        requestId: tracer.id,
+        signal: c.req.raw.signal,
+    });
+
+    if (gate.outcome === OUTCOME_ABANDONED) {
+        tracer.aborted();
+
+        return c.body(null, STATUS_CLIENT_LEFT);
+    }
+
+    if (gate.outcome === OUTCOME_REFUSED) {
+        tracer.warn(gate.reason);
+
+        return c.json(gate.body, STATUS_MEMORY_REFUSED);
+    }
+
+    const loadHold = createLoadHold();
+
+    loadHold.take(gate.hold);
+    tracer.proxy(`${c.req.method} ${c.req.path} model=${model}`);
+
+    let upstreamRes;
+
+    try {
+        upstreamRes = await forward(c, text);
+    } catch (err) {
+        //  The hold would be reaped after its TTL; freeing it now is
+        //  the only thing this path does that the ungated one does
+        //  not. The error goes on to the same 500 as before.
+        loadHold.release();
+
+        throw err;
+    }
+
+    const observed = observeResponse(upstreamRes.body, {
+        onFirstByte: () => {
+            tracer.firstByte();
+            loadHold.release();
+        },
+
+        onEnd: () => {
+            tracer.done(upstreamRes.status);
+            loadHold.release();
+        },
+
+        onCancel: () => {
+            tracer.aborted();
+            loadHold.release();
+        },
+    });
+
+    return respond(upstreamRes, observed);
+}
+
+/**
+ * Registered after every other route, so it sees only what none of
+ * them served.
+ * @param {import("@hono/hono").Hono} app
+ */
+export function registerCatchAll(app) {
+    app.all("*", (c) => {
+        console.log(`\n➡️ Proxying unhandled endpoint: ${c.req.path}`);
+
+        if (isGatedLoad(c)) {
+            return forwardGated(c);
+        }
+
+        return forwardAsIs(c);
+    });
+}

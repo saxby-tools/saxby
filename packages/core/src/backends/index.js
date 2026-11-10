@@ -48,5 +48,9 @@ export { OllamaAdapter };
  *     be asked; an empty array means nothing is loaded.
  */
 
-/** @type {BackendAdapter[]} */
+/**
+ * Every backend core knows, for a caller that tries them in order.
+ * One entry until a second backend lands.
+ * @type {BackendAdapter[]}
+ */
 export const BACKEND_ADAPTERS = [OllamaAdapter];

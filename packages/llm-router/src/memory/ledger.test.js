@@ -18,15 +18,23 @@ function job(overrides = {}) {
     return { bytes: GIB, label: "sleep", pid: 4242, ...overrides };
 }
 
-Deno.test("ledger — jobs and holds both count as reserved", () => {
+Deno.test("ledger — jobs and holds are listed apart", () => {
     const ledger = createLedger();
 
     ledger.addJob(job({ bytes: 2 * GIB }));
     ledger.addHold({ bytes: GIB, model: "voxtral:32k", requestId: "r1" });
 
-    assertEquals(ledger.reservedBytes(), 3 * GIB);
     assertEquals(ledger.jobs().length, 1);
     assertEquals(ledger.holds().length, 1);
+    assertEquals(ledger.holds()[0].bytes, GIB);
+});
+
+Deno.test("ledger — a hold may have no known size", () => {
+    const ledger = createLedger();
+
+    ledger.addHold({ bytes: null, model: "never-seen:1b", requestId: "r1" });
+
+    assertEquals(ledger.holds()[0].bytes, null);
 });
 
 Deno.test("ledger — a hold alone is not a job", () => {
@@ -37,13 +45,27 @@ Deno.test("ledger — a hold alone is not a job", () => {
     assertEquals(ledger.hasJobs(), false);
 });
 
-Deno.test("ledger — removing an entry frees its bytes", () => {
+Deno.test("ledger — removing an entry drops it", () => {
     const ledger = createLedger();
     const entry = ledger.addJob(job());
 
     assertEquals(ledger.remove(entry.id)?.id, entry.id);
-    assertEquals(ledger.reservedBytes(), 0);
+    assertEquals(ledger.list(), []);
     assertEquals(ledger.hasJobs(), false);
+});
+
+Deno.test("ledger — removing a hold counts as a release", () => {
+    const ledger = createLedger();
+    const hold = ledger.addHold({ bytes: GIB, model: "m", requestId: "r1" });
+    const entry = ledger.addJob(job());
+
+    ledger.remove(entry.id);
+
+    assertEquals(ledger.holdReleases(), 0);
+
+    ledger.remove(hold.id);
+
+    assertEquals(ledger.holdReleases(), 1);
 });
 
 Deno.test("ledger — removing an unknown id returns null", () => {
@@ -87,13 +109,15 @@ Deno.test("ledger — a shared hold counts once, outlives one release", () => {
 
     assertEquals(ledger.findHold("m")?.id, hold.id);
     assertEquals(ledger.retainHold(hold.id)?.holders, 2);
-    assertEquals(ledger.reservedBytes(), GIB);
+    assertEquals(ledger.holds().length, 1);
 
     assertEquals(ledger.releaseHold(hold.id), null);
-    assertEquals(ledger.reservedBytes(), GIB);
+    assertEquals(ledger.holds().length, 1);
+    assertEquals(ledger.holdReleases(), 0);
 
     assertEquals(ledger.releaseHold(hold.id)?.id, hold.id);
-    assertEquals(ledger.reservedBytes(), 0);
+    assertEquals(ledger.holds(), []);
+    assertEquals(ledger.holdReleases(), 1);
     assertEquals(ledger.findHold("m"), null);
 });
 

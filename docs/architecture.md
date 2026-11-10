@@ -142,9 +142,13 @@ recorded, as `bypass` and `raw`.
 | anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
-catch-all lives in [`main.js`](../packages/llm-router/src/main.js) and
-forwards headers as they arrive, minus `accept-encoding`,
-`content-length` and `host`.
+catch-all,
+[`routes/catch-all.js`](../packages/llm-router/src/routes/catch-all.js),
+is registered last and forwards headers as they arrive, minus
+`accept-encoding`, `content-length` and `host`. While a `saxby
+reserve` job holds memory, a JSON POST to one of Ollama's inference
+paths goes through the same memory gate as chat, on the model its
+body names ([Memory broker](memory-broker.md#which-paths-are-gated)).
 [Issue #22](https://github.com/saxby-tools/saxby/issues/22) covers what
 that means for user-identifying headers.
 
@@ -186,8 +190,12 @@ prompt does not survive in free pages. The reasoning is in
 The log also holds Tier 3's exemplar vectors, keyed by embedding
 model, which is why switching embedders back and forth re-embeds
 nothing. The memory broker writes its events to `memory_events` and
-caches each model's last measured size in `model_sizes`, through the
-same queue.
+caches each model's largest measured size in `model_sizes`, through
+the same queue. The time note
+([`prefix/apply.js`](../packages/llm-router/src/prefix/apply.js))
+keeps when each user message was first seen in `message_seen`, hashes
+only, written through the queue and read in one indexed lookup when
+the note is built.
 
 ##  The memory broker
 

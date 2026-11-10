@@ -12,9 +12,12 @@ The job waits until 12 GiB is free, then runs with PyTorch capped at
 it can't get the memory in time, it is refused with a reason. If
 saxbyd can't be asked at all, the job does not run.
 
-While a job holds memory, Saxby also makes chat requests wait before
-they load a model that would not fit. With no job running, chat
-requests skip the broker entirely.
+While a job holds memory, Saxby also makes requests wait before they
+load a model that would not fit, whether they come to its chat route
+or to one of Ollama's own inference paths through the catch-all. With
+no job running, requests are not checked, but every model the chat
+route loads is counted until the backend lists it, so a job cannot
+start in its space.
 
 ##  Why it exists
 
@@ -87,7 +90,7 @@ free = ceiling - margin - pinned - loaded - reserved
 | margin | Kept free beyond everything else. `memory.margin_gib` |
 | pinned | Every pinned model at full size, loaded or not |
 | loaded | Every other model the backend holds now |
-| reserved | Every job, plus model loads let through but not yet loaded |
+| reserved | Every job, plus forwarded loads the backend does not list yet |
 
 A job of N GiB runs when N fits in `free`.
 
@@ -110,10 +113,12 @@ nothing is admitted. The refusal says which term:
 - the ceiling cannot be measured (see [Platforms](#platforms))
 - the backend did not answer `/api/ps`
 - a pinned model has no known size
+- a model Saxby is loading has no known size
 
 The first and the third are config gaps: waiting cannot fill them, so
 a job is refused at once rather than after `wait_timeout_s`. The
-second may clear on the next poll, so a job waits for it.
+second may clear on the next poll, and the fourth ends with the
+request that is loading the model, so a job waits for those.
 
 The current budget, in bytes:
 
@@ -144,7 +149,7 @@ where the `pinned` field lives. Its profile takes `size_gib` too.
 A pinned model's size comes from, in order:
 
 1. what the backend reports now, if it is loaded
-2. what the backend reported the last time it was loaded whole
+2. the largest size the backend has reported for it loaded whole
 3. `size_gib` in the config
 
 Only a whole load is a measurement. When memory is tight, Ollama
@@ -153,10 +158,29 @@ than the model needs to load whole; remembering it would undercount
 the pinned model from then on. Such a load still counts as loaded,
 at the GPU size it holds now, but it is not remembered.
 
-Sizes from the backend are kept in the decision log's file, so a
-saxbyd restart does not forget them. If none of the three exists, the
-size is unknown, and **every job is refused until it is known**. The
-boot log says so:
+The largest whole load wins, not the latest. A model's size depends
+on the context length it was loaded with, and that differs by
+client: Saxby's chat route sends `/v1/chat/completions`, which
+ignores `num_ctx`, so Ollama loads the model at its own default,
+while a client on Ollama's `/api` paths can ask for a smaller one.
+Had the smaller load replaced the bigger size, the broker would have
+counted less than Saxby's own load of the model needs once it
+unloaded, and a job could have been admitted into the difference. An
+unusually large load inflates the number instead, which errs the safe
+way: a bigger size only makes the broker more careful.
+
+Sizes from the backend are kept in the decision log's file, in the
+table `model_sizes`, so a saxbyd restart does not forget them. They
+are read at boot, so to start over, stop saxbyd, clear the table,
+and start it again:
+
+```bash
+sqlite3 ~/.config/saxby/decision-log.db "DELETE FROM model_sizes;"
+```
+
+Every model is then unknown until it loads whole again or `size_gib`
+fills in. If none of the three exists, the size is unknown, and
+**every job is refused until it is known**. The boot log says so:
 
 ```
 🧮 Memory broker: ceiling 96.0 GiB (iogpu.wired_limit_mb), margin 8.0 GiB
@@ -167,16 +191,18 @@ boot log says so:
 That fixes itself the first time the model loads whole. Set
 `size_gib` to skip the wait. A measured size always beats `size_gib`,
 since the real size changes with the context length the backend
-loads.
+loads, so `size_gib` is a stand-in until the first whole load, not a
+floor under later ones.
 
 ##  Model loads
 
 Ollama decides whether a model fits by looking at memory that is free
 right now. A job that has reserved 40 GiB but not used it yet looks
-free. So while a job holds a reservation, Saxby checks each chat
-request before it is sent to the backend:
+free. So while a job holds a reservation, Saxby checks each request
+that names a model before it is sent to the backend:
 
-- **No job held:** not checked. No call to the backend, no wait.
+- **No job held:** not checked. No call to the backend, no wait. The
+  load is still counted, as described below.
 - **The model is loaded:** sent at once.
 - **The model is pinned:** sent at once. Its space is already held.
 - **Otherwise:** sent once its size fits in `free`. Until then it
@@ -194,21 +220,63 @@ A real one, from a test with a 5-second wait:
 }
 ```
 
-A model's size comes from the backend's last report or the catalog's
-`size_gib`. A model with neither waits until no job is held.
+A model's size comes from the largest whole load the backend has
+reported for it or the catalog's `size_gib`, as for a pinned model. A
+model with neither waits until no job is held.
 
 `saxby/<model>` bypass requests and raw model names are checked the
 same way. They load models too.
 
-Once a load is let through, its size is held in the ledger until the
-response's first byte arrives. By then the backend lists the model,
-and its size counts as loaded. Without the hold, two different models
-could both be let through into the same free space.
+###  Which paths are gated
+
+Saxby's own chat route, `POST /v1/chat/completions`, and the six
+paths the catch-all forwards whose body names a model:
+
+| Path | What it is |
+| --- | --- |
+| `/api/chat`, `/api/generate` | Ollama's own chat and completion |
+| `/api/embed`, `/api/embeddings` | Ollama's own embedding |
+| `/v1/completions`, `/v1/embeddings` | OpenAI-style, passed through |
+
+On the catch-all paths, a JSON POST is read for its `model` field
+only while a job holds memory. With no job held, and on every other
+path, the request streams through untouched. A body that is not
+JSON, or names no model, is forwarded as it came: the broker cannot
+judge a load it cannot name, and the backend answers for the request.
+
+A catch-all request has no decision-log row, so a refused one has no
+`memory_refused` outcome there, but its `memory_events` row is
+written like any other. Logging `/v1/embeddings` as a route of its
+own is post-v1 backlog.
+
+Clients that call Ollama directly, on its own port, never pass
+through Saxby and cannot be gated by it (see [Limits](#limits)).
+
+Every forwarded chat request's model is held in the ledger until
+the response's first byte arrives, job or no job; a catch-all request
+takes a hold only when it was gated
+([#71](https://github.com/saxby-tools/saxby/issues/71)). By then the backend
+lists the model, and its size counts as loaded instead; a model the
+backend lists is never counted twice. Until then, the space the model
+is about to take is not free: without the hold, two different models
+could both be let through into the same free space, and a job that
+arrives while a model is still loading could be admitted into its
+space. The hold costs no call to the backend: the model is counted
+at the size the backend last reported for it, else its `size_gib`.
+With neither, its size is unknown, and a job waits until the hold
+ends. A pinned model needs no hold; its space is already held.
 
 A second request for the same model, while it is still loading,
 joins that hold rather than adding one: the backend loads the model
 once, so its size counts once. The hold stays until the last request
 sharing it has its first byte.
+
+A hold can end while the backend is being asked what it has loaded.
+The answer may then be from before the model was listed, and the
+model would count nowhere. The broker notes how many holds have
+ended before each read and, when the count moved during it, reads
+again before deciding. After three such reads in a row the answer is
+treated as unknown for that poll, which makes the job or load wait.
 
 The decision-log row of a refused request has the outcome
 `memory_refused`. Its `request_id` matches a row in `memory_events`
@@ -271,9 +339,46 @@ above or below the reservation by the same error. `saxby reserve`
 then says the cap was not set and why; the reservation still stands.
 Set the ceiling with `saxby vram-guard-mac` to get the cap.
 
-**MLX jobs are not capped.** MLX reads neither variable. The ledger
-still counts an MLX job, so it cannot start beside models it would
-not fit with. It can still grow past its reservation once it runs.
+**MLX jobs cap themselves.** MLX reads no environment variable for
+its memory limit. Its Metal allocator picks a default at startup,
+1.5 times Metal's recommended working set, and only a call changes it
+(`mlx/backend/metal/allocator.cpp`, checked at v0.32.4). So on every
+platform `saxby reserve` puts the reservation in the job's
+environment, in whole bytes:
+
+```
+SAXBY_RESERVED_BYTES=12884901888
+```
+
+An MLX script reads it and sets the limit before it allocates:
+
+```python
+import os
+import mlx.core as mx
+
+reserved = os.environ.get("SAXBY_RESERVED_BYTES")
+
+if reserved:
+    mx.set_memory_limit(int(reserved))
+```
+
+`mx.set_memory_limit` is the current name; `mx.metal.set_memory_limit`
+is deprecated and prints a warning. MLX's limit is softer than
+PyTorch's. When active memory is over it, `mx.eval` waits for the
+work already in flight to finish before it goes on, so freed buffers
+come back sooner; an allocation fails only once RAM and swap are
+gone. A job whose live arrays need more than the limit still grows
+past it, so size the reservation to the job's peak, as with PyTorch.
+
+Two other MLX calls are not caps. `mx.set_cache_limit` bounds the
+pool of freed buffers MLX keeps for reuse; mflux's `--low-ram` and
+`--mlx-cache-limit-gb` set that one, for `mflux-generate` and
+`mflux-upscale-seedvr2` alike. `mx.set_wired_limit` says how much to
+keep resident, and mlx-lm sets it to Metal's recommended working set.
+Neither stops a job from growing. `saxby reserve` cannot make the
+call for a job: the limit lives inside the process, and mflux and
+mlx-lm take no flag for it. The ledger counts an MLX job either way,
+so it cannot start beside models it would not fit with.
 
 ##  When saxbyd cannot be asked
 
@@ -319,7 +424,7 @@ observed beside the budget, so the margin can be tuned against
 evidence later.
 
 **The wait** is long enough for a short job ahead to finish. It
-applies to chat requests too, so a client waits this long before it
+applies to model loads too, so a client waits this long before it
 gets a 503.
 
 **The heartbeat** sets how long a dead job's memory stays held: at
@@ -446,17 +551,23 @@ Not built yet:
   Halo's GTT size
 - a Linux limiter that runs the job in a `systemd-run --scope` with
   `MemoryMax`
-- an MLX cap
+
+There is no MLX cap to build: MLX takes its limit from a call, not
+the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
+(see [The cap inside a job](#the-cap-inside-a-job)).
 
 ##  Limits
 
-- **Only Saxby's chat route is gated.** Clients that call Ollama
-  directly, and Ollama's native paths sent through Saxby's catch-all
-  (`/api/chat`, `/api/generate`, `/api/embed`, `/v1/embeddings`,
-  `/v1/completions`), can still load a model while a job runs. Their
-  models do count as loaded once they are.
-  [Issue #33](https://github.com/saxby-tools/saxby/issues/33).
-- **MLX jobs are not capped** once they run.
+- **Clients that call Ollama directly cannot be gated.** A client
+  pointed at Ollama's own port, such as OpenClaw's memory search,
+  never passes through Saxby, so it can still load a model while a
+  job runs. Its models do count as loaded once they are. Point every
+  client at Saxby, which gates its own routes and the inference paths
+  it forwards ([Which paths are gated](#which-paths-are-gated)).
+- **MLX jobs cap themselves, or not at all.** `saxby reserve` hands
+  them the size in `SAXBY_RESERVED_BYTES`; the call is the job's, and
+  mflux and mlx-lm do not make it. The call has not yet been run
+  under a reservation with a small cap.
   [Issue #34](https://github.com/saxby-tools/saxby/issues/34).
 - **Waiters are not in line.** Each waiting job or load checks again
   once a second. A big job can be passed by smaller ones that fit
@@ -470,12 +581,3 @@ Not built yet:
 - **`explain` does not show the gate.** It never calls the backend,
   and the gate reads `/api/ps`.
   [Issue #38](https://github.com/saxby-tools/saxby/issues/38).
-- **A load Ollama has not listed yet reads as free.** With no job
-  held, chat requests take no hold, so a job that starts while one of
-  their models is still loading can be admitted into that model's
-  space. [Issue #40](https://github.com/saxby-tools/saxby/issues/40).
-- **A model's remembered size is its last whole load.** A load at a
-  smaller context, such as one from a client that sets `num_ctx` on
-  Ollama's `/api` paths, replaces a bigger size. Once the model
-  unloads, the broker counts less than Saxby's own load of it needs.
-  [Issue #41](https://github.com/saxby-tools/saxby/issues/41).

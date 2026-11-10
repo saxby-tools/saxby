@@ -7,6 +7,10 @@ import { uninstallCommand } from "./commands/uninstall.js";
 //  so saxby's global -i/--instance would do nothing here. Hidden from
 //  help and refused when given after this command. `saxby -i dev
 //  vram-guard-mac` still parses, since the top-level command owns -i.
+/**
+ * `install`, `uninstall` and `status` for the LaunchDaemon. Mount it
+ * under any name; `saxby` mounts it as `vram-guard-mac`.
+ */
 export const vramGuardMacCommand = new Command()
     .description("Manage the hardware VRAM governor daemon.")
     .noGlobals()

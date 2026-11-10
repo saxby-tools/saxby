@@ -1,32 +1,54 @@
 import * as v from "valibot";
 
-//  Memory broker defaults (docs/memory-broker.md says why each).
+/**
+ * Memory broker default: GiB kept free beyond every model and
+ * reservation (docs/memory-broker.md says why).
+ */
 export const DEFAULT_MARGIN_GIB = 8;
+
+/**
+ * Memory broker default: seconds a job or a model load waits for
+ * room before it is refused (docs/memory-broker.md says why).
+ */
 export const DEFAULT_WAIT_TIMEOUT_S = 120;
+
+/**
+ * Memory broker default: seconds between `saxby reserve` check-ins,
+ * and between saxbyd's sweeps for reservations whose job has died
+ * (docs/memory-broker.md says why).
+ */
 export const DEFAULT_HEARTBEAT_INTERVAL_S = 10;
 
-//  Loopback: this machine only, the one caller that needs no API
-//  token (AGENTS.md).
+/**
+ * Loopback: this machine only, the one caller that needs no API
+ * token (AGENTS.md).
+ */
 export const DEFAULT_LISTEN_HOST = "127.0.0.1";
 
-//  The one kind of proxy Saxby knows how to judge. A kind is added
-//  only with the checks that make it safe (llm-router's guard.js).
+/**
+ * The one kind of proxy Saxby knows how to judge. A kind is added
+ * only with the checks that make it safe (llm-router's guard.js).
+ */
 export const PROXY_KIND_TAILSCALE_SERVE = "tailscale-serve";
 
 //  A bare DNS name: no scheme, no port, no path.
 const PROXY_HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
 
-//  A browser extension's origin: "chrome-extension://<id>" or
-//  "moz-extension://<uuid>". Lowercase, as browsers send it, with no
-//  path and no wildcard. The second group is the extension's id.
-//  The only kind of origin Saxby lets in: a web page would also need
-//  CORS answers, which Saxby does not give.
+/**
+ * A browser extension's origin: "chrome-extension://<id>" or
+ * "moz-extension://<uuid>". Lowercase, as browsers send it, with no
+ * path and no wildcard. The second group is the extension's id.
+ * The only kind of origin Saxby lets in: a web page would also need
+ * CORS answers, which Saxby does not give.
+ */
 export const EXTENSION_ORIGIN =
     /^(chrome-extension|moz-extension|safari-web-extension):\/\/([a-z0-9-]+)$/;
 
-//  The one reasoning_effort Saxby will add for a client. It is the
-//  only value safe on every model: Ollama answers 400 to any other
-//  when the model has no reasoning to turn down (seen on 0.40.15).
+/**
+ * The one reasoning_effort Saxby will add for a client. It is the
+ * only value safe on every model: Ollama answers 400 to any other
+ * when the model has no reasoning to turn down (seen on 0.40.15).
+ */
 export const REASONING_EFFORT_NONE = "none";
 
 //  A client signature as the router's log/client.js spells it: the
@@ -34,6 +56,55 @@ export const REASONING_EFFORT_NONE = "none";
 //  "leantype". A key in any other shape would never match a client.
 const CLIENT_SIGNATURE = /^[a-z][a-z0-9_.-]*$/;
 
+//  Named so the error can say what a good value looks like.
+const TIMEZONE_EXAMPLE = "America/Chicago";
+
+//  The one IANA name with no slash in it that is worth accepting.
+const TIMEZONE_UTC = "UTC";
+
+/**
+ * The zone this machine keeps time in, as an IANA name. Right for a
+ * tool that serves one machine: the person at the keyboard is in the
+ * zone the machine is set to.
+ * @returns {string}
+ */
+export function hostTimeZone() {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
+ * Whether this is an IANA zone name the runtime knows. The zone list
+ * ships with the runtime, not with Saxby, so Intl is the only check
+ * there is. Intl also takes abbreviations ("CST") and offsets
+ * ("+05:30"), and both are refused: an abbreviation is ambiguous and
+ * an offset is read worse than a name, which is why the note carries
+ * the name. IANA names are Area/Location, linked names such as
+ * "US/Central" included, plus "UTC". Intl.supportedValuesOf is not
+ * used: it lists ICU's canonical ids, which leave out "UTC" and spell
+ * some zones by their old names.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isTimeZone(name) {
+    try {
+        new Intl.DateTimeFormat("en-US", { timeZone: name });
+    } catch {
+        return false;
+    }
+
+    if (name === TIMEZONE_UTC) {
+        return true;
+    }
+
+    return name.includes("/");
+}
+
+/**
+ * A tag as the vocabulary spells it: uppercase letters, digits and
+ * underscores, such as TAG_CODER. Whether the tag exists is checked
+ * by validateTagContract, since a claim nothing emits is a warning,
+ * not an invalid file.
+ */
 export const TagSchema = v.pipe(
     v.string(),
     v.regex(
@@ -49,6 +120,11 @@ const SizeGibSchema = v.pipe(
     v.check((gib) => gib > 0, "size_gib must be greater than 0"),
 );
 
+/**
+ * One catalog entry: a model the router may pick, the tags it claims
+ * for Tier 2a, and what the memory broker needs to know about its
+ * size.
+ */
 export const ModelSchema = v.strictObject({
     name: v.string("Model name is required"),
     description: v.optional(v.string()),
@@ -69,6 +145,10 @@ export const ModelSchema = v.strictObject({
     size_gib: v.optional(SizeGibSchema),
 });
 
+/**
+ * One persona: the tags and exemplars that reach it, and the model it
+ * routes to. Tier 2b matches on `tags`, Tier 3 on `exemplars`.
+ */
 export const PersonaSchema = v.strictObject({
     description: v.optional(v.string()),
     exemplars: v.optional(v.array(v.string()), []),
@@ -81,6 +161,11 @@ export const PersonaSchema = v.strictObject({
     ),
 });
 
+/**
+ * One embedder for Tier 3. The threshold lives here rather than on
+ * `semantic` because cosine calibration is model-specific, so an A/B
+ * between embedders is one config line, not a retuning.
+ */
 export const SemanticProfileSchema = v.strictObject({
     model: v.string("Semantic model name is required"),
     dim: v.pipe(
@@ -98,11 +183,19 @@ export const SemanticProfileSchema = v.strictObject({
     size_gib: v.optional(SizeGibSchema),
 });
 
+/**
+ * Tier 3 settings: the named embedder profiles and which one is
+ * active. validateConfig checks that `active` names a profile.
+ */
 export const SemanticSchema = v.strictObject({
     active: v.string("Active semantic profile is required"),
     profiles: v.record(v.string(), SemanticProfileSchema),
 });
 
+/**
+ * Memory broker settings. Every field has a default, so a config
+ * with no `memory` section still runs the broker.
+ */
 export const MemorySchema = v.strictObject({
     //  Kept free beyond every model and reservation.
     margin_gib: v.optional(
@@ -134,6 +227,10 @@ export const MemorySchema = v.strictObject({
     ceiling_gib: v.optional(SizeGibSchema),
 });
 
+/**
+ * One proxy saxbyd accepts forwarding headers from, by kind and by
+ * the Host name clients reach it at. Every other proxy is refused.
+ */
 export const TrustedProxySchema = v.strictObject({
     kind: v.picklist(
         [PROXY_KIND_TAILSCALE_SERVE],
@@ -150,9 +247,11 @@ export const TrustedProxySchema = v.strictObject({
     ),
 });
 
-//  Request fields Saxby fills in for one client when the request
-//  leaves them out. A closed list: each field here is one the chat
-//  route knows how to add and the decision log knows how to show.
+/**
+ * Request fields Saxby fills in for one client when the request
+ * leaves them out. A closed list: each field here is one the chat
+ * route knows how to add and the decision log knows how to show.
+ */
 export const ClientDefaultsSchema = v.strictObject({
     reasoning_effort: v.optional(
         v.picklist(
@@ -162,6 +261,40 @@ export const ClientDefaultsSchema = v.strictObject({
     ),
 });
 
+/**
+ * The time note on every user message (docs/configuration.md,
+ * "Message prefix"). Off until v1 ships it. One block for every
+ * model: the lab tested one model, and the note costs each the same.
+ */
+export const MessagePrefixSchema = v.strictObject({
+    enabled: v.optional(v.boolean(), false),
+    //  The zone the note is written in. From the config or, one day,
+    //  the client; never guessed from anything else. The default is
+    //  the host's, which is the user's on a machine that serves one
+    //  person. An unknown name is refused here rather than found at
+    //  the first request.
+    timezone: v.optional(
+        v.pipe(
+            v.string("timezone must be a string"),
+            v.check(
+                isTimeZone,
+                `timezone is not a known IANA zone name; use one such ` +
+                    `as '${TIMEZONE_EXAMPLE}'`,
+            ),
+        ),
+        hostTimeZone,
+    ),
+    //  "This conversation resumed after 12 days away." on the latest
+    //  note. The larger lever in the lab, so on unless turned off.
+    gap_sentence: v.optional(v.boolean(), true),
+});
+
+/**
+ * The whole config file. Unknown fields are refused rather than
+ * ignored, so a misspelt key cannot pass for a setting that took.
+ * Checks across fields, such as every named model being in the
+ * catalog, live in validateConfig.
+ */
 export const SaxbyConfigSchema = v.strictObject({
     listen_port: v.optional(
         v.pipe(
@@ -227,6 +360,9 @@ export const SaxbyConfigSchema = v.strictObject({
         ),
         {},
     ),
+    //  Every user message gets a note saying when it was first seen,
+    //  in the user's zone. Applied on save, like client_defaults.
+    message_prefix: v.optional(MessagePrefixSchema, {}),
     log_path: v.optional(v.string()),
     memory: v.optional(MemorySchema, {}),
     //  Empty unless the operator names one, and then every proxied

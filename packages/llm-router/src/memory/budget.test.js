@@ -38,6 +38,7 @@ function terms(overrides = {}) {
         ],
         loaded: [{ model: "qwen3.8:27b", bytes: gibToBytes(25) }],
         reservedBytes: 0,
+        unknownLoads: [],
         residencyError: null,
         usedBytes: null,
         usedSource: "vm_stat wired",
@@ -94,6 +95,17 @@ Deno.test("budget — a backend that cannot answer makes free unknown", () => {
 
     assertEquals(budget.freeBytes, null);
     assertStringIncludes(budget.unknowns[0], "timed out");
+});
+
+Deno.test("budget — a load of unknown size makes free unknown", () => {
+    const budget = computeBudget(terms({ unknownLoads: ["never-seen:1b"] }));
+
+    assertEquals(budget.freeBytes, null);
+    assertEquals(budget.configGap, false);
+    assertStringIncludes(
+        budget.unknowns[0],
+        "'never-seen:1b' is loading with no known size",
+    );
 });
 
 Deno.test("budget — the description shows every term", () => {
@@ -166,6 +178,15 @@ Deno.test("reserve — a backend that did not answer is waited on", () => {
 
     assert(!got.fits);
     assert(!got.neverFits);
+});
+
+Deno.test("reserve — a load of unknown size is waited on", () => {
+    const budget = computeBudget(terms({ unknownLoads: ["never-seen:1b"] }));
+    const got = decideReservation(budget, gibToBytes(1));
+
+    assert(!got.fits);
+    assert(!got.neverFits);
+    assertStringIncludes(got.reason, "'never-seen:1b' is loading");
 });
 
 //  =====================================================================

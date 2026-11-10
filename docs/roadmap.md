@@ -106,8 +106,11 @@ known gaps are issues labelled
         kernel panic on Oct. 27, 2026; ships in v0.9.6)*
     - [x] `saxby reserve --gib N -- <command>`, and model loads that
           wait for room while a job holds memory
-          ([Memory broker](memory-broker.md), #39). Known gaps: #33
+          ([Memory broker](memory-broker.md), #39). Known gaps: #34
           through #38, #40 and #41.
+    - [x] The inference paths the catch-all forwards take the same
+          gate as chat (#33;
+          [Which paths are gated](memory-broker.md#which-paths-are-gated)).
   - [x] **Decision log privacy** *(not in the original plan: added
         when the question of other people's prompts came up; ships
         in v0.9.7)*

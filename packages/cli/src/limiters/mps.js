@@ -21,8 +21,8 @@
 //                            PyTorch's own 1.4 : 1.7 proportion.
 //
 //  Ratios are rounded DOWN, so the cap never lands above the
-//  reservation. MLX jobs read neither variable; the ledger still
-//  counts them.
+//  reservation. MLX jobs read neither variable, nor any other: they
+//  cap themselves from SAXBY_RESERVED_BYTES (reserve/run.js).
 //
 //  The cap is set only when the ceiling was measured from
 //  iogpu.wired_limit_mb, because that is the number PyTorch's ratio

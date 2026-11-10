@@ -24,7 +24,11 @@ import { SystemdAdapter } from "./systemd.js";
  * @property {(instance: string | null) => Promise<Object>} status
  */
 
-/** @type {ServiceAdapter[]} */
+/**
+ * Every supervisor Saxby can install itself under. findServiceAdapter
+ * picks the first that supports this platform.
+ * @type {ServiceAdapter[]}
+ */
 export const SERVICE_ADAPTERS = [LaunchdAdapter, SystemdAdapter];
 
 /**

@@ -5,6 +5,7 @@ import {
     EXIT_NOT_FOUND,
     EXIT_TEMPFAIL,
     EXIT_UNAVAILABLE,
+    RESERVED_BYTES_VAR,
     runReserved,
 } from "./run.js";
 
@@ -233,6 +234,7 @@ Deno.test("reserve — an admitted job runs capped, then frees", async () => {
         timeout_s: 120,
     });
     assertEquals(control.calls.spawn[0].env, {
+        SAXBY_RESERVED_BYTES: String(GIB),
         FAKE_RATIO: String(1 / 96),
         FAKE_SOURCE: "iogpu.wired_limit_mb",
     });
@@ -342,8 +344,34 @@ Deno.test("reserve — --no-broker runs loudly and still caps", async () => {
     assertEquals(await running, 0);
     assertEquals(control.calls.create, []);
     assertEquals(control.calls.spawn[0].env, {
+        SAXBY_RESERVED_BYTES: String(GIB),
         FAKE_RATIO: String(1 / 96),
         FAKE_SOURCE: "probe fixture",
     });
     assertStringIncludes(control.output(), "NOT told about this job");
+});
+
+Deno.test("reserve — the job can read its reservation's size", async () => {
+    //  MLX has no environment cap, so an MLX job caps itself from this
+    //  variable. It carries saxbyd's number, not the flag's.
+    const control = harness({
+        onCreate: () =>
+            Promise.resolve({
+                ...ADMITTED,
+                body: {
+                    ...ADMITTED.body,
+                    reservation: { ...RESERVATION, bytes: 2 * GIB },
+                },
+            }),
+    });
+    const running = runReserved(plan(), control.deps);
+
+    await settle();
+    control.exit(0);
+    await running;
+
+    assertEquals(
+        control.calls.spawn[0].env[RESERVED_BYTES_VAR],
+        String(2 * GIB),
+    );
 });

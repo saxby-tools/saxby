@@ -43,6 +43,13 @@ function describeDown(port, probeHost) {
     return `nothing is listening on ${probeHost}:${port}`;
 }
 
+/**
+ * `saxby status`: one line and an exit code saying whether this
+ * instance's saxbyd answers on its port, for health checks and shell
+ * scripts. Exit 0 while it serves, even on a config it could not
+ * replace; exit 1 when nothing answers, something else holds the
+ * port, or the config cannot be read.
+ */
 export const statusCommand = new Command()
     .description(
         "Say whether this instance's saxbyd is answering; exit 1 if not.",

@@ -1,7 +1,23 @@
+/* @ts-self-types="./main.d.ts" */
+/**
+ * `saxbyd`, the Saxby daemon. It sits in front of an OpenAI-compatible
+ * backend and routes each chat request to the right local model,
+ * logging every decision with its reasons. This entry point runs the
+ * program and exports nothing; install it with
+ * `deno install -g -n saxbyd jsr:@saxby/llm-router`.
+ *
+ * @example Run with routing trace output
+ * ```bash
+ * saxbyd --trace
+ * ```
+ * @module
+ */
+
 import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { basename, join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
+import { registerCatchAll } from "./routes/catch-all.js";
 import {
     fetchSaxbyStatus,
     findMemoryProbe,
@@ -374,6 +390,31 @@ function announcePromptText(config) {
 }
 
 /**
+ * Says whether user messages get the time note, and in which zone. A
+ * note the model reads on every message is never added silently. At
+ * boot the default, off, is not worth a line; after a save that
+ * changed the block, either state is.
+ */
+function announceMessagePrefix(config, sayOff) {
+    const settings = config.message_prefix;
+
+    if (!settings.enabled) {
+        if (sayOff) {
+            console.log("🕒 Time note on user messages: off.");
+        }
+
+        return;
+    }
+
+    const gap = settings.gap_sentence ? "with" : "without";
+
+    console.log(
+        `🕒 Time note on every user message, zone ` +
+            `${settings.timezone}, ${gap} the gap sentence.`,
+    );
+}
+
+/**
  * Says so when a reload emptied a list of ways in. The announce
  * functions print nothing for an empty list, and an operator who just
  * closed a door wants to see that it took.
@@ -445,6 +486,10 @@ function applyReload(state, changed, parts) {
 
     if (changed.includes("log_prompts")) {
         announcePromptText(config);
+    }
+
+    if (changed.includes("message_prefix")) {
+        announceMessagePrefix(config, true);
     }
 
     announceClosed(config, changed);
@@ -626,6 +671,7 @@ async function main() {
 
     announceProxies(config);
     announceOrigins(config);
+    announceMessagePrefix(config, false);
 
     //  The decision log is observability, never load-bearing. If it
     //  cannot be opened the router still routes — it just stops
@@ -743,47 +789,10 @@ async function main() {
 
     registerRoutes(app);
 
-    //  Global catch-all for unimplemented OpenAI endpoints.
-    app.all("*", async (c) => {
-        const url = new URL(c.req.url);
-        console.log(`\n➡️ Proxying unhandled endpoint: ${url.pathname}`);
-
-        const isGetOrHead = ["GET", "HEAD"].includes(c.req.method);
-
-        const upstreamHeaders = new Headers(c.req.raw.headers);
-
-        upstreamHeaders.delete("accept-encoding");
-        upstreamHeaders.delete("content-length");
-        upstreamHeaders.delete("host");
-
-        if (c.get("sentApiToken")) {
-            upstreamHeaders.delete("authorization");
-        }
-
-        const upstreamUrl = c.get("config").upstream_url;
-
-        const upstreamReq = new Request(
-            `${upstreamUrl}${url.pathname}${url.search}`,
-            {
-                method: c.req.method,
-                headers: upstreamHeaders,
-                body: isGetOrHead ? undefined : c.req.raw.body,
-                duplex: isGetOrHead ? undefined : "half",
-            },
-        );
-
-        const upstreamRes = await fetch(upstreamReq);
-
-        const headers = new Headers(upstreamRes.headers);
-
-        headers.delete("content-encoding");
-        headers.delete("content-length");
-
-        return new Response(upstreamRes.body, {
-            status: upstreamRes.status,
-            headers,
-        });
-    });
+    //  Last, so it sees only what no route served: Ollama's own API,
+    //  passed through, with its inference paths gated while a job
+    //  holds memory.
+    registerCatchAll(app);
 
     await announceListen(config, apiToken);
 
