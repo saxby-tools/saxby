@@ -136,9 +136,10 @@ const LANGS_MAX = 10;
 //  Rough chars-per-token. Code is denser than prose (symbols, short
 //  identifiers), so it gets its own divisor. Deliberately pessimistic:
 //  over-estimating tokens falls back a model early, which is the safe
-//  direction to be wrong.
-const CHARS_PER_TOKEN_PROSE = 4;
-const CHARS_PER_TOKEN_CODE = 3;
+//  direction to be wrong. Exported so extract.js weighs prior turns
+//  and tool JSON with the same two numbers, not a third.
+export const CHARS_PER_TOKEN_PROSE = 4;
+export const CHARS_PER_TOKEN_CODE = 3;
 
 //  ---------------------------------------------------------------------
 //  Patterns
