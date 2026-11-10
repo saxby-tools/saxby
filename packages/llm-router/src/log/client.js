@@ -179,35 +179,6 @@ export function identifyClient(getHeader, config) {
 }
 
 /**
- * Lists signatures seen in the log that have no friendly name yet.
- *
- * Written for a `saxby clients` command that does not exist yet: the
- * user would run it, see what has actually been hitting the router,
- * and name anything worth naming. Nothing calls this today.
- */
-export function unmappedSignatures(rows, config) {
-    const names = config.client_names || {};
-    const unmapped = new Map();
-
-    for (const row of rows) {
-        if (names[row.client_signature]) {
-            continue;
-        }
-
-        const seen = unmapped.get(row.client_signature) || {
-            signature: row.client_signature,
-            userAgent: row.user_agent,
-            requests: 0,
-        };
-
-        seen.requests++;
-        unmapped.set(row.client_signature, seen);
-    }
-
-    return [...unmapped.values()].sort((a, b) => b.requests - a.requests);
-}
-
-/**
  * The name of the prompt hash in use, stamped on every row so a
  * reader can tell these hashes from the plain SHA-256 of rows written
  * before v0.9.7.
