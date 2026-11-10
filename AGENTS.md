@@ -108,9 +108,9 @@ decision log, M5 Tier 3 semantic — **all complete**.
 
 **M6: MVP / v1 release** — Phases 0–3, the Phase 4 docs, the rename
 (v0.9.4), packaging and publishing (v0.9.5), the memory broker
-(v0.9.6), the decision log privacy release (v0.9.7) and tailnet
-clients (v0.9.8) are done. What remains is one GitHub milestone each:
-the JSDoc sweep (v0.9.9), then the v1.0.0 tag
+(v0.9.6), the decision log privacy release (v0.9.7), tailnet
+clients (v0.9.8) and the JSDoc sweep (v0.9.9) are done. What remains
+is the v1.0.0 milestone, then the tag
 ([Roadmap](docs/roadmap.md)).
 Phased, in order. Instances first
 (`getInstanceDir`, `--instance`, `saxby instance list`, the dev

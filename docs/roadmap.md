@@ -107,7 +107,10 @@ known gaps are issues labelled
     - [x] `saxby reserve --gib N -- <command>`, and model loads that
           wait for room while a job holds memory
           ([Memory broker](memory-broker.md), #39). Known gaps: #34
-          through #38, #40 and #41.
+          through #38, and #71.
+    - [x] Every forwarded chat load is counted until the backend
+          lists it (#40), and a model's size is its largest whole
+          load (#41).
     - [x] The inference paths the catch-all forwards take the same
           gate as chat (#33;
           [Which paths are gated](memory-broker.md#which-paths-are-gated)).
@@ -134,11 +137,16 @@ known gaps are issues labelled
     - [x] A saved config is applied without a restart, whole or not
           at all, and `saxby status` says when one was declined
           ([Edits apply on save](configuration.md#edits-apply-on-save)).
-  - [ ] **Phase 4 — Documentation** *(last: it documents a surface
+  - [x] **Time note** *(not in the original plan: pulled forward
+        from lab report 003 on Nov. 10, 2026; off by default)*
+    - [x] `message_prefix`: every user message carries the time Saxby
+          first saw it, in the user's zone, and the latest says how
+          long the conversation was away
+          ([Message prefix](configuration.md#message-prefix)).
+  - [x] **Phase 4 — Documentation** *(last: it documents a surface
         that is still moving until Phase 2 lands)*
-    - [ ] JSDoc sweep (#26, v0.9.9), consistent across the repo. Mechanical and
-          verifiable with `deno check` — safe to start any time, and
-          independent of the phases above.
+    - [x] JSDoc sweep (#26, v0.9.9), consistent across the repo:
+          every exported symbol, in three passes on Nov. 10, 2026.
     - [x] Create `docs/` — [Getting started](getting-started.md),
           [Configuration](configuration.md), [Instances](instances.md),
           [Routing](routing.md), [Services](services.md),
