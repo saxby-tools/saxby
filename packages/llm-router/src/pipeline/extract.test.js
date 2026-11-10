@@ -1,4 +1,5 @@
-//  =====================================================================
+//  ==============================================================});
+
 //  Intent extraction cases
 //  =====================================================================
 //  The background-task rows here are a regression guard. Open WebUI's
@@ -8,7 +9,7 @@
 //  sent a follow-up generator to a 51GB coding model.
 
 import { assert, assertEquals } from "@std/assert";
-import { extractIntent } from "./extract.js";
+import { extractIntent, replaceMessageText } from "./extract.js";
 import { EMITTABLE_TAGS } from "@saxby/core";
 
 const CONFIG = {
@@ -178,6 +179,43 @@ Deno.test("weight — the same text weighs the same anywhere", () => {
     assertEquals(asQuestion, asSystem);
 });
 
+//  ---------------------------------------------------------------------
+//  Rewriting a message's text
+//  ---------------------------------------------------------------------
+//  The /command strip writes the clean prompt back into the message.
+//  A message that arrived as parts must keep its images and audio, or
+//  a `/coder` prompt with a screenshot reaches the model blind.
+
+Deno.test("replace — a string is replaced whole", () => {
+    assertEquals(replaceMessageText("/coder fix it", "fix it"), "fix it");
+});
+
+Deno.test("replace — parts keep their image and get the new text", () => {
+    const image = { type: "image_url", image_url: { url: "data:x" } };
+    const parts = [{ type: "text", text: "/coder what is this" }, image];
+
+    const result = replaceMessageText(parts, "what is this");
+
+    assertEquals(result, [{ type: "text", text: "what is this" }, image]);
+});
+
+Deno.test("replace — several text parts collapse to one", () => {
+    const image = { type: "image_url", image_url: { url: "data:x" } };
+    const parts = [
+        { type: "text", text: "/coder" },
+        image,
+        { type: "text", text: "what is this" },
+    ];
+
+    const result = replaceMessageText(parts, "what is this");
+
+    assertEquals(result, [{ type: "text", text: "what is this" }, image]);
+});
+
+Deno.test("replace — content of another shape is left alone", () => {
+    assertEquals(replaceMessageText(null, "x"), null);
+    assertEquals(replaceMessageText(42, "x"), 42);
+=======
 //  Agent clients send every tool's JSON schema with every request,
 //  and a prior turn that was a tool call keeps its name and arguments
 //  outside `content`. Neither was counted, and est_tokens ran a third

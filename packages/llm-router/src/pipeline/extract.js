@@ -55,6 +55,47 @@ function readMessageContent(content) {
 }
 
 /**
+ * Returns `content` with its text replaced and every other part kept.
+ *
+ * A string is replaced whole. An array of parts keeps its images and
+ * audio in place: the first text part takes the new text, and any
+ * later text part goes, since readMessageContent read them as one
+ * string. Content of neither shape is returned unchanged.
+ * @param {string | Array<Object> | unknown} content
+ * @param {string} text
+ * @returns {string | Array<Object> | unknown}
+ */
+export function replaceMessageText(content, text) {
+    if (typeof content === "string") {
+        return text;
+    }
+
+    if (!Array.isArray(content)) {
+        return content;
+    }
+
+    const parts = [];
+
+    let placed = false;
+
+    for (const part of content) {
+        if (part?.type !== "text") {
+            parts.push(part);
+            continue;
+        }
+
+        if (placed) {
+            continue;
+        }
+
+        parts.push({ ...part, text });
+        placed = true;
+    }
+
+    return parts;
+}
+
+/**
  * Finds the last user message and its index.
  */
 function findLastUserMessage(messages) {

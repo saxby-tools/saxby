@@ -359,3 +359,71 @@ Deno.test("token — any other Authorization is passed on", async () => {
 
     assertEquals(headers.Authorization, "Bearer the-secret");
 });
+
+//  =====================================================================
+//  The /command strip keeps the rest of the message
+//  =====================================================================
+//  A message can be parts: text beside an image or audio. Through
+//  v0.9.8 the strip replaced the whole array with the clean text, so
+//  a `/coder` prompt with a screenshot reached the model blind.
+
+const PERSONA_CONFIG = {
+    ...CONFIG,
+    global_default_model: "voxtral:32k",
+    personas: {
+        coder: { default_model: "voxtral:32k", tags: ["TAG_CODER"] },
+    },
+};
+
+function appWithPersona() {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", PERSONA_CONFIG);
+        c.set("log", null);
+        c.set("semantic", null);
+        c.set("broker", broker);
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+Deno.test("strip — a /command message keeps its image part", async () => {
+    const upstream = stubUpstream();
+    const image = { type: "image_url", image_url: { url: "data:x" } };
+
+    try {
+        const res = await quietly(() =>
+            appWithPersona().request("/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "saxby",
+                    messages: [{
+                        role: "user",
+                        content: [
+                            { type: "text", text: "/coder what is this" },
+                            image,
+                        ],
+                    }],
+                }),
+            })
+        );
+
+        await res.text();
+
+        const sent = upstream.requests[0].body;
+
+        assertEquals(sent.model, "voxtral:32k");
+        assertEquals(sent.messages[0].content, [
+            { type: "text", text: "what is this" },
+            image,
+        ]);
+    } finally {
+        upstream.restore();
+    }
+});
