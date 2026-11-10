@@ -155,6 +155,13 @@ its size.
 returns the whole decision as JSON. It never calls the upstream: no
 tokens, no model load. It is the safe way to test routing.
 
+For the same reason it cannot say whether the request would wait for
+memory while a `saxby reserve` job holds a reservation. That verdict
+depends on what is loaded at that second, a fact about the machine,
+not the request. `GET /saxby/v1/reservations` shows the budget now,
+and the `memory_events` table records what the gate decided for real
+requests ([Memory broker](memory-broker.md#the-log)).
+
 It reads `model` the way a chat request does. Send `saxby` to see
 the tiers at work. A `saxby/<model>` or any other name comes back as
 tier `bypass` or `raw` with that model selected, the same way the

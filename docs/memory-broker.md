@@ -227,6 +227,13 @@ model with neither waits until no job is held.
 `saxby/<model>` bypass requests and raw model names are checked the
 same way. They load models too.
 
+`POST /saxby/v1/explain` reports the routing decision and never
+calls the backend, so it cannot say whether a request would wait.
+That verdict depends on what is loaded at that second, a fact about
+the machine, not the request. `GET /saxby/v1/reservations` shows the
+budget now, and the `memory_events` table records what the gate
+decided for real requests ([The log](#the-log)).
+
 ###  Which paths are gated
 
 Saxby's own chat route, `POST /v1/chat/completions`, and the six
@@ -578,6 +585,3 @@ the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
   instance is invisible to the default instance's gate. Reserve
   through the instance your clients use.
   [Issue #37](https://github.com/saxby-tools/saxby/issues/37).
-- **`explain` does not show the gate.** It never calls the backend,
-  and the gate reads `/api/ps`.
-  [Issue #38](https://github.com/saxby-tools/saxby/issues/38).
