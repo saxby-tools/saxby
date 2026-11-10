@@ -45,7 +45,13 @@ const KIND_HOLD = "hold";
  */
 
 /**
+ * Builds the in-memory record of jobs and holds the broker has
+ * promised, with no awaits anywhere, so a decision and its entry
+ * land in one synchronous step.
  * @param {() => number} [now] - Milliseconds; injected by tests.
+ * @returns {Object} The ledger's methods: addJob, addHold, get,
+ *     findHold, retainHold, releaseHold, remove, heartbeat, list,
+ *     jobs, holds, hasJobs and holdReleases.
  */
 export function createLedger(now = () => Date.now()) {
     /** @type {Map<string, LedgerEntry>} */
