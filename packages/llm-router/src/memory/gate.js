@@ -29,7 +29,7 @@ export const OUTCOME_REFUSED = "refused";
  * and from every early return, whichever comes first, so a hold
  * released twice would charge the ledger a release it never took.
  * @returns {{ take: (hold: { release: () => void } | null) => void,
- *     release: () => void }}
+ *     release: () => void, taken: () => boolean }}
  */
 export function createLoadHold() {
     let hold = null;
@@ -47,7 +47,11 @@ export function createLoadHold() {
         hold = null;
     }
 
-    return { take, release };
+    function taken() {
+        return hold !== null;
+    }
+
+    return { take, release, taken };
 }
 
 /**
