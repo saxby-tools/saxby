@@ -6,6 +6,10 @@ import { validateConfig } from "./schema.js";
 const CONFIG_FILE_JSONC = "config.jsonc";
 const CONFIG_FILE_JSON = "config.json";
 
+//  The names loadConfig reads, in the order it tries them. saxbyd
+//  watches the instance folder for a change to either.
+export const CONFIG_FILE_NAMES = [CONFIG_FILE_JSONC, CONFIG_FILE_JSON];
+
 /**
  * Loads and validates an instance's config.
  *

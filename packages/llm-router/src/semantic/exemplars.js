@@ -48,7 +48,7 @@ const PRUNE_SQL = `
  * Only needs to detect a change, not resist an attacker, so FNV-1a is
  * plenty and avoids making the whole warm-up path async.
  */
-function hashExemplar(text) {
+export function hashExemplar(text) {
     let hash = 0x811c9dc5;
 
     for (let i = 0; i < text.length; i++) {
@@ -176,8 +176,11 @@ export async function warmExemplars(db, config, profile, upstreamUrl) {
     const candidates = wanted.map((item) => {
         const entry = cached.get(item.hash);
 
+        //  The label is the config's persona, not the cached row's:
+        //  an exemplar moved to another persona keeps its vector and
+        //  must answer for its new one.
         return {
-            label: entry.persona,
+            label: item.persona,
             exemplar: entry.exemplar,
             vector: entry.vector,
         };

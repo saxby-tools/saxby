@@ -133,6 +133,21 @@ If Ollama runs on the host and not in the stack:
   then listen on an address the container can reach, which its
   default, `127.0.0.1`, is not; see `OLLAMA_HOST` in Ollama's docs.
 
+##  Editing the config
+
+A saved config is applied live in a container too; see
+[Edits apply on save](configuration.md#edits-apply-on-save). Both
+ways of keeping `/data` were checked on Docker Desktop for macOS
+(Engine 29.9.2) on Nov. 9, 2026: a named volume edited from another
+container or with `docker cp`, and a folder bind-mounted from the
+Mac and edited there.
+
+The image's health check is `saxby status`, which reads the config
+file. While the file is broken, the container is reported unhealthy
+even though saxbyd keeps serving the config it had. That is a fair
+warning: the container would not survive a restart. Docker itself
+does not restart an unhealthy container.
+
 ##  What does not work in a container
 
 - **`saxby reserve`.** The memory broker checks that a job's process

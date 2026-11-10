@@ -18,6 +18,8 @@ import {
     validateTagContract,
 } from "@saxby/core";
 import { initTracing, isVerbose } from "./observability/trace.js";
+import { createReloader } from "./config/reload.js";
+import { watchConfig } from "./config/watch.js";
 import { openDecisionLog } from "./log/db.js";
 import { createBroker } from "./memory/broker.js";
 import { describePinnedGap } from "./memory/budget.js";
@@ -56,10 +58,12 @@ const KEY_FILE = "prompt-hash.key";
  * Prepares Tier 3: resolves the active profile, confirms the embedder
  * answers, and warms the exemplar vector cache.
  *
- * Returns null on any failure. Tier 3 is an enhancement — a missing
- * embedder must cost semantic routing, never the router.
+ * Returns null when the config asks for no Tier 3 or gives it nothing
+ * to match. Throws when the embedder cannot be used, so the caller
+ * decides what that costs: a boot goes on without Tier 3, and a reload
+ * keeps the Tier 3 it has (config/reload.js).
  */
-async function warmSemantic(config, log) {
+async function buildSemantic(config, log) {
     if (!config.semantic) {
         return null;
     }
@@ -77,43 +81,52 @@ async function warmSemantic(config, log) {
     //  a missing one stops the boot before this runs.
     const profile = config.semantic.profiles[config.semantic.active];
 
-    try {
-        const probe = await probeProfile(profile, config.upstream_url);
+    const probe = await probeProfile(profile, config.upstream_url);
 
-        const warmed = await warmExemplars(
-            log.db,
-            config,
-            profile,
-            config.upstream_url,
+    const warmed = await warmExemplars(
+        log.db,
+        config,
+        profile,
+        config.upstream_url,
+    );
+
+    if (warmed.candidates.length === 0) {
+        console.warn(
+            "⚠️  No persona exemplars configured; Tier 3 has " +
+                "nothing to match against.",
         );
 
-        if (warmed.candidates.length === 0) {
-            console.warn(
-                "⚠️  No persona exemplars configured; Tier 3 has " +
-                    "nothing to match against.",
-            );
+        return null;
+    }
 
-            return null;
-        }
+    console.log(
+        `🧭 Tier 3: ${profile.model} (${probe.dim}d), ` +
+            `${warmed.candidates.length} exemplars, ` +
+            `threshold ${profile.threshold}`,
+    );
 
+    if (warmed.embedded + warmed.pruned > 0 || warmed.reused > 0) {
         console.log(
-            `🧭 Tier 3: ${profile.model} (${probe.dim}d), ` +
-                `${warmed.candidates.length} exemplars, ` +
-                `threshold ${profile.threshold}`,
+            `   embedded ${warmed.embedded}, reused ${warmed.reused}` +
+                (warmed.pruned > 0 ? `, pruned ${warmed.pruned}` : ""),
         );
+    }
 
-        if (warmed.embedded + warmed.pruned > 0 || warmed.reused > 0) {
-            console.log(
-                `   embedded ${warmed.embedded}, reused ${warmed.reused}` +
-                    (warmed.pruned > 0 ? `, pruned ${warmed.pruned}` : ""),
-            );
-        }
+    return {
+        profile,
+        candidates: warmed.candidates,
+        upstreamUrl: config.upstream_url,
+    };
+}
 
-        return {
-            profile,
-            candidates: warmed.candidates,
-            upstreamUrl: config.upstream_url,
-        };
+/**
+ * Tier 3 at boot. Returns null on any failure: Tier 3 is an
+ * enhancement, and a missing embedder must cost semantic routing,
+ * never the router.
+ */
+async function warmSemantic(config, log) {
+    try {
+        return await buildSemantic(config, log);
     } catch (error) {
         console.warn(
             `⚠️  Tier 3 unavailable, continuing without it: ` +
@@ -334,6 +347,121 @@ function announceOrigins(config) {
 }
 
 /**
+ * Says which extra Host names the guard accepts.
+ */
+function announceHosts(config) {
+    if (config.allowed_hosts.length === 0) {
+        return;
+    }
+
+    const names = config.allowed_hosts.join(", ");
+
+    console.log(`🛡️  Host names also accepted: ${names}`);
+}
+
+/**
+ * Says whether prompt text is stored. Printed either way: with text
+ * off by default, the quiet case is the one storing prompts, so
+ * neither may be silent.
+ */
+function announcePromptText(config) {
+    if (config.log_prompts) {
+        console.log("   prompt text: logged (log_prompts: true)");
+        return;
+    }
+
+    console.log("   prompt text: hashes only (log_prompts: false)");
+}
+
+/**
+ * Says so when a reload emptied a list of ways in. The announce
+ * functions print nothing for an empty list, and an operator who just
+ * closed a door wants to see that it took.
+ */
+function announceClosed(config, changed) {
+    if (changed.includes("trusted_proxies")) {
+        if (config.trusted_proxies.length === 0) {
+            console.log("🔒 No proxy is trusted now.");
+        }
+    }
+
+    if (changed.includes("allowed_origins")) {
+        if (config.allowed_origins.length === 0) {
+            console.log("🔒 No browser extension is allowed now.");
+        }
+    }
+
+    if (changed.includes("allowed_hosts")) {
+        if (config.allowed_hosts.length === 0) {
+            console.log("🔒 Only local Host names are accepted now.");
+        }
+    }
+}
+
+/**
+ * Hands a reloaded config to everything that keeps its own copy of
+ * part of it, right after the swap and in the same tick, so no request
+ * meets a guard, a broker and a route that disagree. Then says what a
+ * boot would have said about the fields that changed: a way in is
+ * never silent, whether it opened at boot or on a save.
+ * @param {{ config: Object }} state - from the reloader
+ * @param {string[]} changed - top-level config fields that differ
+ * @param {{ access: Object, broker: Object, log: Object | null }} parts
+ */
+function applyReload(state, changed, parts) {
+    const config = state.config;
+
+    parts.access.config = config;
+    parts.access.allowedHosts = buildAllowedHosts(config.allowed_hosts);
+    parts.broker.reconfigure(config);
+    parts.log?.setLogPrompts(config.log_prompts);
+
+    //  Tags live in these two. Repeating the boot's warnings after an
+    //  edit that touched neither would bury the line that matters.
+    const tagsMoved = changed.includes("catalog") ||
+        changed.includes("personas");
+
+    if (tagsMoved) {
+        for (const warning of validateTagContract(config)) {
+            console.warn(`⚠️  ${warning}`);
+        }
+    }
+
+    if (changed.includes("upstream_url")) {
+        console.log(`🔗 Upstream target: ${config.upstream_url}`);
+    }
+
+    if (changed.includes("trusted_proxies")) {
+        announceProxies(config);
+    }
+
+    if (changed.includes("allowed_origins")) {
+        announceOrigins(config);
+    }
+
+    if (changed.includes("allowed_hosts")) {
+        announceHosts(config);
+    }
+
+    if (changed.includes("log_prompts")) {
+        announcePromptText(config);
+    }
+
+    announceClosed(config, changed);
+
+    //  Pins and sizes come from these two. A newly pinned model with
+    //  no size refuses every job, which is better read now.
+    const pinsMoved = changed.includes("catalog") ||
+        changed.includes("semantic");
+
+    if (pinsMoved) {
+        announceBroker(parts.broker).catch((error) => {
+            console.warn(`⚠️  Memory budget not printed: ${error.message}`);
+        });
+    }
+}
+
+/**
  * Says what the bind means, once, before listening. A bind beyond
  * loopback is the operator's call (AGENTS.md), so it is named, not
  * refused: what protects it is the API token, which every request
@@ -377,7 +505,9 @@ async function announceListen(config, apiToken) {
  * not fit a proxy named in the config, before the request logger or
  * any route sees them (security/guard.js says why).
  * @param {{ config: Object, apiToken: string | null,
- *     allowedHosts: Set<string> }} access - fixed at boot
+ *     allowedHosts: Set<string> }} access - the token is fixed at
+ *     boot; config and allowedHosts are replaced together when the
+ *     config is reloaded (applyReload)
  */
 async function guardRequests(c, next, access) {
     const { config, apiToken, allowedHosts } = access;
@@ -526,15 +656,7 @@ async function main() {
             console.log(`   made owner-only: ${names.join(", ")}`);
         }
 
-        //  Printed either way. With text off by default, the quiet
-        //  case is the one storing prompts, so neither may be silent.
-        if (config.log_prompts) {
-            console.log("   prompt text: logged (log_prompts: true)");
-        }
-
-        if (!config.log_prompts) {
-            console.log("   prompt text: hashes only (log_prompts: false)");
-        }
+        announcePromptText(config);
     } catch (error) {
         console.warn(
             `⚠️  Decision log unavailable, continuing without it: ` +
@@ -557,13 +679,37 @@ async function main() {
         allowedHosts: buildAllowedHosts(config.allowed_hosts),
     };
 
+    //  From here on `config` is only the config saxbyd booted with.
+    //  Whatever serves a request reads the reloader's, which a save
+    //  to the config file replaces.
+    const reloader = createReloader({
+        config,
+        semantic,
+        load: () => loadConfig(instance),
+        warm: (next) => buildSemantic(next, log),
+        onApply: (state, changed) =>
+            applyReload(state, changed, { access, broker, log }),
+    });
+
+    const watching = watchConfig({
+        dir: getInstanceDir(instance),
+        reload: reloader.reload,
+    });
+
+    if (watching.error() === null) {
+        console.log("👀 Watching the config file; a save is applied live.");
+    }
+
+    //  Read by the status route, so `saxby status` can say when the
+    //  file on disk is not the config that is running.
+    const readConfigState = () => ({
+        ...reloader.status(),
+        watch_error: watching.error(),
+    });
+
     app.use("*", (c, next) => guardRequests(c, next, access));
 
-    if (config.allowed_hosts.length > 0) {
-        const names = config.allowed_hosts.join(", ");
-
-        console.log(`🛡️  Host names also accepted: ${names}`);
-    }
+    announceHosts(config);
 
     if (!isVerbose()) {
         const requestLogger = logger();
@@ -582,10 +728,15 @@ async function main() {
     }
 
     app.use("*", async (c, next) => {
-        c.set("config", config);
+        //  Read once, so a request sees one config and the Tier 3
+        //  vectors built for it, even if a reload lands mid-request.
+        const current = reloader.current();
+
+        c.set("config", current.config);
+        c.set("configState", readConfigState);
         c.set("instance", instance);
         c.set("log", log);
-        c.set("semantic", semantic);
+        c.set("semantic", current.semantic);
         c.set("broker", broker);
         await next();
     });
@@ -609,8 +760,10 @@ async function main() {
             upstreamHeaders.delete("authorization");
         }
 
+        const upstreamUrl = c.get("config").upstream_url;
+
         const upstreamReq = new Request(
-            `${config.upstream_url}${url.pathname}${url.search}`,
+            `${upstreamUrl}${url.pathname}${url.search}`,
             {
                 method: c.req.method,
                 headers: upstreamHeaders,

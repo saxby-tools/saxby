@@ -207,9 +207,14 @@ export function createBroker(options) {
     const defaultWaitMs = memory.wait_timeout_s * MS_PER_S;
 
     const ledger = createLedger(now);
-    const pinned = listPinned(config, backend.canonicalName);
-    const pinnedNames = new Set(pinned.map((term) => term.model));
-    const catalogSizes = mapCatalogSizes(config, backend.canonicalName);
+
+    //  What the config says about models, and where the backend is.
+    //  Replaced together by reconfigure() when the config is reloaded;
+    //  every decision reads them fresh, so none sees half of each.
+    let pinned = listPinned(config, backend.canonicalName);
+    let pinnedNames = new Set(pinned.map((term) => term.model));
+    let catalogSizes = mapCatalogSizes(config, backend.canonicalName);
+    let upstreamUrl = options.upstreamUrl;
 
     let sweepTimer = null;
     let sweeping = false;
@@ -238,7 +243,7 @@ export function createBroker(options) {
 
     async function readResidency() {
         try {
-            const loaded = await backend.fetchResidency(options.upstreamUrl);
+            const loaded = await backend.fetchResidency(upstreamUrl);
 
             options.sizes.record(loaded);
 
@@ -827,6 +832,26 @@ export function createBroker(options) {
         sweepTimer = null;
     }
 
+    //  ---- Reloading the config --------------------------------------
+
+    /**
+     * Takes the models and the backend address from a reloaded config.
+     * Synchronous, and the ledger is not touched: a job admitted under
+     * the old config keeps its reservation, and the next decision is
+     * judged against the new pins and sizes.
+     *
+     * The `memory` block is NOT read again. The sweep timer and the
+     * heartbeat interval are tied to jobs already running, so a change
+     * there needs a restart (config/reload.js refuses it).
+     * @param {Object} next - A validated Saxby config.
+     */
+    function reconfigure(next) {
+        pinned = listPinned(next, backend.canonicalName);
+        pinnedNames = new Set(pinned.map((term) => term.model));
+        catalogSizes = mapCatalogSizes(next, backend.canonicalName);
+        upstreamUrl = next.upstream_url;
+    }
+
     //  ---- Reading the state -----------------------------------------
 
     async function snapshot() {
@@ -848,6 +873,7 @@ export function createBroker(options) {
         sweep,
         start,
         stop,
+        reconfigure,
         snapshot,
         hasJobs: ledger.hasJobs,
         heartbeatIntervalS: memory.heartbeat_interval_s,

@@ -261,6 +261,34 @@ Deno.test({
 });
 
 Deno.test({
+    name: "log — setLogPrompts changes what the next row stores",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+
+        log.record(await entryFor(log, "before"));
+        log.setLogPrompts(true);
+        log.record(await entryFor(log, "kept"));
+        log.setLogPrompts(false);
+        log.record(await entryFor(log, "after"));
+        log.flush();
+
+        //  Read back by hash: log ids do not sort by arrival.
+        const find = log.db.prepare(
+            "SELECT prompt FROM decision_log WHERE prompt_hash = ?",
+        );
+
+        const stored = [];
+
+        for (const text of ["before", "kept", "after"]) {
+            stored.push(find.get(await log.hashPrompt(text)).prompt);
+        }
+
+        assertEquals(stored, [null, "kept", null]);
+    },
+});
+
+Deno.test({
     name: "log — the prompt hash is keyed and stamped with its scheme",
     sanitizeResources: false,
     fn: async () => {

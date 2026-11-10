@@ -387,7 +387,8 @@ export function openDecisionLogReadOnly(path) {
  * Opens (and migrates) the decision log, returning a writer.
  *
  * @param {string} path
- * @param {Object} config - reads config.log_prompts
+ * @param {Object} config - reads config.log_prompts, once; a reload
+ *   passes the new value to setLogPrompts
  * @param {string | null} keyPath - the instance's prompt-hash.key;
  *   null keeps a key for this process only
  */
@@ -425,6 +426,9 @@ export async function openDecisionLog(path, config, keyPath = null) {
     let closed = false;
     let written = 0;
     let dropped = 0;
+
+    //  Changed only by setLogPrompts, when the config is reloaded.
+    let logPrompts = Boolean(config.log_prompts);
 
     //  ---- Flush -----------------------------------------------------
 
@@ -539,7 +543,7 @@ export async function openDecisionLog(path, config, keyPath = null) {
 
             prompt_hash: entry.promptHash,
             prompt_hash_scheme: PROMPT_HASH_SCHEME,
-            prompt: config.log_prompts ? entry.prompt : null,
+            prompt: logPrompts ? entry.prompt : null,
 
             system_prefix: entry.systemPrefix ?? null,
 
@@ -645,6 +649,17 @@ export async function openDecisionLog(path, config, keyPath = null) {
         }));
     }
 
+    //  ---- Reloading the config ---------------------------------------
+
+    /**
+     * Turns prompt text on or off for rows written from now on. Rows
+     * already queued keep what they were recorded with.
+     * @param {boolean} enabled - the reloaded config's log_prompts
+     */
+    function setLogPrompts(enabled) {
+        logPrompts = Boolean(enabled);
+    }
+
     //  ---- Lifecycle --------------------------------------------------
 
     function close() {
@@ -686,6 +701,7 @@ export async function openDecisionLog(path, config, keyPath = null) {
         memory,
         saveModelSize,
         loadModelSizes,
+        setLogPrompts,
         flush,
         close,
         stats,

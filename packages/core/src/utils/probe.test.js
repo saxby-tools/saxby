@@ -3,6 +3,7 @@ import {
     fetchInstanceStatus,
     fetchSaxbyStatus,
     isPortHeld,
+    listConfigWarnings,
     probeHostFor,
     probeTokenFor,
 } from "./probe.js";
@@ -153,4 +154,48 @@ Deno.test("probe — a token that cannot be read is no token", async () => {
 
         await Deno.remove(root, { recursive: true });
     }
+});
+
+//  =====================================================================
+//  What a status answer says about the config
+//  =====================================================================
+
+const STATUS = { instance: null, port: 11435, pid: 1, version: "0.0.0" };
+const LOADED_AT = "2026-11-09T12:00:00.000Z";
+
+Deno.test("config warnings — none when the file is what runs", () => {
+    const config = { loaded_at: LOADED_AT, declined: null, watch_error: null };
+
+    assertEquals(listConfigWarnings({ ...STATUS, config }), []);
+});
+
+Deno.test("config warnings — none from a saxbyd too old to say", () => {
+    assertEquals(listConfigWarnings(STATUS), []);
+    assertEquals(listConfigWarnings(null), []);
+});
+
+Deno.test("config warnings — a declined edit carries its reason", () => {
+    const config = {
+        loaded_at: LOADED_AT,
+        declined: { at: "2026-11-09T12:05:00.000Z", reason: "- oops" },
+        watch_error: null,
+    };
+
+    assertEquals(listConfigWarnings({ ...STATUS, config }), [
+        "The config on disk is NOT applied; saxbyd still runs the one " +
+        `loaded ${LOADED_AT}.\n- oops`,
+    ]);
+});
+
+Deno.test("config warnings — a dead watch is named", () => {
+    const config = {
+        loaded_at: LOADED_AT,
+        declined: null,
+        watch_error: "too many open files",
+    };
+
+    assertEquals(listConfigWarnings({ ...STATUS, config }), [
+        "Config edits are NOT being watched (too many open files). " +
+        "Restart to apply an edit.",
+    ]);
 });

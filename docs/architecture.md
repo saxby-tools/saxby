@@ -56,6 +56,23 @@ in order:
 Steps 4 and 5 can fail without stopping Saxby. Observability and
 cleverness are optional; routing is not.
 
+##  Reload
+
+After boot, saxbyd watches the instance folder and repeats steps 2,
+3 and 5 when the config file is saved
+([`config/watch.js`](../packages/llm-router/src/config/watch.js),
+[`config/reload.js`](../packages/llm-router/src/config/reload.js)).
+The new config is built off to the side and swapped in with one
+assignment, so a request sees the old config or the new one, never
+part of each. The guard and the memory broker take their share of it
+in the same tick; the broker's ledger is not touched.
+
+Where a boot would stop, a reload declines: the old config keeps
+serving, and the reason goes to the log and to
+`GET /saxby/v1/status`. `listen_host`, `listen_port`, `log_path` and
+`memory` are fixed for the life of the process, and an edit to one
+declines the whole save.
+
 ##  The guard
 
 Before any route — chat, `explain`, `status`, the catch-all — every

@@ -275,7 +275,7 @@ grammar checker that calls an OpenAI-compatible endpoint.
    origin.
 3. Add that origin to `allowed_origins`, as
    [Browser extensions](configuration.md#browser-extensions) shows,
-   and restart Saxby.
+   and save. Saxby applies it at once.
 
 This extension checks on every pause in typing and sends no
 `reasoning_effort` to a local endpoint (its source, read Nov. 8,
