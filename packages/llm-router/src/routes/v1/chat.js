@@ -1,4 +1,4 @@
-import { extractIntent } from "../../pipeline/extract.js";
+import { extractIntent, replaceMessageText } from "../../pipeline/extract.js";
 import { resolvePipeline } from "../../pipeline/resolve.js";
 import { classifyModel } from "../../pipeline/model-name.js";
 import { startTrace } from "../../observability/trace.js";
@@ -225,11 +225,17 @@ export function registerChatRoutes(app) {
             targetModel = decision.model;
             body.model = targetModel;
 
-            //  Strip the /command so the model never sees it.
+            //  Strip the /command so the model never sees it. The message
+            //  may be parts, text beside images or audio, so only its text
+            //  is rewritten and the rest stays.
             if (extracted.override) {
                 if (extracted.promptIndex >= 0) {
-                    body.messages[extracted.promptIndex].content =
-                        decision.prompt;
+                    const target = body.messages[extracted.promptIndex];
+
+                    target.content = replaceMessageText(
+                        target.content,
+                        decision.prompt,
+                    );
                 }
             }
 
