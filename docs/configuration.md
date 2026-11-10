@@ -243,7 +243,9 @@ reach a writer persona through its Tier 3 exemplars instead.
 **A tag is a routing preference, not a capability claim.** A model
 that *can* write code should not claim `TAG_CODER` unless it is the
 model code should go to. If two models claim the same tag, the tag
-stops telling them apart.
+stops telling them apart. For that reason `config generate` suggests
+`TAG_REASONING` for reasoning specialists only; a generalist that
+should take reasoning work gets the tag by hand.
 
 **`TAG_VISION` and `TAG_AUDIO` are the exception.** They are
 requirements. A request with an image only considers models that
