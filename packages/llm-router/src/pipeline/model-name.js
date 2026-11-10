@@ -11,8 +11,16 @@
 //  one rule. explain once carried no copy of it and routed everything,
 //  so it reported decisions the chat route never made.
 
+/**
+ * The model name a client asks for to be routed. The only name that
+ * runs the tiers; it is also what /v1/models lists first.
+ */
 export const SAXBY_MODEL = "saxby";
 
+/**
+ * The prefix that names a bypass: `saxby/<model>` goes straight to
+ * `<model>`, logged but never routed.
+ */
 export const SAXBY_PREFIX = `${SAXBY_MODEL}/`;
 
 /**

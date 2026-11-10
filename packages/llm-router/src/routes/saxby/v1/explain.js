@@ -52,6 +52,13 @@ function explainPassthrough(body, requested) {
     };
 }
 
+/**
+ * Registers POST /saxby/v1/explain on the Hono app. The body is a
+ * chat completion request; the answer is the routing decision as
+ * JSON, with no upstream call.
+ * @param {import("hono").Hono} app
+ * @returns {void}
+ */
 export function registerExplainRoutes(app) {
     app.post("/saxby/v1/explain", async (c) => {
         const config = c.get("config");

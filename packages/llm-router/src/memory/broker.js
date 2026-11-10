@@ -150,8 +150,8 @@ function mapCatalogSizes(config, canonicalName) {
 }
 
 /**
- * A model's size, best source first: loaded now, last measured, then
- * the config's size_gib.
+ * A model's size, best source first: loaded now, largest measured,
+ * then the config's size_gib.
  */
 function sizeModel(model, sizeGib, loadedByName, sizes) {
     if (loadedByName.has(model)) {

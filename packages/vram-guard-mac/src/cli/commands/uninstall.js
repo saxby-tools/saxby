@@ -2,6 +2,12 @@ import { Command } from "@cliffy/command";
 import { executeAsRootMac as executeAsRoot } from "@saxby/core";
 import { DAEMON_DIR, PLIST_DESTINATION } from "../../constants.js";
 
+/**
+ * `saxby vram-guard-mac uninstall`: unloads the LaunchDaemon, removes
+ * its plist and script directory, and hands the ceiling back to
+ * macOS, as root through one privilege prompt. The override file
+ * under /usr/local/etc is kept.
+ */
 export const uninstallCommand = new Command()
     .description("Unload and remove the macOS LaunchDaemon.")
     .action(async () => {

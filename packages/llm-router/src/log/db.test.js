@@ -356,7 +356,7 @@ Deno.test({
         const log = await openDecisionLog(path, { log_prompts: false });
 
         assertEquals(log.migration.from, 4);
-        assertEquals(log.migration.to, 6);
+        assertEquals(log.migration.to, 7);
 
         const old = log.db.prepare(
             "SELECT prompt_hash, prompt_hash_scheme FROM decision_log",
@@ -400,6 +400,104 @@ Deno.test({
 
         assertEquals(JSON.parse(rows[0]), { reasoning_effort: "none" });
         assertEquals(rows[1], null);
+
+        log.close();
+    },
+});
+
+//  =====================================================================
+//  The time note
+//  =====================================================================
+
+Deno.test({
+    name: "log — the row says the note was on and what gap it named",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+        const resumed = await entryFor(log, "hello");
+        const fresh = await entryFor(log, "hello");
+        const off = await entryFor(log, "hello");
+
+        resumed.messagePrefix = { gapHours: 27.5 };
+        fresh.messagePrefix = { gapHours: null };
+        off.messagePrefix = null;
+
+        log.record(resumed);
+        log.record(fresh);
+        log.record(off);
+        log.flush();
+
+        const rows = log.db.prepare(
+            "SELECT message_prefix AS p, message_prefix_gap_hours AS g " +
+                "FROM decision_log ORDER BY id",
+        ).all();
+
+        assertEquals(rows, [
+            { p: 1, g: 27.5 },
+            { p: 1, g: null },
+            { p: 0, g: null },
+        ]);
+
+        log.close();
+    },
+});
+
+Deno.test({
+    name: "log — a message keeps the time it was first seen",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+
+        log.rememberFirstSeen("conv-a", ["m1", "m2"], "2026-10-26T06:30:00Z");
+        log.rememberFirstSeen("conv-a", ["m2", "m3"], "2026-10-27T09:00:00Z");
+        log.rememberFirstSeen("conv-b", ["m1"], "2026-10-28T00:00:00Z");
+        log.flush();
+
+        const seen = log.findFirstSeen("conv-a");
+
+        assertEquals([...seen.entries()], [
+            ["m1", "2026-10-26T06:30:00Z"],
+            ["m2", "2026-10-26T06:30:00Z"],
+            ["m3", "2026-10-27T09:00:00Z"],
+        ]);
+
+        //  The same hash in another conversation is another row.
+        assertEquals(
+            log.findFirstSeen("conv-b").get("m1"),
+            "2026-10-28T00:00:00Z",
+        );
+        assertEquals(log.findFirstSeen("conv-c").size, 0);
+
+        log.close();
+    },
+});
+
+Deno.test({
+    name: "log — a conversation idle for ninety days is dropped whole",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+        const insert = log.db.prepare(
+            "INSERT INTO message_seen VALUES (?, ?, ?)",
+        );
+
+        //  An old conversation, and one that was old but came back.
+        insert.run("old", "m1", "2026-01-01T00:00:00.000Z");
+        insert.run("old", "m2", "2026-01-02T00:00:00.000Z");
+        insert.run("back", "m1", "2026-01-01T00:00:00.000Z");
+        insert.run("back", "m2", new Date().toISOString());
+
+        //  The first write after open queues the sweep.
+        log.rememberFirstSeen("new", ["m1"], new Date().toISOString());
+        log.flush();
+
+        const keys = log.db.prepare(
+            "SELECT DISTINCT conversation_key AS k FROM message_seen " +
+                "ORDER BY k",
+        ).all().map((row) => row.k);
+
+        assertEquals(keys, ["back", "new"]);
+        assertEquals(log.findFirstSeen("back").size, 2);
 
         log.close();
     },

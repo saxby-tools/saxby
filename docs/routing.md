@@ -135,9 +135,10 @@ to turn it off.
 After a tier picks its candidates, Saxby checks that the request
 fits. It estimates the size of the **whole** request — system prompt
 and every earlier turn, not just the last message — at roughly four
-characters per token, with code charged at a denser rate. Any
-candidate whose `max_context` is smaller is skipped, with the reason
-recorded.
+characters per token, with code charged at a denser rate. The tool
+schemas sent with the request and the tool calls on earlier assistant
+turns are JSON, so they count at the code rate too. Any candidate
+whose `max_context` is smaller is skipped, with the reason recorded.
 
 If every candidate is too small, Saxby falls back to the global
 default, but only if it fits and meets any requirement. Otherwise it

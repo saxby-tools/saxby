@@ -29,10 +29,13 @@ import { BYTES_PER_MIB } from "../units.js";
 const SYSCTL_PATH = "/usr/sbin/sysctl";
 const VM_STAT_PATH = "/usr/bin/vm_stat";
 
-//  Exported because it is also the `ceilingSource` a reading carries
-//  when the ceiling was measured. The PyTorch cap in `saxby reserve`
-//  is a ratio of Metal's own number, which this key equals when set,
-//  so the limiter compares the source against it before capping.
+/**
+ * The sysctl key for the GPU's wired ceiling. Exported because it is
+ * also the `ceilingSource` a reading carries when the ceiling was
+ * measured. The PyTorch cap in `saxby reserve` is a ratio of Metal's
+ * own number, which this key equals when set, so the limiter compares
+ * the source against it before capping.
+ */
 export const WIRED_LIMIT_KEY = "iogpu.wired_limit_mb";
 
 const PAGE_SIZE_PATTERN = /page size of (\d+) bytes/;
@@ -147,15 +150,30 @@ function readUsage(result) {
     return { usedBytes: wired, usedSource: "vm_stat wired" };
 }
 
+/**
+ * The macOS probe: the GPU ceiling from sysctl and wired memory from
+ * vm_stat, each run by absolute path. Static only, so MEMORY_PROBES
+ * holds the class itself and nothing is constructed.
+ */
 export class DarwinMemoryProbe {
+    /** The short name code picks this probe by. */
     static id = "darwin";
+
+    /** The name shown to people. */
     static displayName = "macOS (Apple Silicon)";
 
+    /**
+     * Whether this is the probe for the running OS.
+     * @returns {boolean}
+     */
     static isSupported() {
         return Deno.build.os === "darwin";
     }
 
     /**
+     * One reading of the ceiling and of wired memory. Never throws: a
+     * program that fails leaves its half of the reading null, with
+     * the reason in that half's source field.
      * @param {typeof runProgram} [run] - Injected by tests.
      * @returns {Promise<import("./index.js").MemoryReading>}
      */

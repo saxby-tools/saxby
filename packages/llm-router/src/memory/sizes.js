@@ -12,6 +12,16 @@
 //  matters most. A size of zero is refused for the same reason the
 //  config refuses size_gib 0.
 //
+//  The largest whole load wins, not the latest. A model's size
+//  depends on the context length it was loaded with, and that differs
+//  by client: Saxby's chat route gets the backend's default, while a
+//  client on Ollama's /api paths can pass a smaller num_ctx. Had the
+//  smaller load replaced the bigger size, the broker would count less
+//  than Saxby's own load of the model needs once it unloads, and a
+//  job could be admitted into the difference. An unusually large load
+//  inflates the number until the table is cleared, which errs the
+//  safe way: a bigger size only makes the broker more careful.
+//
 //  Kept in the decision-log file (table model_sizes), like the
 //  exemplar vectors, so a saxbyd restart does not forget them. A cache
 //  only ever makes the broker less careful than it needs to be, never
@@ -37,8 +47,8 @@ export function createSizeCache(options = {}) {
 
     /**
      * Records what the backend reports as loaded, skipping partial
-     * loads and empty sizes. Only a change is saved, so a steady state
-     * writes nothing.
+     * loads and empty sizes. Only a larger size is saved, so a steady
+     * state writes nothing and a smaller load changes nothing.
      * @param {import("@saxby/core").LoadedModel[]} loaded
      */
     function record(loaded) {
@@ -53,8 +63,10 @@ export function createSizeCache(options = {}) {
 
             const known = sizes.get(model.name);
 
-            if (known?.bytes === model.bytes) {
-                continue;
+            if (known !== undefined) {
+                if (known.bytes >= model.bytes) {
+                    continue;
+                }
             }
 
             const measuredAt = new Date(now()).toISOString();

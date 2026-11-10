@@ -107,6 +107,12 @@ function formatRow(prompt, result) {
         `${score}  margin ${margin}${flag}`;
 }
 
+/**
+ * `saxby probe [prompts...]`: scores each prompt against the
+ * instance's Tier 3 exemplars through /saxby/v1/explain and prints
+ * the tier, persona, score and margin. With no prompts it runs the
+ * built-in set. Only the embedder runs; no completion is generated.
+ */
 export const probeCommand = new Command()
     .description(
         "Score prompts against Tier 3 exemplars without generating.",

@@ -8,7 +8,7 @@
 //  sent a follow-up generator to a 51GB coding model.
 
 import { assert, assertEquals } from "@std/assert";
-import { extractIntent } from "./extract.js";
+import { extractIntent, replaceMessageText } from "./extract.js";
 import { EMITTABLE_TAGS } from "@saxby/core";
 
 const CONFIG = {
@@ -176,4 +176,104 @@ Deno.test("weight — the same text weighs the same anywhere", () => {
     }, CONFIG).metrics.estimatedTokens;
 
     assertEquals(asQuestion, asSystem);
+});
+
+//  ---------------------------------------------------------------------
+//  Rewriting a message's text
+//  ---------------------------------------------------------------------
+//  The /command strip writes the clean prompt back into the message.
+//  A message that arrived as parts must keep its images and audio, or
+//  a `/coder` prompt with a screenshot reaches the model blind.
+
+Deno.test("replace — a string is replaced whole", () => {
+    assertEquals(replaceMessageText("/coder fix it", "fix it"), "fix it");
+});
+
+Deno.test("replace — parts keep their image and get the new text", () => {
+    const image = { type: "image_url", image_url: { url: "data:x" } };
+    const parts = [{ type: "text", text: "/coder what is this" }, image];
+
+    const result = replaceMessageText(parts, "what is this");
+
+    assertEquals(result, [{ type: "text", text: "what is this" }, image]);
+});
+
+Deno.test("replace — several text parts collapse to one", () => {
+    const image = { type: "image_url", image_url: { url: "data:x" } };
+    const parts = [
+        { type: "text", text: "/coder" },
+        image,
+        { type: "text", text: "what is this" },
+    ];
+
+    const result = replaceMessageText(parts, "what is this");
+
+    assertEquals(result, [{ type: "text", text: "what is this" }, image]);
+});
+
+Deno.test("replace — content of another shape is left alone", () => {
+    assertEquals(replaceMessageText(null, "x"), null);
+    assertEquals(replaceMessageText(42, "x"), 42);
+});
+
+//  Agent clients send every tool's JSON schema with every request,
+//  and a prior turn that was a tool call keeps its name and arguments
+//  outside `content`. Neither was counted, and est_tokens ran a third
+//  under Ollama's prompt_tokens on agent payloads (#46). Both are
+//  JSON, so both are charged at the code rate.
+
+const TOOLS = [{
+    type: "function",
+    function: {
+        name: "read_file",
+        description: "Reads one file from the workspace.",
+        parameters: {
+            type: "object",
+            properties: { path: { type: "string" } },
+            required: ["path"],
+        },
+    },
+}];
+
+Deno.test("weight — tool schemas add to the estimate", () => {
+    const bare = ask(PROSE).metrics.estimatedTokens;
+    const withTools = ask(PROSE, { tools: TOOLS }).metrics.estimatedTokens;
+
+    assert(withTools > bare);
+});
+
+Deno.test("weight — a tool call with empty content is not empty", () => {
+    //  300 characters of arguments plus a 9-character name, at three
+    //  characters per token: 103, with nothing else in the payload.
+    const args = JSON.stringify({ path: "a".repeat(289) });
+
+    assertEquals(args.length, 300);
+
+    const result = extractIntent({
+        model: "saxby",
+        messages: [
+            {
+                role: "assistant",
+                content: "",
+                tool_calls: [{
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "read_file", arguments: args },
+                }],
+            },
+            { role: "user", content: "" },
+        ],
+    }, CONFIG);
+
+    assertEquals(result.metrics.estimatedTokens, 103);
+});
+
+Deno.test("weight — tools that are not an array are ignored", () => {
+    const bare = ask(PROSE).metrics.estimatedTokens;
+
+    for (const tools of ["read_file", 7, { name: "read_file" }, null]) {
+        const result = ask(PROSE, { tools });
+
+        assertEquals(result.metrics.estimatedTokens, bare);
+    }
 });

@@ -1,3 +1,19 @@
+/**
+ * Shared contracts for Saxby, a local-first LLM routing daemon:
+ * the config schema and loader, instance folders, the API token,
+ * backend adapters, memory probes, service labels and the tag
+ * vocabulary. `saxby config generate` writes what `saxbyd` reads,
+ * and this package is the agreement between them.
+ *
+ * @example Load an instance's config
+ * ```js
+ * import { loadConfig, resolveInstanceName } from "@saxby/core";
+ *
+ * const config = await loadConfig(resolveInstanceName("dev"));
+ * ```
+ * @module
+ */
+
 export * from "./utils/env.js";
 export * from "./utils/fetch-error.js";
 export * from "./utils/plist.js";

@@ -99,6 +99,8 @@ const INSERT_COLUMNS = [
     "prompt",
     "system_prefix",
     "client_defaults",
+    "message_prefix",
+    "message_prefix_gap_hours",
 ];
 
 const INSERT_SQL = `
@@ -157,6 +159,38 @@ const SIZE_UPSERT_SQL = `
 const SIZE_SELECT_SQL = `
     SELECT model, bytes, measured_at FROM model_sizes
 `;
+
+//  First-seen times for the time note (prefix/apply.js). OR IGNORE,
+//  so a message seen again keeps its first time, and a repeat of the
+//  same text in one conversation shares it.
+const SEEN_INSERT_SQL = `
+    INSERT OR IGNORE INTO message_seen
+        (conversation_key, message_hash, first_seen_at)
+    VALUES (?, ?, ?)
+`;
+
+const SEEN_SELECT_SQL = `
+    SELECT message_hash, first_seen_at FROM message_seen
+    WHERE conversation_key = ?
+`;
+
+//  A conversation goes whole, judged by its newest row.
+const SEEN_PRUNE_SQL = `
+    DELETE FROM message_seen WHERE conversation_key IN (
+        SELECT conversation_key FROM message_seen
+        GROUP BY conversation_key
+        HAVING MAX(first_seen_at) < ?
+    )
+`;
+
+//  How long a conversation's first-seen rows outlive its last message,
+//  and how often the sweep runs. Ninety days is past any pause the
+//  lab measured (seven weeks); a conversation resumed later gets the
+//  resume time on every message, which is the first-request case
+//  again. The sweep rides the write queue and runs only when a row is
+//  written, so an idle instance keeps what it has.
+const SEEN_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const SEEN_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
 //  ---------------------------------------------------------------------
 //  Serialisation helpers
@@ -413,11 +447,15 @@ export async function openDecisionLog(path, config, keyPath = null) {
     const memoryStmt = db.prepare(MEMORY_SQL);
     const sizeStmt = db.prepare(SIZE_UPSERT_SQL);
 
+    const seenSelectStmt = db.prepare(SEEN_SELECT_SQL);
+
     const statements = {
         insert: insertStmt,
         complete: completeStmt,
         memory: memoryStmt,
         size: sizeStmt,
+        seen: db.prepare(SEEN_INSERT_SQL),
+        prune: db.prepare(SEEN_PRUNE_SQL),
     };
 
     const queue = [];
@@ -426,6 +464,7 @@ export async function openDecisionLog(path, config, keyPath = null) {
     let closed = false;
     let written = 0;
     let dropped = 0;
+    let seenPrunedAt = 0;
 
     //  Changed only by setLogPrompts, when the config is reloaded.
     let logPrompts = Boolean(config.log_prompts);
@@ -548,6 +587,11 @@ export async function openDecisionLog(path, config, keyPath = null) {
             system_prefix: entry.systemPrefix ?? null,
 
             client_defaults: toJson(entry.clientDefaults),
+
+            //  The time note: whether it was on, and the gap the
+            //  latest note named. NULL gap means no sentence.
+            message_prefix: toBool(Boolean(entry.messagePrefix)),
+            message_prefix_gap_hours: entry.messagePrefix?.gapHours ?? null,
         };
 
         enqueue({
@@ -649,6 +693,54 @@ export async function openDecisionLog(path, config, keyPath = null) {
         }));
     }
 
+    //  ---- Message prefix ---------------------------------------------
+
+    /**
+     * When each message of one conversation was first seen: a Map of
+     * message hash to ISO time. Synchronous and on the request path,
+     * like the size cache's read: one indexed lookup per request, and
+     * the note cannot be built without it.
+     * @param {string} conversationKey
+     * @returns {Map<string, string>}
+     */
+    function findFirstSeen(conversationKey) {
+        const seen = new Map();
+
+        for (const row of seenSelectStmt.all(conversationKey)) {
+            seen.set(row.message_hash, row.first_seen_at);
+        }
+
+        return seen;
+    }
+
+    /**
+     * Remembers when these messages were first seen. Queued like
+     * every write, so a request that follows within one flush reads
+     * the old rows and stamps the arrival time again: a difference
+     * under FLUSH_INTERVAL_MS, which the note's minutes never show.
+     * Each call may also queue the sweep of idle conversations.
+     * @param {string} conversationKey
+     * @param {string[]} hashes
+     * @param {string} at - ISO time
+     */
+    function rememberFirstSeen(conversationKey, hashes, at) {
+        for (const hash of hashes) {
+            enqueue({ kind: "seen", values: [conversationKey, hash, at] });
+        }
+
+        const now = Date.now();
+
+        if (now - seenPrunedAt < SEEN_PRUNE_INTERVAL_MS) {
+            return;
+        }
+
+        seenPrunedAt = now;
+
+        const cutoff = new Date(now - SEEN_RETENTION_MS).toISOString();
+
+        enqueue({ kind: "prune", values: [cutoff] });
+    }
+
     //  ---- Reloading the config ---------------------------------------
 
     /**
@@ -701,6 +793,8 @@ export async function openDecisionLog(path, config, keyPath = null) {
         memory,
         saveModelSize,
         loadModelSizes,
+        findFirstSeen,
+        rememberFirstSeen,
         setLogPrompts,
         flush,
         close,

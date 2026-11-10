@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
-import { validateConfig } from "./schema.js";
+import { hostTimeZone, validateConfig } from "./schema.js";
 
 function config(overrides = {}) {
     return {
@@ -336,4 +336,49 @@ Deno.test("config — an extension may have client defaults", () => {
     }));
 
     assertEquals(Object.keys(parsed.client_defaults).length, 1);
+});
+
+//  =====================================================================
+//  Message prefix
+//  =====================================================================
+
+Deno.test("config — the message prefix is off, in the host's zone", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.message_prefix.enabled, false);
+    assertEquals(parsed.message_prefix.gap_sentence, true);
+    assertEquals(parsed.message_prefix.timezone, hostTimeZone());
+});
+
+Deno.test("config — a known zone name is kept as written", () => {
+    const zones = ["America/Chicago", "Asia/Kolkata", "UTC", "US/Central"];
+
+    for (const zone of zones) {
+        const parsed = validateConfig(
+            config({ message_prefix: { enabled: true, timezone: zone } }),
+        );
+
+        assertEquals(parsed.message_prefix.timezone, zone);
+    }
+});
+
+Deno.test("config — an unknown zone name is refused and named", () => {
+    //  An abbreviation and an offset are refused on purpose: the
+    //  first is ambiguous, the second is read worse than a name.
+    for (const zone of ["Mars/Olympus", "CST", "", "+05:30"]) {
+        const message = messageFor(
+            config({ message_prefix: { timezone: zone } }),
+        );
+
+        assert(message.includes("message_prefix.timezone"), zone);
+        assert(message.includes("not a known IANA zone name"), zone);
+    }
+});
+
+Deno.test("config — a misspelled message_prefix field is named", () => {
+    const message = messageFor(
+        config({ message_prefix: { time_zone: "UTC" } }),
+    );
+
+    assert(message.includes("unknown field 'message_prefix.time_zone'"));
 });

@@ -26,7 +26,7 @@ Deno.test("sizes — saved rows survive a restart", () => {
     assertEquals(cache.get("granite4:micro-h")?.bytes, 4 * GIB);
 });
 
-Deno.test("sizes — only a change is saved", () => {
+Deno.test("sizes — only a larger size is saved", () => {
     const saved = [];
     const cache = createSizeCache({
         save: (model, bytes) => saved.push([model, bytes]),
@@ -40,6 +40,46 @@ Deno.test("sizes — only a change is saved", () => {
         ["bge-m3:latest", GIB],
         ["bge-m3:latest", 2 * GIB],
     ]);
+});
+
+Deno.test("sizes — a smaller whole load does not lower the size", () => {
+    //  The same model loaded at the backend's default context, then
+    //  by a client that set a smaller num_ctx. The first load is the
+    //  one Saxby's own requests cause, so it is the one that counts.
+    const saved = [];
+    let ms = 0;
+    const cache = createSizeCache({
+        now: () => ms,
+        save: (model, bytes) => saved.push([model, bytes]),
+    });
+
+    cache.record([{ name: "fixture-chat:31b", bytes: 26 * GIB }]);
+
+    ms = 60_000;
+    cache.record([{ name: "fixture-chat:31b", bytes: 20 * GIB }]);
+
+    assertEquals(cache.get("fixture-chat:31b"), {
+        bytes: 26 * GIB,
+        measuredAt: new Date(0).toISOString(),
+    });
+    assertEquals(saved, [["fixture-chat:31b", 26 * GIB]]);
+});
+
+Deno.test("sizes — a saved row is not lowered by a smaller load", () => {
+    const saved = [];
+    const cache = createSizeCache({
+        rows: [{
+            model: "fixture-chat:31b",
+            bytes: 26 * GIB,
+            measuredAt: "2026-10-27T20:00:00.000Z",
+        }],
+        save: (model, bytes) => saved.push([model, bytes]),
+    });
+
+    cache.record([{ name: "fixture-chat:31b", bytes: 20 * GIB }]);
+
+    assertEquals(cache.get("fixture-chat:31b")?.bytes, 26 * GIB);
+    assertEquals(saved, []);
 });
 
 Deno.test("sizes — a partial load is not a measurement", () => {
