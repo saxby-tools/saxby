@@ -142,9 +142,13 @@ recorded, as `bypass` and `raw`.
 | anything else | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
-catch-all lives in [`main.js`](../packages/llm-router/src/main.js) and
-forwards headers as they arrive, minus `accept-encoding`,
-`content-length` and `host`.
+catch-all,
+[`routes/catch-all.js`](../packages/llm-router/src/routes/catch-all.js),
+is registered last and forwards headers as they arrive, minus
+`accept-encoding`, `content-length` and `host`. While a `saxby
+reserve` job holds memory, a JSON POST to one of Ollama's inference
+paths goes through the same memory gate as chat, on the model its
+body names ([Memory broker](memory-broker.md#which-paths-are-gated)).
 [Issue #22](https://github.com/saxby-tools/saxby/issues/22) covers what
 that means for user-identifying headers.
 

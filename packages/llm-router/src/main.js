@@ -17,6 +17,7 @@ import { Hono } from "@hono/hono";
 import { logger } from "@hono/hono/logger";
 import { basename, join } from "@std/path";
 import { registerRoutes } from "./routes/index.js";
+import { registerCatchAll } from "./routes/catch-all.js";
 import {
     fetchSaxbyStatus,
     findMemoryProbe,
@@ -788,47 +789,10 @@ async function main() {
 
     registerRoutes(app);
 
-    //  Global catch-all for unimplemented OpenAI endpoints.
-    app.all("*", async (c) => {
-        const url = new URL(c.req.url);
-        console.log(`\n➡️ Proxying unhandled endpoint: ${url.pathname}`);
-
-        const isGetOrHead = ["GET", "HEAD"].includes(c.req.method);
-
-        const upstreamHeaders = new Headers(c.req.raw.headers);
-
-        upstreamHeaders.delete("accept-encoding");
-        upstreamHeaders.delete("content-length");
-        upstreamHeaders.delete("host");
-
-        if (c.get("sentApiToken")) {
-            upstreamHeaders.delete("authorization");
-        }
-
-        const upstreamUrl = c.get("config").upstream_url;
-
-        const upstreamReq = new Request(
-            `${upstreamUrl}${url.pathname}${url.search}`,
-            {
-                method: c.req.method,
-                headers: upstreamHeaders,
-                body: isGetOrHead ? undefined : c.req.raw.body,
-                duplex: isGetOrHead ? undefined : "half",
-            },
-        );
-
-        const upstreamRes = await fetch(upstreamReq);
-
-        const headers = new Headers(upstreamRes.headers);
-
-        headers.delete("content-encoding");
-        headers.delete("content-length");
-
-        return new Response(upstreamRes.body, {
-            status: upstreamRes.status,
-            headers,
-        });
-    });
+    //  Last, so it sees only what no route served: Ollama's own API,
+    //  passed through, with its inference paths gated while a job
+    //  holds memory.
+    registerCatchAll(app);
 
     await announceListen(config, apiToken);
 

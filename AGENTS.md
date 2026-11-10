@@ -493,7 +493,8 @@ loaded or not, and every other loaded model counted because a job
 cannot evict it. Any unknown term admits nothing. If saxbyd can't be
 asked, the job does not run: no answer from the broker is never a
 yes. `--no-broker` runs anyway, loudly. The gate runs only while a job
-holds a reservation, so the chat fast path stays one synchronous check.
+holds a reservation, so the fast path, chat and catch-all alike, stays
+one synchronous check.
 The gate is load-bearing; its log rows are not.
 
 **saxbyd may start exactly `kill`, `sysctl` and `vm_stat`, by absolute

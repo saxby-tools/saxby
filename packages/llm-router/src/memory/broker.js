@@ -8,10 +8,11 @@
 //    jobs    `saxby reserve --gib N -- <command>` asks for N before the
 //            command starts. It waits while N does not fit, then is
 //            refused. A job never takes a pinned model's space.
-//    loads   a chat request whose model is not loaded asks before it
-//            is forwarded, but only while a job holds a reservation.
-//            With none, nothing can be displaced and the chat route
-//            skips the broker without a call to the backend.
+//    loads   a request whose model is not loaded asks before it is
+//            forwarded, from the chat route or from the catch-all's
+//            inference paths, but only while a job holds a
+//            reservation. With none, nothing can be displaced and
+//            the routes skip the broker without a call to the backend.
 //
 //  The gate is load-bearing: when the budget cannot be known, nothing
 //  is admitted. The log is not: every wait, admission, refusal,
@@ -557,8 +558,9 @@ export function createBroker(options) {
     }
 
     /**
-     * Lets a chat request through once its model is loaded or fits.
-     * Callers skip this entirely when hasJobs() is false.
+     * Lets a request through once its model is loaded or fits. Both
+     * routes that forward loads call it through memory/gate.js, and
+     * skip it entirely when hasJobs() is false.
      * @param {string} model - The model the request will be sent to.
      * @param {{ requestId: string, signal?: AbortSignal }} context
      */
