@@ -17,11 +17,18 @@ import { TAGS } from "@saxby/core";
 //  turn. Open WebUI's title/tag/follow-up generators all sit here.
 const BACKGROUND_MAX_TOKENS = 256;
 
-//  Multimodal messages send `content` as an array of parts rather
-//  than a string. Collapsing that with String() yields
-//  "[object Object]", which then gets feature-extracted, embedded
-//  and logged as if it were the prompt.
-function readMessageContent(content) {
+/**
+ * Reads a message's text and counts its other parts.
+ *
+ * Multimodal messages send `content` as an array of parts rather
+ * than a string. Collapsing that with String() yields
+ * "[object Object]", which then gets feature-extracted, embedded
+ * and logged as if it were the prompt. Exported so the time note
+ * hashes the same text this reads.
+ * @param {string | Array<Object> | unknown} content
+ * @returns {{ text: string, images: number, audio: number }}
+ */
+export function readMessageContent(content) {
     if (typeof content === "string") {
         return { text: content, images: 0, audio: 0 };
     }

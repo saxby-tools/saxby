@@ -5,6 +5,7 @@ import { startTrace } from "../../observability/trace.js";
 import { observeResponse } from "../../observability/stream.js";
 import { identifyClient } from "../../log/client.js";
 import { CODE_ABANDONED } from "../../memory/broker.js";
+import { applyMessagePrefix, readConversation } from "../../prefix/apply.js";
 
 //  The request fields `client_defaults` may fill in. The config schema
 //  allows the same list and no more, so a default is never a way to
@@ -164,6 +165,10 @@ export function registerChatRoutes(app) {
         const tracer = startTrace("chat");
         tracer.ingest(body);
 
+        //  Read before the /command strip or the time note rewrites
+        //  a message: its hash must match what the client sends back.
+        const conversation = readConversation(body);
+
         const client = identifyClient(
             (name) => c.req.header(name),
             config,
@@ -182,6 +187,7 @@ export function registerChatRoutes(app) {
         let ttfbMs = null;
         let usage = { promptTokens: null, completionTokens: null };
         let systemPrefix = null;
+        let messagePrefix = null;
 
         //  ---- Direct hardware bypass: saxby/<model> -----------------
         if (requested.mode === "bypass") {
@@ -241,6 +247,14 @@ export function registerChatRoutes(app) {
 
             systemPrefix = applySystemPrefix(body, targetModel, config);
 
+            //  Last, so the note sits on what the model receives.
+            messagePrefix = await applyMessagePrefix(body, conversation, {
+                config,
+                log,
+                receivedAt,
+                tracer,
+            });
+
             logId = log?.record({
                 requestId: tracer.id,
                 receivedAt,
@@ -263,6 +277,7 @@ export function registerChatRoutes(app) {
                     : null,
                 systemPrefix,
                 clientDefaults,
+                messagePrefix,
             });
 
             //  Nothing in the catalog can serve a requirement. The row
@@ -303,6 +318,13 @@ export function registerChatRoutes(app) {
         if (requested.mode !== "route") {
             systemPrefix = applySystemPrefix(body, targetModel, config);
 
+            messagePrefix = await applyMessagePrefix(body, conversation, {
+                config,
+                log,
+                receivedAt,
+                tracer,
+            });
+
             const passthroughTier = requested.mode;
 
             if (passthroughTier === "raw") {
@@ -342,6 +364,7 @@ export function registerChatRoutes(app) {
                 semantic: null,
                 systemPrefix,
                 clientDefaults,
+                messagePrefix,
             });
         }
 

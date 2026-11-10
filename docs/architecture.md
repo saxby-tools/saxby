@@ -187,7 +187,11 @@ The log also holds Tier 3's exemplar vectors, keyed by embedding
 model, which is why switching embedders back and forth re-embeds
 nothing. The memory broker writes its events to `memory_events` and
 caches each model's largest measured size in `model_sizes`, through
-the same queue.
+the same queue. The time note
+([`prefix/apply.js`](../packages/llm-router/src/prefix/apply.js))
+keeps when each user message was first seen in `message_seen`, hashes
+only, written through the queue and read in one indexed lookup when
+the note is built.
 
 ##  The memory broker
 
