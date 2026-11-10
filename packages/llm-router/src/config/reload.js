@@ -30,6 +30,11 @@
 //  warm-up, what to do after a swap, the clock, the console), so tests
 //  run it with no file and no network.
 
+/**
+ * Top-level config fields a running daemon cannot change. An edit
+ * that touches one is declined whole, with the field named; the
+ * header above says why each is on the list.
+ */
 export const RESTART_ONLY_FIELDS = [
     "listen_host",
     "listen_port",
@@ -37,8 +42,19 @@ export const RESTART_ONLY_FIELDS = [
     "memory",
 ];
 
+/** A reload outcome: the file was swapped in as the running config. */
 export const RELOAD_APPLIED = "applied";
+
+/**
+ * A reload outcome: the file already matches the running config, so
+ * nothing was swapped. Also what a bad edit's undo reports.
+ */
 export const RELOAD_UNCHANGED = "unchanged";
+
+/**
+ * A reload outcome: the file could not be applied and the old config
+ * keeps serving. The result carries the reason.
+ */
 export const RELOAD_DECLINED = "declined";
 
 const RESTART_HINT = "Restart to apply it: 'saxby service restart'.";
