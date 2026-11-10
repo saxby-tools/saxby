@@ -27,15 +27,34 @@ import { BrokerUnreachable } from "./client.js";
 //  Exit codes. The job's own code passes through; these are the
 //  wrapper's, from sysexits.h where one fits, so a skill can tell
 //  "try later" (75) from "no broker" (69).
+
+/** saxbyd rejected the request itself: a bad size or a bad flag. */
 export const EXIT_USAGE = 2;
+
+/**
+ * saxbyd could not be asked, or has no broker, so the job did not
+ * run. sysexits.h EX_UNAVAILABLE.
+ */
 export const EXIT_UNAVAILABLE = 69;
+
+/**
+ * The broker refused the reservation within the wait: memory may
+ * free up, so try later. sysexits.h EX_TEMPFAIL.
+ */
 export const EXIT_TEMPFAIL = 75;
+
+/** The command could not be started. The shell's own code for it. */
 export const EXIT_NOT_FOUND = 127;
+
+/** Ctrl-C while waiting for the reservation; nothing ran. */
 export const EXIT_INTERRUPTED = 130;
 
-//  The reservation's size, in whole bytes, for a job that must cap
-//  itself. MLX reads no environment variable for its limit, so an MLX
-//  script calls mx.set_memory_limit with this (docs/memory-broker.md).
+/**
+ * The environment variable holding the reservation's size, in whole
+ * bytes, for a job that must cap itself. MLX reads no environment
+ * variable for its limit, so an MLX script calls mx.set_memory_limit
+ * with this (docs/memory-broker.md).
+ */
 export const RESERVED_BYTES_VAR = "SAXBY_RESERVED_BYTES";
 
 const MS_PER_S = 1000;
