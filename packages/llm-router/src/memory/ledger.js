@@ -5,11 +5,13 @@
 //
 //    job    a `saxby reserve` wrapper and its child. Lives until the
 //           wrapper releases it or every one of its processes has died.
-//    hold   a model load the broker let through. Lives until the
+//    hold   a model load the chat route forwarded. Lives until the
 //           first byte comes back, when the backend lists the model
 //           and its size counts as loaded instead. Without it, two
 //           different models could load at once on the same free
-//           space.
+//           space, and a job could start in the space of a model the
+//           backend has not listed yet. A hold's size may be unknown;
+//           the broker treats that as an unknown term, never as free.
 //
 //  A saxbyd restart empties the ledger. Every live wrapper notices on
 //  its next heartbeat (404) and registers again with the same id, so
@@ -17,7 +19,9 @@
 //
 //  No awaits anywhere in here. The broker reads the backend, then
 //  computes and adds in one synchronous step, so two requests can
-//  never both be admitted against the same free space.
+//  never both be admitted against the same free space. Hold releases
+//  are counted so the broker can tell when one landed while the
+//  backend was being read.
 
 const KIND_JOB = "job";
 const KIND_HOLD = "hold";
@@ -26,7 +30,8 @@ const KIND_HOLD = "hold";
  * @typedef {Object} LedgerEntry
  * @property {string} id
  * @property {"job" | "hold"} kind
- * @property {number} bytes
+ * @property {number | null} bytes - Null for a hold whose model has
+ *     no known size.
  * @property {string | null} label - Jobs: the command's name.
  * @property {number | null} pid - Jobs: the wrapper.
  * @property {number | null} childPid - Jobs: the command it runs.
@@ -45,6 +50,9 @@ const KIND_HOLD = "hold";
 export function createLedger(now = () => Date.now()) {
     /** @type {Map<string, LedgerEntry>} */
     const entries = new Map();
+
+    //  How many holds have left the ledger, by release or removal.
+    let holdsReleased = 0;
 
     function stamp() {
         const ms = now();
@@ -80,7 +88,8 @@ export function createLedger(now = () => Date.now()) {
     }
 
     /**
-     * @param {{ bytes: number, model: string, requestId: string }} hold
+     * @param {{ bytes: number | null, model: string,
+     *     requestId: string }} hold
      * @returns {LedgerEntry}
      */
     function addHold(hold) {
@@ -172,6 +181,7 @@ export function createLedger(now = () => Date.now()) {
         }
 
         entries.delete(id);
+        holdsReleased += 1;
 
         return entry;
     }
@@ -182,7 +192,15 @@ export function createLedger(now = () => Date.now()) {
     function remove(id) {
         const entry = get(id);
 
+        if (!entry) {
+            return null;
+        }
+
         entries.delete(id);
+
+        if (entry.kind === KIND_HOLD) {
+            holdsReleased += 1;
+        }
 
         return entry;
     }
@@ -237,14 +255,15 @@ export function createLedger(now = () => Date.now()) {
         return false;
     }
 
-    function reservedBytes() {
-        let total = 0;
-
-        for (const entry of entries.values()) {
-            total += entry.bytes;
-        }
-
-        return total;
+    /**
+     * How many holds have ended so far. The broker notes it before a
+     * read of the backend and again before deciding: a hold that
+     * ended in between means the backend has its model, and the
+     * answer in hand may be from before the model was listed.
+     * @returns {number}
+     */
+    function holdReleases() {
+        return holdsReleased;
     }
 
     return {
@@ -260,6 +279,6 @@ export function createLedger(now = () => Date.now()) {
         jobs,
         holds,
         hasJobs,
-        reservedBytes,
+        holdReleases,
     };
 }
