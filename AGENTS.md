@@ -452,6 +452,33 @@ the client's template every time, and one miss brings back a
 on every request. The request's own value always wins, and what Saxby
 added is stored on the row.
 
+**Every user message is stamped with the time Saxby first saw it, in
+the user's zone, when `message_prefix` is on.** Lab report 003,
+[A sense of time](https://saxby-tools.github.io/lab/reports/003-time-notes/),
+three rounds on Nov. 1, 2026. Every message, not the latest only: a
+note on the latest message alone scored 82 and 76 against a bar of
+90, and three weeks after "the dry run is tomorrow afternoon" it said
+you were still set for tomorrow; on this runner it also cost the
+whole prompt every turn, since editing an earlier message throws away
+a sliding-window model's cache, while a note fixed on each message
+when first seen extends it. The shape is a clock with the weekday,
+`[It is 1:30 a.m. on Monday, October 26, 2026 (America/Chicago).]`:
+a daypart word was read as a span and broke after midnight, and an
+ISO offset was read worse than a zone name and mis-named the weekday
+8 percent of the time. The gap sentence on the latest note, "This
+conversation resumed after 12 days away", is the larger lever: 88.8
+without it, 96.7 with. **The zone comes from the config or the
+client, never a guess**: in the host's zone with nothing said the
+design scored 50.4, and told to ask when the user's place was unknown
+the model never asked, not once in 2,520 replies. Saxby stamps in the
+user's zone or not at all; a client that sends the zone in a header
+is a separate issue. An earlier message gets the time of the first
+request that carried it, from `message_seen` in the decision log,
+hashes only under the prompt hash's scheme; the conversation key is
+the first user message's hash, and a conversation idle 90 days is
+dropped whole. The row records that the note was on and the gap it
+named, never the note's text. Off by default until v1.
+
 **The memory broker lives in Saxby, and fails closed.** On Oct. 27,
 2026, an uncapped PyTorch job grew to 122 GiB beside two loaded models
 and the kernel panicked ([Memory broker](docs/memory-broker.md)).
@@ -554,6 +581,15 @@ PyTorch's MPS cap is `PYTORCH_MPS_HIGH_WATERMARK_RATIO` times
 unified memory. A ratio of 0 DISABLES it. The low watermark, default
 1.4, may not exceed the high one, so setting only the high one below
 1.4 makes PyTorch fail at startup. Set both.
+
+MLX reads no environment variable for its memory limit. Its Metal
+allocator picks a default at startup, 1.5 times Metal's recommended
+working set, and only `mx.set_memory_limit` changes it (checked at
+v0.32.4). That limit is a throttle, not a cap: over it, `mx.eval`
+waits for work in flight before going on, and an allocation fails
+only once RAM and swap are gone. `saxby reserve` hands a job the
+size in `SAXBY_RESERVED_BYTES`; the call is the job's. mflux and
+mlx-lm make no such call and take no flag for it.
 
 `Deno.kill(pid, 0)` needs unrestricted `--allow-run`; a list such as
 `--allow-run=/bin/kill` is not enough (Deno 2.9.8). `deno compile`

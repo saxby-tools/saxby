@@ -61,15 +61,30 @@ function readUsage(fields) {
     };
 }
 
+/**
+ * The Linux probe: usage from /proc/meminfo and never a ceiling, for
+ * the reasons in this file's header. Static only, so MEMORY_PROBES
+ * holds the class itself and nothing is constructed.
+ */
 export class LinuxMemoryProbe {
+    /** The short name code picks this probe by. */
     static id = "linux";
+
+    /** The name shown to people. */
     static displayName = "Linux (minimal)";
 
+    /**
+     * Whether this is the probe for the running OS.
+     * @returns {boolean}
+     */
     static isSupported() {
         return Deno.build.os === "linux";
     }
 
     /**
+     * One reading: usage from /proc/meminfo, the ceiling always
+     * unknown. Never throws: an unreadable file leaves usage null and
+     * says so in `usedSource`.
      * @param {(path: string) => Promise<string>} [readText] - Injected
      *     by tests.
      * @returns {Promise<import("./index.js").MemoryReading>}

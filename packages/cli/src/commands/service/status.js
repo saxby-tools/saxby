@@ -56,6 +56,12 @@ function describeConfig(holder, instance) {
     return `loaded ${holder.config.loaded_at}`;
 }
 
+/**
+ * `saxby service status`: whether the service file exists, whether
+ * the supervisor has it loaded, and whether this instance answers on
+ * its port, each on its own line. A saved config saxbyd could not
+ * apply is printed as a warning under them.
+ */
 export const statusCommand = new Command()
     .description("Show whether the Saxby service is installed and up.")
     .action(async (options) => {

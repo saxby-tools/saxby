@@ -10,6 +10,11 @@
 //  zero models, and every request falls through to the global default
 //  with no error at all. That is the failure that shipped in M3.
 
+/**
+ * The tag vocabulary, by constant name: every tag the extractor may
+ * emit and a catalog or persona may claim. Add a tag here first; the
+ * contract between the two sides is checked by validateTagContract.
+ */
 export const TAGS = {
     CODER: "TAG_CODER",
     MULTI_FILE: "TAG_MULTI_FILE",
@@ -32,12 +37,14 @@ export const TAGS = {
     AUDIO: "TAG_AUDIO",
 };
 
-//  Every tag the extractor actually emits — listed by hand, not
-//  derived from TAGS. TAG_WRITER and TAG_LONG_CONTEXT are in the
-//  vocabulary but nothing emits them yet, and deriving this set from
-//  TAGS let configs claim them with no warning: a routing rule that
-//  looked real and never fired. Add a tag here in the same change
-//  that makes extract.js emit it.
+/**
+ * Every tag the extractor actually emits — listed by hand, not
+ * derived from TAGS. TAG_WRITER and TAG_LONG_CONTEXT are in the
+ * vocabulary but nothing emits them yet, and deriving this set from
+ * TAGS let configs claim them with no warning: a routing rule that
+ * looked real and never fired. Add a tag here in the same change
+ * that makes extract.js emit it.
+ */
 export const EMITTABLE_TAGS = new Set([
     TAGS.CODER,
     TAGS.MULTI_FILE,
@@ -54,7 +61,10 @@ export const EMITTABLE_TAGS = new Set([
 //  it gets its own warning.
 const KNOWN_TAGS = new Set(Object.values(TAGS));
 
-//  Default tag sets for the personas the generator scaffolds.
+/**
+ * Default tag sets for the personas `saxby config generate`
+ * scaffolds, by persona name.
+ */
 export const PERSONA_TAG_DEFAULTS = {
     coder: [TAGS.CODER, TAGS.MULTI_FILE, TAGS.DEBUG],
     //  Empty until something emits TAG_WRITER: writer is reached
@@ -96,6 +106,7 @@ function collectClaimedTags(config) {
  * degraded router, not a broken one. It must be LOUD, because the
  * symptom (everything falls back) looks like working software.
  *
+ * @param {Object} config - A validated config.
  * @returns {string[]} human-readable warnings
  */
 export function validateTagContract(config) {

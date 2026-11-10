@@ -26,7 +26,7 @@
 //  `sqlite3` at 2am. A transparent archive you cannot read by eye is
 //  not transparent.
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 //  Applied in order; index is the version they upgrade TO.
 //  Never edit a shipped migration — append a new one.
@@ -187,9 +187,10 @@ export const MIGRATIONS = [
     //  label is the command's name only. Its arguments are never
     //  stored: they can hold paths and secrets.
     //
-    //  model_sizes is a cache, like exemplar_vectors: the last size
-    //  the backend reported for each model, so a pinned model keeps
-    //  counting at full size after it unloads and after a restart.
+    //  model_sizes is a cache, like exemplar_vectors: the largest size
+    //  the backend has reported for each model loaded whole, so a
+    //  pinned model keeps counting at full size after it unloads and
+    //  after a restart.
     `
     CREATE TABLE memory_events (
         id              INTEGER PRIMARY KEY,
@@ -265,6 +266,34 @@ export const MIGRATIONS = [
     //  itself is not recorded here.
     `
     ALTER TABLE decision_log ADD COLUMN client_defaults TEXT;
+    `,
+    //  ---- v7 --------------------------------------------------------
+    //  The time note (docs/configuration.md, "Message prefix").
+    //
+    //  message_seen is the one thing Saxby remembers between requests:
+    //  when each user message of a conversation was first carried by
+    //  one, so an earlier message's note says when it was said, not
+    //  when it was last sent. Hashes only, under the prompt hash's
+    //  keyed scheme, and the conversation key is the first user
+    //  message's hash: no text, so a shared log says nothing about
+    //  what was said. Rows go with their conversation: one idle for
+    //  ninety days is dropped whole (db.js).
+    //
+    //  The two columns say what the model was told: whether the notes
+    //  were on, 0 or 1, and the gap in hours the latest note named,
+    //  NULL when it named none. Never the note's text, which is
+    //  user-adjacent: it says when someone was at the keyboard.
+    `
+    CREATE TABLE message_seen (
+        conversation_key TEXT NOT NULL,
+        message_hash     TEXT NOT NULL,
+        first_seen_at    TEXT NOT NULL,
+
+        PRIMARY KEY (conversation_key, message_hash)
+    ) STRICT;
+
+    ALTER TABLE decision_log ADD COLUMN message_prefix INTEGER;
+    ALTER TABLE decision_log ADD COLUMN message_prefix_gap_hours REAL;
     `,
 ];
 
