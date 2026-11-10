@@ -36,8 +36,49 @@ for (const name of NAMES) {
 }
 
 Deno.test("family patterns keep their preference tags", () => {
-    assertEquals(suggestCapabilities("gemma4:31b").tags, [TAGS.REASONING]);
+    assertEquals(suggestCapabilities("gemma4:31b").tags, []);
     assertEquals(suggestCapabilities("mistral-small3.2:24b").tags, [
         TAGS.DATA,
     ]);
 });
+
+//  =====================================================================
+//  TAG_REASONING reaches reasoning specialists only
+//  =====================================================================
+//  A preference tag that several models claim stops telling them
+//  apart, so a generalist name must not suggest TAG_REASONING. A
+//  generalist that should take reasoning work gets the tag by hand.
+
+const GENERALISTS = [
+    "gemma4:31b",
+    "llama3.2:3b",
+    "mistral:7b",
+];
+
+const REASONING_SPECIALISTS = [
+    "deepseek-r1:8b",
+    "qwq:32b",
+    "mathstral:7b",
+];
+
+for (const name of GENERALISTS) {
+    Deno.test(`${name} gets no TAG_REASONING from its name`, () => {
+        const { tags } = suggestCapabilities(name);
+
+        assert(
+            !tags.includes(TAGS.REASONING),
+            `${name} was given ${TAGS.REASONING}`,
+        );
+    });
+}
+
+for (const name of REASONING_SPECIALISTS) {
+    Deno.test(`${name} keeps TAG_REASONING`, () => {
+        const { tags } = suggestCapabilities(name);
+
+        assert(
+            tags.includes(TAGS.REASONING),
+            `${name} was not given ${TAGS.REASONING}`,
+        );
+    });
+}
