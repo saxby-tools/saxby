@@ -125,6 +125,16 @@ export function startTrace(label) {
             emit(id, "DEFAULT", `client=${signature} ${fields}`);
         },
 
+        //  The time note (prefix/apply.js): what the user messages
+        //  were stamped with, or why it was the arrival time.
+        note(detail) {
+            if (currentLevel < LEVEL_VERBOSE) {
+                return;
+            }
+
+            emit(id, "NOTE", detail);
+        },
+
         extract(extracted) {
             if (currentLevel < LEVEL_VERBOSE) {
                 return;
