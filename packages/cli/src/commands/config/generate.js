@@ -176,6 +176,13 @@ export function buildTrustedProxies(host) {
     return [{ kind: PROXY_KIND_TAILSCALE_SERVE, host: host.trim() }];
 }
 
+/**
+ * `saxby config generate`: detects the running backend, asks which
+ * models fill each role and how the instance is exposed, and writes
+ * the instance's config.jsonc. The flags cover what a prompt cannot
+ * ask well: where the file goes, which backend URL to try, and the
+ * bind address and Host names a container needs.
+ */
 export const generateCommand = new Command()
     .description("Interactively generate a Saxby configuration.")
     .option(
