@@ -405,10 +405,13 @@ function stampMeta(db) {
 //  ---------------------------------------------------------------------
 //  Read-only access
 //  ---------------------------------------------------------------------
-//  The dashboard uses this. Read-only by FLAG, not by convention: the
-//  observability layer must be structurally incapable of corrupting
-//  the archive it observes.
-
+/**
+ * Opens the decision log for reading only, as the dashboard does.
+ * Read-only by FLAG, not by convention: the observability layer must
+ * be structurally incapable of corrupting the archive it observes.
+ * @param {string} path
+ * @returns {DatabaseSync}
+ */
 export function openDecisionLogReadOnly(path) {
     return new DatabaseSync(path, { readOnly: true });
 }
