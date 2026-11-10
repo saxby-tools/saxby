@@ -3,7 +3,8 @@
 //  =====================================================================
 //  1. Ask saxbyd for the memory. The request is held open while saxbyd
 //     waits for room. Ctrl-C here stops the wait; nothing has run.
-//  2. Set each limiter's cap in the job's environment.
+//  2. Put the reservation's size and each limiter's cap in the job's
+//     environment.
 //  3. Start the job, tell saxbyd its pid, and check in every heartbeat
 //     interval. A 404 means saxbyd restarted: register again.
 //  4. When the job exits, release the reservation and exit with the
@@ -32,6 +33,11 @@ export const EXIT_TEMPFAIL = 75;
 export const EXIT_NOT_FOUND = 127;
 export const EXIT_INTERRUPTED = 130;
 
+//  The reservation's size, in whole bytes, for a job that must cap
+//  itself. MLX reads no environment variable for its limit, so an MLX
+//  script calls mx.set_memory_limit with this (docs/memory-broker.md).
+export const RESERVED_BYTES_VAR = "SAXBY_RESERVED_BYTES";
+
 const MS_PER_S = 1000;
 
 const PREFIX = "saxby reserve:";
@@ -45,13 +51,14 @@ function errorMessage(reply) {
 }
 
 /**
- * Each supported limiter's environment, merged. A limiter that can't
- * apply says why and is skipped; the reservation still stands.
+ * The job's environment: the reservation's size, for a job that caps
+ * itself, then each supported limiter's cap, merged. A limiter that
+ * can't apply says why and is skipped; the reservation still stands.
  * @param {number} reservedBytes
  * @param {{ bytes: number | null, source: string | null }} ceiling
  */
 function buildLimitEnv(reservedBytes, ceiling, deps) {
-    const env = {};
+    const env = { [RESERVED_BYTES_VAR]: String(reservedBytes) };
 
     for (const limiter of deps.limiters) {
         const result = limiter.environment({

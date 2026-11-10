@@ -9,6 +9,9 @@
 const LINK_SEPARATOR = ": ";
 
 /**
+ * The last link of a fetch error's cause chain, the one a person can
+ * act on, with the request URL and transport layers in front of it
+ * dropped.
  * @param {unknown} err - What fetch rejected with.
  * @returns {string} "Connection refused (os error 61)", or the error's
  *     own message when it has no cause.

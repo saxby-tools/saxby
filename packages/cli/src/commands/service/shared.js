@@ -11,6 +11,12 @@ import { findServiceAdapter } from "../../services/index.js";
 const ANSWER_TIMEOUT_MS = 30_000;
 const ANSWER_POLL_MS = 500;
 
+/**
+ * Prints a marked error and exits 1. For user errors, where a stack
+ * trace would be noise.
+ * @param {string} message
+ * @returns {never}
+ */
 export function fail(message) {
     console.error(`❌ ${message}`);
     Deno.exit(1);
@@ -85,6 +91,14 @@ export async function waitForAnswer(config, instance, previousPid = null) {
     return null;
 }
 
+/**
+ * Prints the outcome of an install or restart: the pid and version
+ * that answered, or where to look when nothing did yet.
+ * @param {Object | null} holder - What waitForAnswer returned.
+ * @param {import("../../services/index.js").ServiceAdapter} adapter
+ * @param {string | null} instance
+ * @returns {void}
+ */
 export function reportAnswer(holder, adapter, instance) {
     if (!holder) {
         console.log(

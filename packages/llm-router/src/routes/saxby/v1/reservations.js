@@ -307,6 +307,12 @@ async function list(c) {
     });
 }
 
+/**
+ * Registers the memory broker's four routes on the Hono app: list,
+ * create, heartbeat and release, under /saxby/v1/reservations.
+ * @param {import("hono").Hono} app
+ * @returns {void}
+ */
 export function registerReservationRoutes(app) {
     app.get(BASE_PATH, list);
     app.post(BASE_PATH, create);

@@ -161,8 +161,10 @@ saxby config generate
 
 It finds Ollama, lists your models, and asks a few questions: the
 port (keep `11435`), a fallback model, models for the coder and
-writer roles, any other models to include, and whether to set up
-Tier 3 with your embedding model. It writes
+writer roles, any other models to include, whether to set up Tier 3
+with your embedding model, whether to store prompt text in the
+decision log, and whether to let your other devices in through
+Tailscale Serve. The last two default to no. It writes
 `~/.config/saxby/config.jsonc`.
 
 The generated file is a starting point. [Configuration](configuration.md)

@@ -20,6 +20,9 @@
 
 import { join } from "@std/path";
 
+/**
+ * The token file's name, beside the config in the instance folder.
+ */
 export const API_TOKEN_FILE = "api-token";
 
 //  256 bits, written as 64 hex characters.

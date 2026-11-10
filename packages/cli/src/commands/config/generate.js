@@ -1,7 +1,14 @@
 import { Command } from "@cliffy/command";
 import { Checkbox, Confirm, Input, Select } from "@cliffy/prompt";
 import { join } from "@std/path";
-import { getInstanceDir, resolveInstanceName, TAGS } from "@saxby/core";
+import * as v from "valibot";
+import {
+    getInstanceDir,
+    PROXY_KIND_TAILSCALE_SERVE,
+    resolveInstanceName,
+    TAGS,
+    TrustedProxySchema,
+} from "@saxby/core";
 import { ADAPTERS } from "../../adapters/index.js";
 import {
     isEmbeddingModel,
@@ -76,6 +83,20 @@ const CONFIG_COMMENTS = {
         "which still groups repeats. Routing, tags and timings are",
         "logged either way.",
     ],
+    client_defaults: [
+        "Request fields Saxby fills in for one client when the request",
+        "leaves them out, keyed by client signature: the User-Agent's",
+        "product token, lowercased. Empty by default, and then nothing",
+        "is added. The one field is reasoning_effort and the one value",
+        '"none", e.g. { "leantype": { "reasoning_effort": "none" } }.',
+    ],
+    trusted_proxies: [
+        "Proxies allowed to pass requests in from other machines.",
+        "Empty by default, and then every proxied request is refused.",
+        "The one kind is Tailscale Serve, named by this machine's full",
+        "tailnet name. Every request through it needs the API token:",
+        "saxby token.",
+    ],
 };
 
 /**
@@ -90,7 +111,7 @@ const CONFIG_COMMENTS = {
  * @param {Object} payload
  * @returns {string}
  */
-function renderJsoncConfig(payload) {
+export function renderJsoncConfig(payload) {
     const json = JSON.stringify(payload, null, INDENT);
     const pad = " ".repeat(INDENT);
     // Match a top-level key only: exactly one indent, then "key":
@@ -124,6 +145,35 @@ function parseNameList(value) {
     }
 
     return value.split(",").map((name) => name.trim()).filter(Boolean);
+}
+
+/**
+ * The prompt's validator for a tailnet name. The schema is the one
+ * authority on what a proxy host looks like, so the answer is checked
+ * against it rather than against a second regex kept here.
+ * @param {string} value
+ * @returns {true | string} true, or the message to show.
+ */
+export function checkProxyHost(value) {
+    const result = v.safeParse(TrustedProxySchema, {
+        kind: PROXY_KIND_TAILSCALE_SERVE,
+        host: value.trim(),
+    });
+
+    if (result.success) {
+        return true;
+    }
+
+    return result.issues[0].message;
+}
+
+/**
+ * The trusted_proxies entry for Tailscale Serve on this machine.
+ * @param {string} host - The machine's full tailnet name.
+ * @returns {Array<{kind: string, host: string}>}
+ */
+export function buildTrustedProxies(host) {
+    return [{ kind: PROXY_KIND_TAILSCALE_SERVE, host: host.trim() }];
 }
 
 export const generateCommand = new Command()
@@ -410,6 +460,28 @@ export const generateCommand = new Command()
                 default: false,
             });
 
+            // 4d-quater. Tailscale Serve. Off unless asked: naming a
+            // proxy lets other machines in. The name is typed, never
+            // read from `tailscale`: Saxby does not manage the tools
+            // around it.
+            const useTailscaleServe = await Confirm.prompt({
+                message: "Let your other devices in through Tailscale " +
+                    "Serve? (Each needs the API token: saxby token.)",
+                default: false,
+            });
+
+            let trustedProxies = [];
+
+            if (useTailscaleServe) {
+                const tailnetName = await Input.prompt({
+                    message: "This machine's full tailnet name, as " +
+                        "clients reach it (e.g. my-mac.my-tailnet.ts.net):",
+                    validate: checkProxyHost,
+                });
+
+                trustedProxies = buildTrustedProxies(tailnetName);
+            }
+
             // 4d-bis. Build personas from curated presets
             //  general takes the global default: it IS the fallback
             //  persona, so it needs no prompt of its own.
@@ -451,6 +523,12 @@ export const generateCommand = new Command()
                 personas,
                 //  Written either way, so the file shows the choice.
                 log_prompts: logPrompts,
+                //  Written empty when off, so the file says the keys
+                //  exist and the comments above them say what they do.
+                //  client_defaults is never filled in here: it names a
+                //  client, and generate knows none.
+                client_defaults: {},
+                trusted_proxies: trustedProxies,
             };
         } catch (err) {
             console.error(`❌ Generator Error: ${err.message}`);

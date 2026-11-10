@@ -20,6 +20,10 @@ const TRACING_FLAGS = ["--trace", "--verbose", "-v"];
 const VERSION_FLAGS = ["--version", "-V"];
 const HELP_FLAGS = ["--help", "-h"];
 
+/**
+ * The help text `saxbyd --help` prints, and the tail of the message
+ * for an argument it does not know.
+ */
 export const USAGE = `Usage: saxbyd [options]
 
 Options:

@@ -2,6 +2,12 @@ import { Command } from "@cliffy/command";
 import { instancePhrase } from "@saxby/core";
 import { fail, prepare } from "./shared.js";
 
+/**
+ * `saxby service uninstall`: stops the service and removes its file.
+ * Config, decision log and logs stay, as a package manager would
+ * leave them. Says "nothing to do" rather than "removed" when no
+ * service was there.
+ */
 export const uninstallCommand = new Command()
     .description("Stop Saxby and remove its user service.")
     .action(async (options) => {

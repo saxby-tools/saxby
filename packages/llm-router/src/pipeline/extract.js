@@ -6,7 +6,11 @@
 //  than the prose (an explicitly non-streaming request is a
 //  background utility task, in any language, from any client).
 
-import { extractFeatures } from "./detect.js";
+import {
+    CHARS_PER_TOKEN_CODE,
+    CHARS_PER_TOKEN_PROSE,
+    extractFeatures,
+} from "./detect.js";
 import { TAGS } from "@saxby/core";
 
 //  A response under this many tokens is a utility task, not a chat
@@ -249,14 +253,64 @@ function parseOverride(prompt, config) {
     };
 }
 
+//  A tool call's function name and JSON arguments live outside
+//  `content`, so a turn that was mostly a tool call counted as nearly
+//  empty. Arguments are a JSON string in the OpenAI shape; a client
+//  that sends them as an object is measured serialised, which is how
+//  the upstream will see them.
+function readToolCalls(toolCalls) {
+    if (!Array.isArray(toolCalls)) {
+        return 0;
+    }
+
+    let chars = 0;
+
+    for (const call of toolCalls) {
+        const fn = call?.function;
+
+        if (typeof fn?.name === "string") {
+            chars += fn.name.length;
+        }
+
+        if (typeof fn?.arguments === "string") {
+            chars += fn.arguments.length;
+            continue;
+        }
+
+        if (fn?.arguments !== undefined) {
+            chars += JSON.stringify(fn.arguments).length;
+        }
+    }
+
+    return chars;
+}
+
+//  Every tool's JSON schema travels with every request from an agent
+//  client, and the upstream templates all of them into the prompt.
+//  OpenClaw catalogs 32; nothing here read them until est_tokens ran
+//  a third under Ollama's count on agent payloads (#46). Anything
+//  but an array is left to the upstream to reject.
+function readTools(tools) {
+    if (!Array.isArray(tools)) {
+        return 0;
+    }
+
+    return JSON.stringify(tools).length;
+}
+
 //  Weight is a property of the WHOLE payload, not the current turn.
 //  Intent comes from the last user message; context pressure comes
 //  from everything the upstream will actually have to prefill —
-//  system prompt, injected memory, and every prior turn. An agent
-//  sends 20 messages and a two-line question; estimating from the
-//  question alone was wrong by three orders of magnitude.
-function measurePayload(messages) {
+//  system prompt, injected memory, every prior turn, the tool
+//  schemas and the tool calls. An agent sends 20 messages and a
+//  two-line question; estimating from the question alone was wrong
+//  by three orders of magnitude.
+//
+//  `chars` is text only. Tool JSON is kept apart so it can be charged
+//  at the code rate, and so the logged `chars` keeps meaning prose.
+function measurePayload(messages, tools) {
     let chars = 0;
+    let jsonChars = readTools(tools);
     let images = 0;
     let audio = 0;
 
@@ -264,11 +318,12 @@ function measurePayload(messages) {
         const parts = readMessageContent(message.content);
 
         chars += parts.text.length;
+        jsonChars += readToolCalls(message.tool_calls);
         images += parts.images;
         audio += parts.audio;
     }
 
-    return { chars, images, audio };
+    return { chars, jsonChars, images, audio };
 }
 
 /**
@@ -291,19 +346,23 @@ export function extractIntent(body, config) {
     //  log records what was asked alongside what was routed.
     const { features, metrics, histogram } = extractFeatures(cleanPrompt);
 
-    const payload = measurePayload(messages);
+    const payload = measurePayload(messages, body.tools);
 
     //  Features and histogram stay scoped to the current turn.
     //  Metrics are rescaled to the full conversation: every OTHER
-    //  message at the prose rate, plus the current turn's own
+    //  message at the prose rate, tool schemas and tool calls at the
+    //  code rate since both are JSON, plus the current turn's own
     //  code-aware estimate. Adding that estimate to a count that
     //  already included the turn once charged it twice.
     const priorChars = payload.chars - rawPrompt.length;
 
+    const priorTokens = Math.ceil(priorChars / CHARS_PER_TOKEN_PROSE);
+    const jsonTokens = Math.ceil(payload.jsonChars / CHARS_PER_TOKEN_CODE);
+
     const payloadMetrics = {
         ...metrics,
         chars: payload.chars,
-        estimatedTokens: Math.ceil(priorChars / 4) +
+        estimatedTokens: priorTokens + jsonTokens +
             metrics.estimatedTokens,
     };
 
