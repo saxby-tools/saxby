@@ -343,7 +343,7 @@ export function registerChatRoutes(app) {
 
         //  ---- Closing the row ---------------------------------------
 
-        //  Set when the memory broker let a model load through. Freed
+        //  The memory broker's note of this request's model load. Freed
         //  at the first byte, when the backend lists the model and its
         //  size counts as loaded instead, or when the request ends.
         let loadHold = null;
@@ -412,6 +412,16 @@ export function registerChatRoutes(app) {
             }
 
             loadHold = gate.hold;
+        }
+
+        //  Every forwarded load is counted, gate or no gate: until the
+        //  backend lists the model, a job that arrives now would read
+        //  its space as free. Synchronous, with no call to the backend,
+        //  so the no-job path still never awaits.
+        if (loadHold === null) {
+            loadHold = broker.trackLoad(targetModel, {
+                requestId: tracer.id,
+            });
         }
 
         const upstreamUrl = `${config.upstream_url}/v1/chat/completions`;
