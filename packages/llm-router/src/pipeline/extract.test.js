@@ -1,5 +1,4 @@
-//  ==============================================================});
-
+//  =====================================================================
 //  Intent extraction cases
 //  =====================================================================
 //  The background-task rows here are a regression guard. Open WebUI's
@@ -215,7 +214,8 @@ Deno.test("replace — several text parts collapse to one", () => {
 Deno.test("replace — content of another shape is left alone", () => {
     assertEquals(replaceMessageText(null, "x"), null);
     assertEquals(replaceMessageText(42, "x"), 42);
-=======
+});
+
 //  Agent clients send every tool's JSON schema with every request,
 //  and a prior turn that was a tool call keeps its name and arguments
 //  outside `content`. Neither was counted, and est_tokens ran a third
