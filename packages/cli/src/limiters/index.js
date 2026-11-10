@@ -10,7 +10,10 @@
 //
 //  Built: PyTorch on Apple's GPU. Future, documented in
 //  docs/memory-broker.md: a Linux limiter that runs the job in a
-//  systemd-run scope with MemoryMax, and caps for MLX and CUDA.
+//  systemd-run scope with MemoryMax, and a CUDA cap. MLX gets no
+//  limiter, because it reads no environment variable for its limit:
+//  an MLX job caps itself from SAXBY_RESERVED_BYTES, which
+//  reserve/run.js sets.
 
 import { MpsWatermarkLimiter } from "./mps.js";
 

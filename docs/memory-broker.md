@@ -292,9 +292,46 @@ above or below the reservation by the same error. `saxby reserve`
 then says the cap was not set and why; the reservation still stands.
 Set the ceiling with `saxby vram-guard-mac` to get the cap.
 
-**MLX jobs are not capped.** MLX reads neither variable. The ledger
-still counts an MLX job, so it cannot start beside models it would
-not fit with. It can still grow past its reservation once it runs.
+**MLX jobs cap themselves.** MLX reads no environment variable for
+its memory limit. Its Metal allocator picks a default at startup,
+1.5 times Metal's recommended working set, and only a call changes it
+(`mlx/backend/metal/allocator.cpp`, checked at v0.32.4). So on every
+platform `saxby reserve` puts the reservation in the job's
+environment, in whole bytes:
+
+```
+SAXBY_RESERVED_BYTES=12884901888
+```
+
+An MLX script reads it and sets the limit before it allocates:
+
+```python
+import os
+import mlx.core as mx
+
+reserved = os.environ.get("SAXBY_RESERVED_BYTES")
+
+if reserved:
+    mx.set_memory_limit(int(reserved))
+```
+
+`mx.set_memory_limit` is the current name; `mx.metal.set_memory_limit`
+is deprecated and prints a warning. MLX's limit is softer than
+PyTorch's. When active memory is over it, `mx.eval` waits for the
+work already in flight to finish before it goes on, so freed buffers
+come back sooner; an allocation fails only once RAM and swap are
+gone. A job whose live arrays need more than the limit still grows
+past it, so size the reservation to the job's peak, as with PyTorch.
+
+Two other MLX calls are not caps. `mx.set_cache_limit` bounds the
+pool of freed buffers MLX keeps for reuse; mflux's `--low-ram` and
+`--mlx-cache-limit-gb` set that one, for `mflux-generate` and
+`mflux-upscale-seedvr2` alike. `mx.set_wired_limit` says how much to
+keep resident, and mlx-lm sets it to Metal's recommended working set.
+Neither stops a job from growing. `saxby reserve` cannot make the
+call for a job: the limit lives inside the process, and mflux and
+mlx-lm take no flag for it. The ledger counts an MLX job either way,
+so it cannot start beside models it would not fit with.
 
 ##  When saxbyd cannot be asked
 
@@ -467,7 +504,10 @@ Not built yet:
   Halo's GTT size
 - a Linux limiter that runs the job in a `systemd-run --scope` with
   `MemoryMax`
-- an MLX cap
+
+There is no MLX cap to build: MLX takes its limit from a call, not
+the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
+(see [The cap inside a job](#the-cap-inside-a-job)).
 
 ##  Limits
 
@@ -477,7 +517,10 @@ Not built yet:
   `/v1/completions`), can still load a model while a job runs. Their
   models do count as loaded once they are.
   [Issue #33](https://github.com/saxby-tools/saxby/issues/33).
-- **MLX jobs are not capped** once they run.
+- **MLX jobs cap themselves, or not at all.** `saxby reserve` hands
+  them the size in `SAXBY_RESERVED_BYTES`; the call is the job's, and
+  mflux and mlx-lm do not make it. The call has not yet been run
+  under a reservation with a small cap.
   [Issue #34](https://github.com/saxby-tools/saxby/issues/34).
 - **Waiters are not in line.** Each waiting job or load checks again
   once a second. A big job can be passed by smaller ones that fit
