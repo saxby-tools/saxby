@@ -30,7 +30,10 @@ export { DarwinMemoryProbe, LinuxMemoryProbe, WIRED_LIMIT_KEY };
  * @property {() => Promise<MemoryReading>} read - Never throws.
  */
 
-/** @type {MemoryProbe[]} */
+/**
+ * Every probe, in the order findMemoryProbe tries them.
+ * @type {MemoryProbe[]}
+ */
 export const MEMORY_PROBES = [DarwinMemoryProbe, LinuxMemoryProbe];
 
 /**
