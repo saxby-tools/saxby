@@ -30,6 +30,11 @@ async function readScript() {
     return await response.text();
 }
 
+/**
+ * `saxby vram-guard-mac install`: copies the guard script to
+ * /usr/local/libexec/saxby, writes its LaunchDaemon plist and loads
+ * it, all as root through one privilege prompt. macOS only.
+ */
 export const installCommand = new Command()
     .description("Install and load the macOS LaunchDaemon.")
     .action(async () => {
