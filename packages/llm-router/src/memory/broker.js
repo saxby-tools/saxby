@@ -12,7 +12,10 @@
 //            forwarded, from the chat route or from the catch-all's
 //            inference paths, but only while a job holds a
 //            reservation. With none, nothing can be displaced and
-//            the routes skip the broker without a call to the backend.
+//            the routes skip the gate without a call to the backend.
+//            Every forwarded load is still noted in the ledger, at
+//            its known size, until the backend lists the model: a
+//            load the backend has not listed yet is not free memory.
 //
 //  The gate is load-bearing: when the budget cannot be known, nothing
 //  is admitted. The log is not: every wait, admission, refusal,
@@ -38,6 +41,20 @@ const PROBE_REUSE_MS = POLL_MS;
 //  A load hold normally ends at the request's first byte. This only
 //  catches a hold some path forgot to release.
 const HOLD_TTL_MS = 10 * 60 * 1000;
+
+//  A hold ends at its request's first byte, when the backend has the
+//  model. An answer from the backend that was on its way when a hold
+//  ended may be from before the model was listed, and the model would
+//  then count nowhere: not loaded, not reserved. Such a read is done
+//  again, up to this many times, before the answer is called unknown
+//  for this poll. Unknown is waited on, never admitted against.
+const SETTLED_READS = 3;
+
+const STALE_READS = `a load finished during each of ${SETTLED_READS} ` +
+    `reads in a row, so every answer may be from before it was listed`;
+
+//  trackLoad sizes a model with no reading of the backend in hand.
+const NOTHING_LOADED = new Map();
 
 const MS_PER_S = 1000;
 
@@ -254,21 +271,73 @@ export function createBroker(options) {
         }
     }
 
-    //  The probe starts two programs and the backend is one HTTP call;
-    //  run side by side they cost one wait instead of two.
-    async function readMachine() {
-        const [reading, residency] = await Promise.all([
-            readProbe(),
-            readResidency(),
-        ]);
+    //  True when a hold ended since `mark` was taken (SETTLED_READS).
+    function readWentStale(mark) {
+        return ledger.holdReleases() !== mark;
+    }
 
-        return { reading, ...residency };
+    //  The probe starts two programs and the backend is one HTTP call;
+    //  run side by side they cost one wait instead of two. Read again
+    //  while a hold ends during the read, a bounded number of times.
+    async function readMachine() {
+        let staleReads = 0;
+
+        while (true) {
+            const mark = ledger.holdReleases();
+
+            const [reading, residency] = await Promise.all([
+                readProbe(),
+                readResidency(),
+            ]);
+
+            if (!readWentStale(mark)) {
+                return { reading, ...residency };
+            }
+
+            staleReads += 1;
+
+            if (staleReads >= SETTLED_READS) {
+                return { reading, loaded: null, residencyError: STALE_READS };
+            }
+        }
     }
 
     function loadedMap(machine) {
         const loaded = machine.loaded ?? [];
 
         return new Map(loaded.map((model) => [model.name, model.bytes]));
+    }
+
+    //  Jobs, plus the holds for loads the backend does not list yet.
+    //  A hold whose model the backend lists is counted as loaded and
+    //  not again here; a pinned model's space is already held. A hold
+    //  with no known size is an unknown term.
+    function reservedFrom(loadedByName) {
+        let reservedBytes = 0;
+        const unknownLoads = [];
+
+        for (const job of ledger.jobs()) {
+            reservedBytes += job.bytes;
+        }
+
+        for (const hold of ledger.holds()) {
+            if (loadedByName.has(hold.model)) {
+                continue;
+            }
+
+            if (pinnedNames.has(hold.model)) {
+                continue;
+            }
+
+            if (hold.bytes === null) {
+                unknownLoads.push(hold.model);
+                continue;
+            }
+
+            reservedBytes += hold.bytes;
+        }
+
+        return { reservedBytes, unknownLoads };
     }
 
     //  Synchronous. Callers read the machine, then call this and change
@@ -292,7 +361,7 @@ export function createBroker(options) {
             marginBytes,
             pinned: pinnedTerms,
             loaded: others,
-            reservedBytes: ledger.reservedBytes(),
+            ...reservedFrom(loadedByName),
             residencyError: machine.residencyError,
             usedBytes: machine.reading.usedBytes,
             usedSource: machine.reading.usedSource,
@@ -576,6 +645,7 @@ export function createBroker(options) {
         };
 
         let waited = false;
+        let staleReads = 0;
 
         function admitUnchecked(reason) {
             const waitMs = now() - startedMs;
@@ -616,6 +686,7 @@ export function createBroker(options) {
             //  Most requests while a job runs are for a model already
             //  loaded. One call to the backend settles those; the
             //  probe runs only when there is a load to judge.
+            const mark = ledger.holdReleases();
             const residency = await readResidency();
             const loadedByName = loadedMap(residency);
 
@@ -653,6 +724,20 @@ export function createBroker(options) {
 
             if (!ledger.hasJobs()) {
                 continue;
+            }
+
+            //  A hold ended while the backend was being read, so its
+            //  model may be in neither the answer nor the ledger
+            //  (SETTLED_READS). Read again before judging this load.
+            if (readWentStale(mark)) {
+                staleReads += 1;
+
+                if (staleReads < SETTLED_READS) {
+                    continue;
+                }
+
+                machine.loaded = null;
+                machine.residencyError = STALE_READS;
             }
 
             const budget = budgetFrom(machine);
@@ -724,7 +809,57 @@ export function createBroker(options) {
             }
 
             await sleep(Math.min(POLL_MS, deadline - now()), context.signal);
+            staleReads = 0;
         }
+    }
+
+    /**
+     * Notes a load the chat route is forwarding, so a job cannot be
+     * admitted into the space of a model the backend has not listed
+     * yet. Synchronous, with no call to the backend: it is the chat
+     * route's fast path, run for every request that took no hold from
+     * gateLoad. The model is counted at its known size, measured
+     * first and then the catalog's size_gib, until the backend lists
+     * it or the hold is released; with neither size it is counted as
+     * unknown, which makes a job wait. A model loading for another
+     * request shares its hold. A pinned model needs none.
+     * @param {string} model - The model the request will be sent to.
+     * @param {{ requestId: string }} context
+     * @returns {{ release: () => void } | null}
+     */
+    function trackLoad(model, context) {
+        const name = model ? backend.canonicalName(model) : "";
+
+        if (!name) {
+            return null;
+        }
+
+        if (pinnedNames.has(name)) {
+            return null;
+        }
+
+        const shared = ledger.findHold(name);
+
+        if (shared) {
+            ledger.retainHold(shared.id);
+
+            return holdHandle(shared);
+        }
+
+        const size = sizeModel(
+            name,
+            catalogSizes.get(name),
+            NOTHING_LOADED,
+            options.sizes,
+        );
+
+        const entry = ledger.addHold({
+            bytes: size.bytes,
+            model: name,
+            requestId: context.requestId,
+        });
+
+        return holdHandle(entry);
     }
 
     //  ---- Reaping ---------------------------------------------------
@@ -872,6 +1007,7 @@ export function createBroker(options) {
         heartbeat,
         release,
         gateLoad,
+        trackLoad,
         sweep,
         start,
         stop,

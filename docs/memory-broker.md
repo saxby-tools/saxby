@@ -15,7 +15,9 @@ saxbyd can't be asked at all, the job does not run.
 While a job holds memory, Saxby also makes requests wait before they
 load a model that would not fit, whether they come to its chat route
 or to one of Ollama's own inference paths through the catch-all. With
-no job running, requests skip the broker entirely.
+no job running, requests are not checked, but every model the chat
+route loads is counted until the backend lists it, so a job cannot
+start in its space.
 
 ##  Why it exists
 
@@ -88,7 +90,7 @@ free = ceiling - margin - pinned - loaded - reserved
 | margin | Kept free beyond everything else. `memory.margin_gib` |
 | pinned | Every pinned model at full size, loaded or not |
 | loaded | Every other model the backend holds now |
-| reserved | Every job, plus model loads let through but not yet loaded |
+| reserved | Every job, plus forwarded loads the backend does not list yet |
 
 A job of N GiB runs when N fits in `free`.
 
@@ -111,10 +113,12 @@ nothing is admitted. The refusal says which term:
 - the ceiling cannot be measured (see [Platforms](#platforms))
 - the backend did not answer `/api/ps`
 - a pinned model has no known size
+- a model Saxby is loading has no known size
 
 The first and the third are config gaps: waiting cannot fill them, so
 a job is refused at once rather than after `wait_timeout_s`. The
-second may clear on the next poll, so a job waits for it.
+second may clear on the next poll, and the fourth ends with the
+request that is loading the model, so a job waits for those.
 
 The current budget, in bytes:
 
@@ -197,7 +201,8 @@ right now. A job that has reserved 40 GiB but not used it yet looks
 free. So while a job holds a reservation, Saxby checks each request
 that names a model before it is sent to the backend:
 
-- **No job held:** not checked. No call to the backend, no wait.
+- **No job held:** not checked. No call to the backend, no wait. The
+  load is still counted, as described below.
 - **The model is loaded:** sent at once.
 - **The model is pinned:** sent at once. Its space is already held.
 - **Otherwise:** sent once its size fits in `free`. Until then it
@@ -247,15 +252,31 @@ own is post-v1 backlog.
 Clients that call Ollama directly, on its own port, never pass
 through Saxby and cannot be gated by it (see [Limits](#limits)).
 
-Once a load is let through, its size is held in the ledger until the
-response's first byte arrives. By then the backend lists the model,
-and its size counts as loaded. Without the hold, two different models
-could both be let through into the same free space.
+Every forwarded chat request's model is held in the ledger until
+the response's first byte arrives, job or no job; a catch-all request
+takes a hold only when it was gated
+([#71](https://github.com/saxby-tools/saxby/issues/71)). By then the backend
+lists the model, and its size counts as loaded instead; a model the
+backend lists is never counted twice. Until then, the space the model
+is about to take is not free: without the hold, two different models
+could both be let through into the same free space, and a job that
+arrives while a model is still loading could be admitted into its
+space. The hold costs no call to the backend: the model is counted
+at the size the backend last reported for it, else its `size_gib`.
+With neither, its size is unknown, and a job waits until the hold
+ends. A pinned model needs no hold; its space is already held.
 
 A second request for the same model, while it is still loading,
 joins that hold rather than adding one: the backend loads the model
 once, so its size counts once. The hold stays until the last request
 sharing it has its first byte.
+
+A hold can end while the backend is being asked what it has loaded.
+The answer may then be from before the model was listed, and the
+model would count nowhere. The broker notes how many holds have
+ended before each read and, when the count moved during it, reads
+again before deciding. After three such reads in a row the answer is
+treated as unknown for that poll, which makes the job or load wait.
 
 The decision-log row of a refused request has the outcome
 `memory_refused`. Its `request_id` matches a row in `memory_events`
@@ -560,7 +581,3 @@ the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
 - **`explain` does not show the gate.** It never calls the backend,
   and the gate reads `/api/ps`.
   [Issue #38](https://github.com/saxby-tools/saxby/issues/38).
-- **A load Ollama has not listed yet reads as free.** With no job
-  held, chat requests take no hold, so a job that starts while one of
-  their models is still loading can be admitted into that model's
-  space. [Issue #40](https://github.com/saxby-tools/saxby/issues/40).

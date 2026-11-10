@@ -13,10 +13,12 @@
 //    loaded    every other model the backend holds now, including
 //              ones loaded outside Saxby; a job cannot evict them
 //    reserved  every job reservation, plus the size of each model
-//              load the broker has let through but not yet seen
+//              load the chat route has forwarded and the backend
+//              does not list yet
 //
 //  Any term that cannot be known makes `free` null, and nothing is
 //  admitted against a null: an unknown is never read as free memory.
+//  A forwarded load whose model has no known size is one such term.
 //
 //  Pure: terms in, numbers and sentences out. The broker gathers the
 //  terms and decides what to do with the answer.
@@ -37,7 +39,10 @@ import { formatGib } from "@saxby/core";
  * @property {number} marginBytes
  * @property {PinnedTerm[]} pinned
  * @property {{ model: string, bytes: number }[]} loaded - Not pinned.
- * @property {number} reservedBytes
+ * @property {number} reservedBytes - Every job, plus every forwarded
+ *     load of known size the backend does not list yet.
+ * @property {string[]} unknownLoads - Forwarded loads the backend does
+ *     not list yet whose models have no known size.
  * @property {string | null} residencyError - Why the backend could
  *     not say what it has loaded, or null when it did.
  * @property {number | null} usedBytes - Observed, never budgeted.
@@ -62,7 +67,8 @@ export function describePinnedGap(term) {
 //  Two kinds of unknown. A config gap (no ceiling, a pinned model with
 //  no size) stays until someone edits the config, so waiting on it
 //  only delays the refusal. A backend that did not answer may answer
-//  on the next poll, so that one is waited on.
+//  on the next poll, and a load of unknown size ends with its
+//  request, so those are waited on.
 function findConfigGaps(terms) {
     const gaps = [];
 
@@ -88,6 +94,13 @@ function findUnknowns(terms, configGaps) {
         unknowns.push(
             `the backend could not say what is loaded: ` +
                 terms.residencyError,
+        );
+    }
+
+    for (const model of terms.unknownLoads) {
+        unknowns.push(
+            `'${model}' is loading with no known size: it has not been ` +
+                `seen loaded and has no size_gib`,
         );
     }
 

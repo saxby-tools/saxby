@@ -18,7 +18,7 @@ const CONFIG = {
 };
 
 function fakeBroker(options = {}) {
-    const calls = { gate: [], released: 0 };
+    const calls = { gate: [], tracked: [], released: 0 };
 
     const broker = {
         hasJobs: () => options.hasJobs ?? false,
@@ -31,6 +31,11 @@ function fakeBroker(options = {}) {
                     hold: { release: () => calls.released++ },
                 },
             );
+        },
+        trackLoad: (model, context) => {
+            calls.tracked.push({ model, requestId: context.requestId });
+
+            return { release: () => calls.released++ };
         },
     };
 
@@ -117,6 +122,25 @@ Deno.test("chat — with no job held, the broker is not asked", async () => {
     }
 });
 
+Deno.test("chat — with no job held, the load is still counted", async () => {
+    const upstream = stubUpstream();
+    const { broker, calls } = fakeBroker({ hasJobs: false });
+
+    try {
+        const res = await quietly(() => chat(app(broker)));
+
+        assertEquals(calls.tracked.length, 1);
+        assertEquals(calls.tracked[0].model, "voxtral:32k");
+        assertEquals(calls.released, 0);
+
+        await res.text();
+
+        assertEquals(calls.released, 1);
+    } finally {
+        upstream.restore();
+    }
+});
+
 Deno.test("chat — a refused load never reaches the backend", async () => {
     const upstream = stubUpstream();
     const { broker, calls } = fakeBroker({
@@ -153,6 +177,7 @@ Deno.test("chat — an admitted load is sent and its hold freed", async () => {
 
         assertEquals(res.status, 200);
         assertEquals(upstream.requests[0].body.model, "voxtral:32k");
+        assertEquals(calls.tracked, []);
         assertEquals(calls.released, 1);
     } finally {
         upstream.restore();

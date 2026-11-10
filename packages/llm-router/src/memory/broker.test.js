@@ -60,14 +60,26 @@ function harness(options = {}) {
     const warnings = [];
     const sleeps = [];
 
+    let residencyReads = 0;
+
     const backend = {
         canonicalName,
         fetchResidency: () => {
+            residencyReads += 1;
+
             if (residency instanceof Error) {
                 return Promise.reject(residency);
             }
 
-            return Promise.resolve(residency);
+            //  The answer is what was loaded when the read began. The
+            //  hook runs while the read is in flight: a model it loads
+            //  shows in the next answer, and a hold it releases lands
+            //  during this one.
+            const answer = residency;
+
+            options.onResidency?.(residencyReads, control);
+
+            return Promise.resolve(answer);
         },
     };
 
@@ -121,6 +133,7 @@ function harness(options = {}) {
             ms += by;
         },
         probeReads: () => probeReads,
+        residencyReads: () => residencyReads,
     };
 
     return control;
@@ -604,6 +617,234 @@ Deno.test("load — an untagged name matches its loaded model", async () => {
 
     assert(got.admitted);
     assertEquals(got.hold, null);
+});
+
+//  =====================================================================
+//  Forwarded loads
+//  =====================================================================
+//  Every request the chat route forwards is noted in the ledger, job
+//  or no job, until the backend lists its model or the request ends.
+//  Without that, a job could start in the space of a model the backend
+//  has not listed yet (issue #40).
+
+const VOXTRAL = { name: "voxtral:32k", bytes: gibToBytes(10) };
+
+function track(broker, model, requestId = "req_fwd") {
+    return broker.trackLoad(model, { requestId });
+}
+
+Deno.test("track — a forwarded load holds its space", async () => {
+    const { broker, events } = harness();
+
+    //  voxtral:32k is 10 GiB by size_gib and not loaded: 32 - 10 = 22.
+    const hold = track(broker, "voxtral:32k");
+
+    assertEquals(events, []);
+
+    const refused = await reserve(broker, 25, { timeoutMs: 0 });
+
+    assertEquals(refused.admitted, false);
+    assertStringIncludes(refused.reason, "reserved 10.0 GiB");
+
+    hold.release();
+
+    const admitted = await reserve(broker, 25);
+
+    assert(admitted.admitted);
+});
+
+Deno.test("track — a load of unknown size makes a job wait", async () => {
+    let hold = null;
+
+    const { broker, events } = harness({
+        onSleep: (count) => {
+            if (count === 2) {
+                hold.release();
+            }
+        },
+    });
+
+    hold = track(broker, "never-seen:1b");
+
+    const got = await reserve(broker, 1);
+
+    assert(got.admitted);
+    assertEquals(got.waitedMs, 2000);
+    assertEquals(kinds(events), ["job:wait", "job:admit"]);
+    assertStringIncludes(
+        events[0].reason,
+        "'never-seen:1b' is loading with no known size",
+    );
+});
+
+Deno.test("track — a measured size beats size_gib", async () => {
+    const control = harness({
+        loaded: [QWEN, { name: "other:7b", bytes: gibToBytes(7) }],
+    });
+
+    //  Seen loaded at 7 GiB, against a size_gib of 5...
+    await control.broker.snapshot();
+
+    //  ...then unloaded. A forwarded load counts the 7.
+    control.setLoaded([QWEN]);
+    track(control.broker, "other:7b");
+
+    const { budget } = await control.broker.snapshot();
+
+    assertEquals(budget.reservedBytes, gibToBytes(7));
+});
+
+Deno.test("track — a load the backend lists counts once", async () => {
+    const control = harness();
+
+    track(control.broker, "voxtral:32k");
+    control.setLoaded([QWEN, VOXTRAL]);
+
+    const { budget } = await control.broker.snapshot();
+
+    assertEquals(budget.loadedBytes, gibToBytes(35));
+    assertEquals(budget.reservedBytes, 0);
+});
+
+Deno.test("track — a pinned model and no model need no hold", async () => {
+    const { broker } = harness();
+
+    assertEquals(track(broker, "gemma4:31b-128k"), null);
+    assertEquals(track(broker, ""), null);
+
+    const { budget, holds } = await broker.snapshot();
+
+    assertEquals(holds, []);
+    assertEquals(budget.reservedBytes, 0);
+});
+
+Deno.test("track — two requests for one model share its hold", async () => {
+    const { broker } = harness();
+
+    const first = track(broker, "voxtral:32k", "req_1");
+    const second = track(broker, "voxtral:32k", "req_2");
+
+    async function reserved() {
+        return (await broker.snapshot()).budget.reservedBytes;
+    }
+
+    assertEquals(await reserved(), gibToBytes(10));
+
+    first.release();
+
+    assertEquals(await reserved(), gibToBytes(10));
+
+    second.release();
+
+    assertEquals(await reserved(), 0);
+});
+
+Deno.test("track — a gated load joins a forwarded hold", async () => {
+    const { broker, events } = harness();
+
+    track(broker, "voxtral:32k");
+
+    //  32 free - 10 held = 22; the job takes 20 of it.
+    await reserve(broker, 20);
+
+    const got = await gate(broker, "voxtral:32k");
+
+    assert(got.admitted);
+    assertStringIncludes(events[1].reason, "sharing its hold");
+    const { budget } = await broker.snapshot();
+
+    assertEquals(budget.reservedBytes, gibToBytes(30));
+});
+
+//  =====================================================================
+//  Reads overtaken by a hold's release
+//  =====================================================================
+//  A hold ends at the first byte, when the backend has the model. An
+//  answer that was on its way when the hold ended may be from before
+//  the model was listed, so the model would count nowhere. The broker
+//  notes the ledger's release count before a read and reads again
+//  when it moved (issue #40, path 2).
+
+//  The issue's reproduction: job J holds 10 GiB and a 40 GiB load is
+//  held, with nothing pinned and nothing loaded (88 GiB of room). The
+//  load's hold ends while the backend is being read for a 50 GiB job,
+//  and the answer in hand is from before the model was listed. With
+//  one read the job is admitted: 100 GiB against 88.
+Deno.test("settle — a hold released mid-read is read again", async () => {
+    const BIG = { name: "big:40b", bytes: gibToBytes(40) };
+
+    let hold = null;
+
+    const control = harness({
+        config: {
+            catalog: { "big:40b": { pinned: false, size_gib: 40 } },
+            semantic: undefined,
+        },
+        loaded: [],
+        onResidency: (_count, control) => {
+            if (!hold) {
+                return;
+            }
+
+            hold.release();
+            hold = null;
+            control.setLoaded([BIG]);
+        },
+    });
+
+    await reserve(control.broker, 10);
+
+    hold = (await gate(control.broker, "big:40b")).hold;
+
+    const readsBefore = control.residencyReads();
+    const got = await reserve(control.broker, 50, { timeoutMs: 0 });
+
+    assertEquals(got.admitted, false);
+    assertStringIncludes(got.reason, "38.0 GiB free");
+    assertEquals(control.residencyReads(), readsBefore + 2);
+});
+
+Deno.test("settle — the gate reads again too", async () => {
+    let hold = null;
+
+    const control = harness({
+        onResidency: (_count, control) => {
+            if (!hold) {
+                return;
+            }
+
+            hold.release();
+            hold = null;
+            control.setLoaded([QWEN, VOXTRAL]);
+        },
+    });
+
+    //  32 free - 20 reserved = 12; voxtral takes 10 of it.
+    await reserve(control.broker, 20);
+
+    hold = (await gate(control.broker, "voxtral:32k")).hold;
+
+    //  other:7b is 5 GiB. With voxtral's hold gone and its load not yet
+    //  listed, 12 GiB would read as free; read again, 2 GiB does.
+    const got = await gate(control.broker, "other:7b");
+
+    assertEquals(got.admitted, false);
+    assertStringIncludes(got.reason, "'other:7b' needs 5.0 GiB");
+});
+
+Deno.test("settle — a read overtaken every time is unknown", async () => {
+    const control = harness({
+        onResidency: (_count, control) => {
+            track(control.broker, "other:7b").release();
+        },
+    });
+
+    const got = await reserve(control.broker, 1, { timeoutMs: 0 });
+
+    assertEquals(got.admitted, false);
+    assertEquals(got.code, "memory_unavailable");
+    assertStringIncludes(got.reason, "reads in a row");
+    assertEquals(control.residencyReads(), 3);
 });
 
 //  =====================================================================
