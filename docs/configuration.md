@@ -167,6 +167,7 @@ live, like any other saxbyd.
 | `log_prompts` | `false` | Store prompt text in the decision log |
 | `client_names` | `{}` | Friendly names for client signatures |
 | `client_defaults` | `{}` | Request fields filled in for a client; see [Client defaults](#client-defaults) |
+| `message_prefix` | off | A time note on every user message; see [Message prefix](#message-prefix) |
 | `log_path` | instance folder | Where the decision log lives |
 | `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
 | `trusted_proxies` | `[]` | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies) |
@@ -365,6 +366,82 @@ next restart, or the next time a config edit is applied.
 The active profile's model is pinned for the memory broker without
 being asked, since Tier 3 loads it. A profile may carry `size_gib`
 like a catalog entry.
+
+##  Message prefix
+
+Off by default. When on, every user message reaches the model with a
+note in front saying when Saxby first saw it, in your zone:
+
+```
+[It is 1:30 a.m. on Monday, October 26, 2026 (America/Chicago).] any news on the dry run?
+```
+
+The latest message's note also says how long the conversation was
+idle, when it was: "This conversation resumed after 12 days away."
+One line goes into the system prompt telling the model what the notes
+are, never to write one itself, and to speak of time the way a person
+would.
+
+```jsonc
+"message_prefix": {
+    "enabled": true,
+    "timezone": "America/Chicago",
+    "gap_sentence": true
+}
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | Put the note on every user message |
+| `timezone` | the machine's zone | An IANA name such as `Europe/Berlin`; the note is written in it |
+| `gap_sentence` | `true` | Say how long the conversation was idle on the latest note |
+
+Why every message, and why this shape, is in the lab's report
+[A sense of time](https://saxby-tools.github.io/lab/reports/003-time-notes/).
+In short: a model resuming a conversation needs to know when the
+earlier words were said, not only what time it is now, and a date
+line in the system prompt does not give it that. A note fixed on each
+message when it is first seen does, and it leaves the runner's prompt
+cache intact, since nothing already sent is edited. A clock with the
+weekday is read as a fact; a word such as "evening" was read as a
+span and lost after midnight. The gap sentence was the larger lever:
+hours under two days, then days, weeks and months, rounded, and no
+sentence under an hour or on a fresh conversation.
+
+`timezone` must be an IANA name, and an unknown one is a config error.
+The default is the machine's zone, which is right for a tool that
+serves one person. Set it to where you are if the machine is
+elsewhere. `CST` and `+05:30` are refused: an abbreviation is
+ambiguous, and an offset was read worse than a name. Saxby never
+guesses a zone from anything else. With the note in the wrong zone
+the model answers from the wrong day and does not ask, however the
+system prompt tells it to; that is the report's round 3.
+
+How the earlier times are known: Saxby keeps nothing between requests
+and sees the whole conversation each time, so an earlier message gets
+the time of the first request that carried it. That is kept in the
+decision log's `message_seen` table as keyed hashes only, the same
+scheme as the prompt hash: the conversation's first user message,
+each message, and the time. Never text. A conversation idle for
+ninety days is dropped from it. The table is observability's: with no
+decision log, every message gets the arrival time, and `--verbose`
+prints a `NOTE` line saying so.
+
+The decision log records that the note was on (`message_prefix`) and
+the gap in hours the latest note named (`message_prefix_gap_hours`),
+never the note's text: when you were at the keyboard is yours.
+
+Edits apply on save. `config generate` does not ask about it; add the
+block by hand.
+
+Known limits, all named in the report: a user who moves zones without
+saying so; half-hour offsets; a daylight saving change inside one
+conversation; any model but Gemma 4. Two of Saxby's own: a client
+that drops the oldest message from the history is treated as a new
+conversation, so every message gets that request's time; and a client
+that states the user's zone itself (Open WebUI puts the browser's
+zone in its prompt variables) is not read yet. That is a separate
+issue once a client sends it in a header.
 
 ##  Listening
 
