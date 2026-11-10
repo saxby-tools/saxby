@@ -59,6 +59,11 @@ export function initTracing(args = []) {
     return currentLevel;
 }
 
+/**
+ * Whether each request's lifecycle is being printed, so main.js can
+ * skip the one-line summary that would repeat it.
+ * @returns {boolean}
+ */
 export function isVerbose() {
     return currentLevel >= LEVEL_VERBOSE;
 }

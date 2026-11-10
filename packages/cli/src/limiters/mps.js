@@ -54,10 +54,22 @@ function formatRatio(ratio) {
     return ratio.toFixed(RATIO_PLACES);
 }
 
+/**
+ * Caps a PyTorch job at its reservation by setting the MPS allocator's
+ * watermark ratios in the job's environment. Static only, so
+ * MEMORY_LIMITERS holds the class itself and nothing is constructed.
+ */
 export class MpsWatermarkLimiter {
+    /** The short name code picks this limiter by. */
     static id = "pytorch-mps";
+
+    /** The name shown to people. */
     static displayName = "PyTorch MPS watermarks";
 
+    /**
+     * Whether this limiter applies on the running OS.
+     * @returns {boolean}
+     */
     static isSupported() {
         return Deno.build.os === "darwin";
     }

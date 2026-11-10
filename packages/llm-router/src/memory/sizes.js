@@ -30,9 +30,15 @@
 //  sizes refuse jobs. Observability stays never load-bearing.
 
 /**
+ * Builds the cache of each model's largest whole load, seeded from
+ * the decision log's rows and written back through `save`, so a
+ * pinned model keeps its size across a restart.
  * @param {{ rows?: { model: string, bytes: number,
  *     measuredAt: string }[], save?: (model: string, bytes: number,
  *     measuredAt: string) => void, now?: () => number }} [options]
+ * @returns {{ record: (loaded: import("@saxby/core").LoadedModel[])
+ *     => void, get: (model: string) =>
+ *     { bytes: number, measuredAt: string } | null }}
  */
 export function createSizeCache(options = {}) {
     const now = options.now ?? (() => Date.now());

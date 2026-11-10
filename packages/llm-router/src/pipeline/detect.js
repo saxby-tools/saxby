@@ -138,7 +138,11 @@ const LANGS_MAX = 10;
 //  over-estimating tokens falls back a model early, which is the safe
 //  direction to be wrong. Exported so extract.js weighs prior turns
 //  and tool JSON with the same two numbers, not a third.
+
+/** Characters per token assumed for prose. */
 export const CHARS_PER_TOKEN_PROSE = 4;
+
+/** Characters per token assumed for code, which packs tighter. */
 export const CHARS_PER_TOKEN_CODE = 3;
 
 //  ---------------------------------------------------------------------
@@ -290,6 +294,16 @@ function blankRange(chars, start, end) {
     }
 }
 
+/**
+ * Parses the prompt once and blanks its code spans and math, so the
+ * prose detectors never trip on content the user is showing rather
+ * than asking about. Newlines survive the blanking, so line numbers
+ * in the masked text match the raw text.
+ * @param {string} text - Anything else is treated as empty.
+ * @returns {{ raw: string, tree: Object, histogram: Object<string,
+ *     number>, codeChars: number, masked: string, lines: string[],
+ *     maskedLines: string[] }}
+ */
 export function prepareInput(text) {
     const raw = typeof text === "string" ? text : "";
     const tree = MARKDOWN.parse(raw);
@@ -692,11 +706,16 @@ function detectSectionHeaders(input) {
 //  ---------------------------------------------------------------------
 //  Registry
 //  ---------------------------------------------------------------------
-//  Adding an owned detector is one entry here plus one function above.
-//  `weight` is advisory metadata for the mapping layer, not a score:
-//  "strong" means high precision for intent, "weak" means the shape is
-//  real but says little about what the user wants.
-
+/**
+ * The owned detectors, run in order after the markdown pass. Adding
+ * one is one entry here plus one function above. `weight` is advisory
+ * metadata for the mapping layer, not a score: "strong" means high
+ * precision for intent, "weak" means the shape is real but says
+ * little about what the user wants.
+ * @type {{ name: string, weight: "strong" | "medium" | "weak",
+ *     run: (input: ReturnType<typeof prepareInput>) =>
+ *     Object | null }[]}
+ */
 export const OWNED_DETECTORS = [
     { name: "filePaths", weight: "strong", run: detectFilePaths },
     { name: "diff", weight: "strong", run: detectDiff },
@@ -707,8 +726,11 @@ export const OWNED_DETECTORS = [
     { name: "sectionHeaders", weight: "weak", run: detectSectionHeaders },
 ];
 
-//  Advisory weights for markdown-derived features, kept here so the
-//  mapping layer has one place to read confidence hints from.
+/**
+ * Advisory weights for markdown-derived features, kept here so the
+ * mapping layer has one place to read confidence hints from.
+ * @type {Object<string, "strong" | "medium" | "weak">}
+ */
 export const MARKDOWN_WEIGHTS = {
     fencedCode: "strong",
     inlineCode: "medium",
@@ -739,6 +761,17 @@ function estimateTokens(input) {
 //  Public entry point
 //  ---------------------------------------------------------------------
 
+/**
+ * The structural evidence in one message: markdown features, each
+ * owned detector's finding, size metrics and the node histogram. This
+ * is what the tag extractor and the decision log read; none of it is
+ * user text.
+ * @param {string} text - The normalised message content.
+ * @returns {{ features: Object<string, Object>, metrics: {
+ *     chars: number, lines: number, codeChars: number,
+ *     codeRatio: number, estimatedTokens: number },
+ *     histogram: Object<string, number> }}
+ */
 export function extractFeatures(text) {
     const input = prepareInput(text);
 
