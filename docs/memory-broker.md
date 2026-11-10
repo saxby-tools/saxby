@@ -144,7 +144,7 @@ where the `pinned` field lives. Its profile takes `size_gib` too.
 A pinned model's size comes from, in order:
 
 1. what the backend reports now, if it is loaded
-2. what the backend reported the last time it was loaded whole
+2. the largest size the backend has reported for it loaded whole
 3. `size_gib` in the config
 
 Only a whole load is a measurement. When memory is tight, Ollama
@@ -153,10 +153,29 @@ than the model needs to load whole; remembering it would undercount
 the pinned model from then on. Such a load still counts as loaded,
 at the GPU size it holds now, but it is not remembered.
 
-Sizes from the backend are kept in the decision log's file, so a
-saxbyd restart does not forget them. If none of the three exists, the
-size is unknown, and **every job is refused until it is known**. The
-boot log says so:
+The largest whole load wins, not the latest. A model's size depends
+on the context length it was loaded with, and that differs by
+client: Saxby's chat route sends `/v1/chat/completions`, which
+ignores `num_ctx`, so Ollama loads the model at its own default,
+while a client on Ollama's `/api` paths can ask for a smaller one.
+Had the smaller load replaced the bigger size, the broker would have
+counted less than Saxby's own load of the model needs once it
+unloaded, and a job could have been admitted into the difference. An
+unusually large load inflates the number instead, which errs the safe
+way: a bigger size only makes the broker more careful.
+
+Sizes from the backend are kept in the decision log's file, in the
+table `model_sizes`, so a saxbyd restart does not forget them. They
+are read at boot, so to start over, stop saxbyd, clear the table,
+and start it again:
+
+```bash
+sqlite3 ~/.config/saxby/decision-log.db "DELETE FROM model_sizes;"
+```
+
+Every model is then unknown until it loads whole again or `size_gib`
+fills in. If none of the three exists, the size is unknown, and
+**every job is refused until it is known**. The boot log says so:
 
 ```
 🧮 Memory broker: ceiling 96.0 GiB (iogpu.wired_limit_mb), margin 8.0 GiB
@@ -167,7 +186,8 @@ boot log says so:
 That fixes itself the first time the model loads whole. Set
 `size_gib` to skip the wait. A measured size always beats `size_gib`,
 since the real size changes with the context length the backend
-loads.
+loads, so `size_gib` is a stand-in until the first whole load, not a
+floor under later ones.
 
 ##  Model loads
 
@@ -194,8 +214,9 @@ A real one, from a test with a 5-second wait:
 }
 ```
 
-A model's size comes from the backend's last report or the catalog's
-`size_gib`. A model with neither waits until no job is held.
+A model's size comes from the largest whole load the backend has
+reported for it or the catalog's `size_gib`, as for a pinned model. A
+model with neither waits until no job is held.
 
 `saxby/<model>` bypass requests and raw model names are checked the
 same way. They load models too.
@@ -474,8 +495,3 @@ Not built yet:
   held, chat requests take no hold, so a job that starts while one of
   their models is still loading can be admitted into that model's
   space. [Issue #40](https://github.com/saxby-tools/saxby/issues/40).
-- **A model's remembered size is its last whole load.** A load at a
-  smaller context, such as one from a client that sets `num_ctx` on
-  Ollama's `/api` paths, replaces a bigger size. Once the model
-  unloads, the broker counts less than Saxby's own load of it needs.
-  [Issue #41](https://github.com/saxby-tools/saxby/issues/41).
