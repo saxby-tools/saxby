@@ -24,6 +24,13 @@
 
 import packageConfig from "../../../../deno.json" with { type: "json" };
 
+/**
+ * Registers GET /saxby/v1/status on the Hono app: which instance this
+ * process serves, its pid and version, and the state of its config,
+ * all answered from memory.
+ * @param {import("hono").Hono} app
+ * @returns {void}
+ */
 export function registerStatusRoutes(app) {
     app.get("/saxby/v1/status", (c) => {
         const config = c.get("config");

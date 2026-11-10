@@ -69,9 +69,19 @@ function readLoadedModel(entry) {
     };
 }
 
+/**
+ * The Ollama backend: inventory and model details for `saxby config
+ * generate`, and what is loaded for the memory broker. Static only,
+ * so a registry holds the class itself and nothing is constructed.
+ */
 export class OllamaAdapter {
+    /** The short name code picks this backend by. */
     static id = "ollama";
+
+    /** The name shown to people. */
     static displayName = "Ollama";
+
+    /** Where Ollama listens unless a caller passes another URL. */
     static defaultUrl = "http://127.0.0.1:11434";
 
     /**

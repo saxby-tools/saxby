@@ -448,14 +448,6 @@ export function selectModel(intent, estimatedTokens, config, required = []) {
 }
 
 /**
- * The full pipeline.
- *
- * @param {Object} extracted
- * @param {Object} config
- * @param {Object|null} semantic - {profile, candidates, upstreamUrl},
- *   or null when Tier 3 is unconfigured or failed to warm.
- */
-/**
  * Required tags that no catalog model claims. When this is not empty,
  * nothing in the catalog can serve the request.
  */
@@ -477,12 +469,6 @@ function describeRefusal(unmet) {
 }
 
 /**
- * The decision when nothing can serve a requirement. Tier 3 and the
- * global default are skipped: any model chosen from here would be a
- * broken one, and a silent fallback hides the config gap that caused
- * it.
- */
-/**
  * A refused decision. `skipped` lists the candidates that were tried
  * and rejected; a refusal before any were tried lists none, so the
  * decision never names a model that was not considered.
@@ -503,6 +489,24 @@ function refuse(intent, extracted, route, refusal, skipped = []) {
     };
 }
 
+/**
+ * The full pipeline: tiers 1 and 2 synchronously, then Tier 3 only
+ * when both abstained, then the context-fit check that picks the
+ * model.
+ *
+ * A required capability no catalog model claims is refused before
+ * Tier 3 runs. Tier 3 and the global default are skipped on purpose:
+ * any model chosen from there would be a broken one, and a silent
+ * fallback hides the config gap that caused it.
+ * @param {Object} extracted - What extractIntent read from the body.
+ * @param {Object} config
+ * @param {Object | null} semantic - {profile, candidates, upstreamUrl},
+ *     or null when Tier 3 is unconfigured or failed to warm.
+ * @returns {Promise<{tier, route, model, candidates, scores,
+ *     abstentions, skipped, exhausted, prompt, semantic, refusal}>}
+ *     `model` is null and `refusal` says why when nothing can serve
+ *     the request.
+ */
 export async function resolvePipeline(extracted, config, semantic = null) {
     let intent = resolveIntent(extracted, config);
     let semanticResult = null;

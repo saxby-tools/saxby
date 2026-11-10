@@ -1,6 +1,11 @@
 import { Command } from "@cliffy/command";
 import { LABEL } from "../../constants.js";
 
+/**
+ * `saxby vram-guard-mac status`: whether the LaunchDaemon is loaded
+ * in the system domain and what `iogpu.wired_limit_mb` is now. Both
+ * are readable without root.
+ */
 export const statusCommand = new Command()
     .description("Check the current memory limits and daemon status.")
     .action(async () => {

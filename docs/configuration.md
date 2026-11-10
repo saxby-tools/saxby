@@ -567,7 +567,9 @@ signature `client_names` uses:
 ```
 
 `reasoning_effort` is the only field, and `"none"` is its only value.
-It turns off a model's reasoning for that client. On the reference
+It turns off a model's reasoning for that client. `saxby config
+generate` writes the key empty, with a comment, since it knows no
+client to name; add the entry by hand. On the reference
 setup, one grammar fix on a 31B model took 5.2 seconds with reasoning
 and 0.6 without, with the same answer.
 
@@ -675,8 +677,9 @@ Serve, so your own devices can reach Saxby over your tailnet.
 
 `kind` is always `tailscale-serve`; no other proxy can be named.
 `host` is the machine's full tailnet name, with no `https://` and no
-port. It is empty by default, and `saxby config generate` leaves it
-out.
+port. It is empty by default. `saxby config generate` asks whether to
+name one and writes the tailnet name you type; it never runs
+`tailscale` to find it.
 
 Saxby does not set Tailscale up. On the machine running Saxby,
 something like this publishes it to your tailnet over HTTPS:

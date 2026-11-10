@@ -580,6 +580,15 @@ unified memory. A ratio of 0 DISABLES it. The low watermark, default
 1.4, may not exceed the high one, so setting only the high one below
 1.4 makes PyTorch fail at startup. Set both.
 
+MLX reads no environment variable for its memory limit. Its Metal
+allocator picks a default at startup, 1.5 times Metal's recommended
+working set, and only `mx.set_memory_limit` changes it (checked at
+v0.32.4). That limit is a throttle, not a cap: over it, `mx.eval`
+waits for work in flight before going on, and an allocation fails
+only once RAM and swap are gone. `saxby reserve` hands a job the
+size in `SAXBY_RESERVED_BYTES`; the call is the job's. mflux and
+mlx-lm make no such call and take no flag for it.
+
 `Deno.kill(pid, 0)` needs unrestricted `--allow-run`; a list such as
 `--allow-run=/bin/kill` is not enough (Deno 2.9.8). `deno compile`
 with such a list still lets the binary run each listed program.

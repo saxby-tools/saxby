@@ -215,3 +215,65 @@ Deno.test("replace — content of another shape is left alone", () => {
     assertEquals(replaceMessageText(null, "x"), null);
     assertEquals(replaceMessageText(42, "x"), 42);
 });
+
+//  Agent clients send every tool's JSON schema with every request,
+//  and a prior turn that was a tool call keeps its name and arguments
+//  outside `content`. Neither was counted, and est_tokens ran a third
+//  under Ollama's prompt_tokens on agent payloads (#46). Both are
+//  JSON, so both are charged at the code rate.
+
+const TOOLS = [{
+    type: "function",
+    function: {
+        name: "read_file",
+        description: "Reads one file from the workspace.",
+        parameters: {
+            type: "object",
+            properties: { path: { type: "string" } },
+            required: ["path"],
+        },
+    },
+}];
+
+Deno.test("weight — tool schemas add to the estimate", () => {
+    const bare = ask(PROSE).metrics.estimatedTokens;
+    const withTools = ask(PROSE, { tools: TOOLS }).metrics.estimatedTokens;
+
+    assert(withTools > bare);
+});
+
+Deno.test("weight — a tool call with empty content is not empty", () => {
+    //  300 characters of arguments plus a 9-character name, at three
+    //  characters per token: 103, with nothing else in the payload.
+    const args = JSON.stringify({ path: "a".repeat(289) });
+
+    assertEquals(args.length, 300);
+
+    const result = extractIntent({
+        model: "saxby",
+        messages: [
+            {
+                role: "assistant",
+                content: "",
+                tool_calls: [{
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "read_file", arguments: args },
+                }],
+            },
+            { role: "user", content: "" },
+        ],
+    }, CONFIG);
+
+    assertEquals(result.metrics.estimatedTokens, 103);
+});
+
+Deno.test("weight — tools that are not an array are ignored", () => {
+    const bare = ask(PROSE).metrics.estimatedTokens;
+
+    for (const tools of ["read_file", 7, { name: "read_file" }, null]) {
+        const result = ask(PROSE, { tools });
+
+        assertEquals(result.metrics.estimatedTokens, bare);
+    }
+});

@@ -18,7 +18,16 @@ const QUICK_TIMEOUT_MS = 5000;
 
 const MS_PER_S = 1000;
 
+/**
+ * Thrown when saxbyd cannot be reached at all, as opposed to answering
+ * with a refusal. The wrapper treats it as "do not run the job".
+ */
 export class BrokerUnreachable extends Error {
+    /**
+     * Builds the message from the port and the underlying fetch error.
+     * @param {number} port - The port saxbyd was expected on.
+     * @param {Error} cause - The fetch error, described in the message.
+     */
     constructor(port, cause) {
         super(
             `saxbyd did not answer on ${HOST}:${port}: ` +
@@ -29,8 +38,14 @@ export class BrokerUnreachable extends Error {
 }
 
 /**
+ * The three calls `saxby reserve` makes on the broker, bound to one
+ * saxbyd: create, heartbeat and release. Each throws BrokerUnreachable
+ * when saxbyd does not answer, and otherwise returns the HTTP status
+ * and the parsed body, so the wrapper decides what a refusal means.
  * @param {number} port - The instance's listen_port.
  * @param {typeof fetch} [fetchImpl] - Injected by tests.
+ * @returns {{ create: Function, heartbeat: Function,
+ *     release: Function, base: string }}
  */
 export function createReservationClient(port, fetchImpl = fetch) {
     const base = `http://${HOST}:${port}${BASE_PATH}`;

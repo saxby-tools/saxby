@@ -96,6 +96,13 @@ async function readInstance(options) {
     };
 }
 
+/**
+ * `saxby reserve --gib N -- <command>`: asks saxbyd for N GiB of GPU
+ * memory, runs the command once it is granted, and releases the
+ * reservation when the command exits. Checks the flags, then hands
+ * the real effects (spawn, signals, the broker client, the limiters)
+ * to runReserved, which owns the flow and the exit codes.
+ */
 export const reserveCommand = new Command()
     .description(
         "Run a command once saxbyd has reserved GPU memory for it. " +

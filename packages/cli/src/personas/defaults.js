@@ -39,6 +39,12 @@
 
 import { TAGS } from "@saxby/core";
 
+/**
+ * The personas a fresh config starts with: coder, writer and the
+ * `general` negative class, each with its tags and exemplars. Keyed
+ * by persona name; `config generate` fills in each default_model.
+ * The three rules above decide what an exemplar may say.
+ */
 export const PERSONA_DEFAULTS = {
     coder: {
         description: "Programming, debugging and software architecture.",
@@ -116,13 +122,15 @@ export const PERSONA_DEFAULTS = {
     },
 };
 
-//  Starting thresholds, per embedding model. NOT comparable across
-//  models: a cosine of 0.60 means different semantic distances under
-//  different embedders, because each occupies a differently shaped
-//  region of the space.
-//
-//  0.60 for bge-m3 is validated against a live probe. The nomic value
-//  is an untested scale-down and should be treated as a guess.
+/**
+ * Starting dimension and threshold, per embedding model. NOT
+ * comparable across models: a cosine of 0.60 means different semantic
+ * distances under different embedders, because each occupies a
+ * differently shaped region of the space.
+ *
+ * 0.60 for bge-m3 is validated against a live probe. The nomic value
+ * is an untested scale-down and should be treated as a guess.
+ */
 export const SEMANTIC_DEFAULTS = {
     "bge-m3": { dim: 1024, threshold: 0.6 },
     "nomic-embed-text": { dim: 768, threshold: 0.55 },

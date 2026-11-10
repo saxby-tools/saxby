@@ -207,8 +207,11 @@ export function unmappedSignatures(rows, config) {
     return [...unmapped.values()].sort((a, b) => b.requests - a.requests);
 }
 
-//  Stamped on every row, so a reader can tell these hashes from the
-//  plain SHA-256 of rows written before v0.9.7.
+/**
+ * The name of the prompt hash in use, stamped on every row so a
+ * reader can tell these hashes from the plain SHA-256 of rows written
+ * before v0.9.7.
+ */
 export const PROMPT_HASH_SCHEME = "hmac-sha256";
 
 const HMAC_ALGORITHM = { name: "HMAC", hash: "SHA-256" };

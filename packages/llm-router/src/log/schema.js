@@ -187,9 +187,10 @@ export const MIGRATIONS = [
     //  label is the command's name only. Its arguments are never
     //  stored: they can hold paths and secrets.
     //
-    //  model_sizes is a cache, like exemplar_vectors: the last size
-    //  the backend reported for each model, so a pinned model keeps
-    //  counting at full size after it unloads and after a restart.
+    //  model_sizes is a cache, like exemplar_vectors: the largest size
+    //  the backend has reported for each model loaded whole, so a
+    //  pinned model keeps counting at full size after it unloads and
+    //  after a restart.
     `
     CREATE TABLE memory_events (
         id              INTEGER PRIMARY KEY,

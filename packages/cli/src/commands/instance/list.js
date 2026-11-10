@@ -151,6 +151,13 @@ function printErrors(rows) {
     }
 }
 
+/**
+ * `saxby instance list`: one row per instance, from the config root
+ * and its instances folder, with the port, whether a saxbyd answers
+ * on it, and whether a service file exists. A row with a problem, a
+ * blocked port or an unreadable config, is named again under the
+ * table with the reason.
+ */
 export const listCommand = new Command()
     .description("List instances with their ports and whether they run.")
     .action(async () => {
