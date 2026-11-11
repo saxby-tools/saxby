@@ -1,4 +1,4 @@
-#  Troubleshooting
+# Troubleshooting
 
 Each entry starts with what you see, then what it means and what to
 do. The messages are quoted as Saxby prints them.
@@ -18,9 +18,9 @@ which build. The second shows what the service manager thinks next to
 what the port says. When those two disagree, that disagreement is
 usually the answer.
 
-##  Saxby will not start
+## Saxby will not start
 
-###  No config
+### No config
 
 ```
 ❌ No config found in ~/.config/saxby
@@ -30,7 +30,7 @@ Please run 'saxby config generate' to launch the interactive setup guide.
 The instance has no `config.jsonc` or `config.json`. Run the command
 it names. For a named instance, the command includes `-i <name>`.
 
-###  The config is broken
+### The config is broken
 
 ```
 ❌ ~/.config/saxby/config.json is not valid JSON or JSONC:
@@ -51,7 +51,7 @@ named anywhere — `global_default_model`, a persona's
 `default_model`, `semantic.active` — must exist in the catalog. See
 [Configuration](configuration.md).
 
-###  The port is taken
+### The port is taken
 
 ```
 ❌ Port 11435 is already in use.
@@ -73,9 +73,9 @@ Under the service, a refused start retries every few seconds, so the
 message repeats in the log until the clash is fixed. That is
 deliberate.
 
-##  Saxby starts, with warnings
+## Saxby starts, with warnings
 
-###  Reserved tags
+### Reserved tags
 
 ```
 ⚠️  Tag 'TAG_WRITER' is reserved: nothing emits it yet, so claiming it never matches. Remove the claim.
@@ -88,7 +88,7 @@ check existed often have these.
 A similar warning that says **"Check for a typo"** means the tag is
 not in the vocabulary at all.
 
-###  Tier 3 is off
+### Tier 3 is off
 
 ```
 ⚠️  Tier 3 unavailable, continuing without it: Embedding request returned HTTP 404. Is 'bge-m3:latest' pulled? ...
@@ -111,7 +111,7 @@ Routing keeps working on Tiers 1 and 2 either way. A fix in the
 config applies when you save it. After a fix outside the config, such
 as pulling the model, restart.
 
-###  A warning about request.signal
+### A warning about request.signal
 
 ```
 Deno.serve: request.signal aborts on successful responses (legacy behavior). ...
@@ -120,12 +120,12 @@ Deno.serve: request.signal aborts on successful responses (legacy behavior). ...
 Printed once at boot by compiled binaries. It is expected and
 harmless; [Releasing](releasing.md) explains why.
 
-##  A config edit did nothing
+## A config edit did nothing
 
 saxbyd applies a saved config live, and keeps the old one when it
 cannot. `saxby status` says which happened; so does the log.
 
-###  The file is broken
+### The file is broken
 
 ```
 ❌ ~/.config/saxby/config.jsonc is not valid JSON or JSONC:
@@ -139,7 +139,7 @@ except that saxbyd keeps serving. Its log has the same error under
 file is broken, because it reads the file to find the port. Fix the
 file and save again.
 
-###  The edit needs a restart
+### The edit needs a restart
 
 ```
 listen_port changed, and that needs a restart. Restart to apply it: 'saxby service restart'.
@@ -149,7 +149,7 @@ listen_port changed, and that needs a restart. Restart to apply it: 'saxby servi
 saxbyd runs. Nothing else in that save was applied either. Restart,
 or undo that one change and save again.
 
-###  Tier 3 could not be rebuilt
+### Tier 3 could not be rebuilt
 
 ```
 Tier 3 could not be rebuilt for the new config, and applying it would turn Tier 3 off: ...
@@ -159,7 +159,7 @@ The edit added or changed an exemplar, or the `semantic` block, and
 the embedder did not answer. saxbyd kept the old config so Tier 3
 stays on. Check the backend, then save the file again.
 
-###  Edits are not being watched
+### Edits are not being watched
 
 ```
 ⚠️  Config edits are NOT being watched: ...
@@ -170,14 +170,14 @@ is a symlink that was pointed into a new folder after saxbyd started.
 saxbyd still serves; restart it to apply an edit and start a new
 watch.
 
-###  status says nothing is wrong
+### status says nothing is wrong
 
 saxbyd did not hear of the save. Some file systems send no change
 events, a network share among them. Restart after an edit there.
 
-##  Requests fail
+## Requests fail
 
-###  400, unmet_requirement
+### 400, unmet_requirement
 
 ```
 No model in this Saxby catalog claims TAG_VISION, so nothing here can handle images. Add TAG_VISION to the capabilities of a model that can.
@@ -187,7 +187,7 @@ The request has an image or audio, and no catalog model claims it can
 handle that. If one of your models can, add the tag to its
 `capabilities`. If none can, the refusal is correct.
 
-###  400, too large for every model
+### 400, too large for every model
 
 ```
 No model in this Saxby catalog fits a request of about 1500000 tokens. The largest context window in the catalog is 393216.
@@ -196,7 +196,7 @@ No model in this Saxby catalog fits a request of about 1500000 tokens. The large
 The whole conversation is bigger than any model's `max_context`.
 Start a new conversation, or have the client trim history.
 
-###  502, upstream unreachable
+### 502, upstream unreachable
 
 ```
 Saxby could not reach its upstream at http://127.0.0.1:11434: fetch failed
@@ -205,14 +205,14 @@ Saxby could not reach its upstream at http://127.0.0.1:11434: fetch failed
 Saxby is fine; the backend is not answering. Check that Ollama is
 running and that `upstream_url` is right.
 
-##  Requests are refused (401)
+## Requests are refused (401)
 
 A request that does not come straight from the machine running Saxby
 must carry the API token; see
 [The API token](configuration.md#the-api-token). Local clients never
 get these.
 
-###  token_required
+### token_required
 
 ```
 Refused: this request did not come straight from the machine running Saxby, so it needs the API token, sent as 'Authorization: Bearer <token>'. Run 'saxby token' on the machine running Saxby to see it.
@@ -221,7 +221,7 @@ Refused: this request did not come straight from the machine running Saxby, so i
 The client sent no token. Run `saxby token` on the machine running
 Saxby and paste the result into the client's API key field.
 
-###  token_invalid
+### token_invalid
 
 ```
 Refused: that is not this Saxby's API token. Run 'saxby token' on the machine running Saxby to see it.
@@ -231,7 +231,7 @@ The client sent a token, and it is the wrong one. The usual causes
 are a placeholder key left over from local use, a token from another
 instance, or a token replaced by `saxby token rotate`.
 
-##  Requests are refused (403)
+## Requests are refused (403)
 
 Saxby serves clients on the same machine and refuses anything that
 looks otherwise. The exceptions are ones you name yourself; see
@@ -240,7 +240,7 @@ looks otherwise. The exceptions are ones you name yourself; see
 refusal is logged as a line starting with `🚫`, with its reason and
 source.
 
-###  remote_path_not_allowed
+### remote_path_not_allowed
 
 ```
 Refused: 'POST /saxby/v1/reservations' is served only to programs on the machine running Saxby. Other machines get /v1/chat/completions and /v1/models.
@@ -250,7 +250,7 @@ The request came from another machine with the right token, and
 asked for something only a local program may use. Run it on the
 machine running Saxby.
 
-###  token_unavailable
+### token_unavailable
 
 ```
 Refused: this Saxby could not read its API token file, so it serves only the machine it runs on. Its log says why.
@@ -261,7 +261,7 @@ it cannot check anyone's token. The boot log has a line starting
 `⚠️  API token unavailable` with the cause. `saxby token rotate`
 writes a fresh file; restart Saxby after.
 
-###  proxy_attribution_required
+### proxy_attribution_required
 
 ```
 Refused: the request carries 'x-forwarded-for', so it came through a proxy. Saxby only serves clients on this machine directly.
@@ -278,20 +278,20 @@ devices, name it in `trusted_proxies`; see
 [Trusted proxies](configuration.md#trusted-proxies). No other proxy
 can be trusted.
 
-###  proxy_not_trusted
+### proxy_not_trusted
 
 A proxy is named in `trusted_proxies`, and this request does not fit
 it. The message says which check failed:
 
-| Message says | Cause |
-| --- | --- |
-| `Host '...' is not a proxy named in trusted_proxies` | The client used a name other than the configured `host`. Use the machine's full tailnet name. |
-| `carries '...', which Tailscale Serve does not send` | A second proxy sits in front of or behind Serve. Saxby trusts Serve alone. |
-| `is not one tailnet address` | The caller is not a tailnet device, or the request passed through more than one proxy. |
-| `through Tailscale Funnel` | The request came from the public internet. Saxby serves your tailnet only; use `tailscale serve`, not `tailscale funnel`. |
-| `must reach Saxby from this machine` | The proxy is not running on the same machine as Saxby. |
+| Message says                                         | Cause                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Host '...' is not a proxy named in trusted_proxies` | The client used a name other than the configured `host`. Use the machine's full tailnet name.                             |
+| `carries '...', which Tailscale Serve does not send` | A second proxy sits in front of or behind Serve. Saxby trusts Serve alone.                                                |
+| `is not one tailnet address`                         | The caller is not a tailnet device, or the request passed through more than one proxy.                                    |
+| `through Tailscale Funnel`                           | The request came from the public internet. Saxby serves your tailnet only; use `tailscale serve`, not `tailscale funnel`. |
+| `must reach Saxby from this machine`                 | The proxy is not running on the same machine as Saxby.                                                                    |
 
-###  proxy_path_not_allowed
+### proxy_path_not_allowed
 
 ```
 Refused: 'GET /api/tags' is not served through a proxy. Proxied clients get /v1/chat/completions and /v1/models.
@@ -301,7 +301,7 @@ A proxied client asked for something other than chat or the model
 list. The memory broker, the status and explain routes and Ollama's
 own API stay on this machine. Use them from `127.0.0.1`.
 
-###  origin_not_allowed
+### origin_not_allowed
 
 ```
 Refused: the request came from a web page (Origin 'https://evil.example'). Saxby does not serve browsers.
@@ -321,7 +321,7 @@ Refused: the browser extension 'chrome-extension://abcdefghijklmnopabcdefghijklm
 Copy the origin from the message into `allowed_origins` and save;
 see [Browser extensions](configuration.md#browser-extensions).
 
-###  origin_path_not_allowed
+### origin_path_not_allowed
 
 ```
 Refused: 'GET /api/tags' is not served to a browser extension. Extensions get /v1/chat/completions and /v1/models.
@@ -331,7 +331,7 @@ An allowed extension asked for something other than chat or the
 model list. If it was `/models` or `/chat/completions` with no
 `/v1`, the extension's base URL is missing `/v1`.
 
-###  host_not_allowed
+### host_not_allowed
 
 ```
 Refused: Host 'attacker.example' is not a local name. Use 127.0.0.1 or localhost, or add it to allowed_hosts in config.jsonc.
@@ -347,7 +347,7 @@ that name in `allowed_hosts`; see
 request sent to a machine address, `http://192.168.1.20:11435`, even
 when `listen_host` is `0.0.0.0`: the address is the `Host`.
 
-###  management_not_allowed
+### management_not_allowed
 
 ```
 Refused: '/api/pull' manages Ollama's models and is not served through Saxby. Call Ollama directly.
@@ -356,7 +356,7 @@ Refused: '/api/pull' manages Ollama's models and is not served through Saxby. Ca
 Pulling, pushing, creating, copying and deleting models are Ollama's
 job, not a router's. Run `ollama pull` or call Ollama on port 11434.
 
-###  Another machine cannot connect
+### Another machine cannot connect
 
 Saxby listens on `127.0.0.1` by default, so nothing beyond this
 machine can reach it directly. There are two ways in, and both need
@@ -368,7 +368,7 @@ the API token:
   also needs its `Host` in `allowed_hosts`; see
   [Listening](configuration.md#listening) before you set either.
 
-###  A container's published port does not answer
+### A container's published port does not answer
 
 ```
 ℹ️  Running in a container with listen_host 127.0.0.1: a published port will not answer. Set listen_host to 0.0.0.0 (docs/docker.md).
@@ -381,7 +381,7 @@ port to the host's loopback: `127.0.0.1:11435:11435`, not
 `11435:11435`, which puts it on every host interface. See
 [Docker](docker.md).
 
-##  Requests go to the wrong model
+## Requests go to the wrong model
 
 Start with `explain`. It shows the tags, the tier, and why every tier
 that declined, declined — without generating anything:
@@ -412,9 +412,9 @@ this. See "Background requests" in [Routing](routing.md).
 **A model is skipped.** `skipped` in the `explain` output says why,
 usually that the conversation does not fit its `max_context`.
 
-##  The service
+## The service
 
-###  install refuses
+### install refuses
 
 ```
 ❌ No 'saxbyd' on PATH. Deploy a build first (docs/releasing.md) or pass --bin <path>.
@@ -446,7 +446,7 @@ different `listen_port`.
 Linux only. There is no user service manager here, which is common
 in containers and some minimal installs.
 
-###  restart says nothing is loaded
+### restart says nothing is loaded
 
 ```
 ❌ tools.saxby.router is installed but not loaded, so there is nothing to restart. Run 'saxby service install' to load it.
@@ -459,7 +459,7 @@ Before v0.9.3, a reinstall could end this way, with `Bootstrap failed:
 5: Input/output error`. The old service was still shutting down when
 the new one tried to load. Install now waits for it.
 
-###  The service stopped when I logged out
+### The service stopped when I logged out
 
 Linux only. User services stop at logout unless lingering is on for
 your user:
@@ -468,16 +468,16 @@ your user:
 loginctl enable-linger
 ```
 
-###  Where the logs are
+### Where the logs are
 
-| Platform | Logs |
-| --- | --- |
-| macOS | `~/Library/Logs/saxby/tools.saxby.router.out.log` and `.error.log` |
-| Linux | `journalctl --user -u saxbyd` |
+| Platform | Logs                                                               |
+| -------- | ------------------------------------------------------------------ |
+| macOS    | `~/Library/Logs/saxby/tools.saxby.router.out.log` and `.error.log` |
+| Linux    | `journalctl --user -u saxbyd`                                      |
 
 Warnings print to the error log on macOS.
 
-###  It is running an old build
+### It is running an old build
 
 `saxby instance list` shows each instance's version. Code changes
 reach the service on your machine only after a deploy. From a
@@ -488,7 +488,7 @@ If the deploy says the service reports an older version than it
 built, the service file points at a `saxbyd` in another folder. Run
 `saxby service install` to point it at the one on `PATH`.
 
-##  Instances
+## Instances
 
 ```
 ❌ Invalid instance name 'Dev': use lowercase letters, digits and hyphens, starting with a letter or digit.
@@ -506,7 +506,7 @@ See [Instances](instances.md) for naming. A **blocked** state in
 instance, or a program that is not saxbyd. The line under the table
 says which.
 
-##  The shell and the system
+## The shell and the system
 
 **"zsh: correct 'saxby' to 'shout'".** zsh has not noticed the new
 command yet. Run `rehash`, or open a new terminal.
@@ -524,7 +524,7 @@ a download you trust:
 xattr -d com.apple.quarantine saxbyd saxby
 ```
 
-##  Generating a config
+## Generating a config
 
 ```
 ❌ Could not detect any active local AI backends.
@@ -540,7 +540,7 @@ pass `--host <url>`.
 Ollama is running but has no models. Pull at least one chat model,
 and an embedding model such as `bge-m3` for Tier 3.
 
-##  Still stuck
+## Still stuck
 
 Search the [open issues](https://github.com/saxby-tools/saxby/issues),
 including the `known-gap` label, which lists every known limitation.
