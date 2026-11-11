@@ -470,6 +470,94 @@ Deno.test("chat — the switch passes them on as sent", async () => {
 });
 
 //  =====================================================================
+//  Who called through a proxy
+//  =====================================================================
+//  main.js sets proxyCaller from the guard's judgement, and only for a
+//  request that came through a trusted proxy. The route hands it to
+//  the log as is, in both branches, and reads nothing from the headers
+//  itself: a request carrying Serve's headers with nothing set is
+//  logged as nobody's.
+
+const PROXY_CALLER = {
+    kind: "tailscale-serve",
+    user: "someone@example.com",
+    addr: "100.64.0.7",
+};
+
+const SERVE_HEADERS = {
+    "X-Forwarded-For": "100.64.0.7",
+    "Tailscale-User-Login": "someone@example.com",
+    "Tailscale-User-Name": "Someone",
+};
+
+function appWithCaller(log, proxyCaller) {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", DEFAULTS_CONFIG);
+        c.set("log", log);
+        c.set("semantic", null);
+        c.set("broker", broker);
+
+        if (proxyCaller) {
+            c.set("proxyCaller", proxyCaller);
+        }
+
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+async function loggedCallerFor(proxyCaller, model, headers = {}) {
+    const upstream = stubUpstream();
+    const { log, entries } = fakeLog();
+
+    try {
+        const res = await quietly(() =>
+            appWithCaller(log, proxyCaller).request("/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...headers },
+                body: JSON.stringify({
+                    model,
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            })
+        );
+
+        await res.text();
+
+        return entries[0].proxyCaller;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("caller — the guard's judgement reaches the log", async () => {
+    for (const model of ["saxby", "saxby/voxtral:32k"]) {
+        assertEquals(
+            await loggedCallerFor(PROXY_CALLER, model, SERVE_HEADERS),
+            PROXY_CALLER,
+            model,
+        );
+    }
+});
+
+Deno.test("caller — nothing from the guard is nobody", async () => {
+    for (const model of ["saxby", "saxby/voxtral:32k"]) {
+        assertEquals(await loggedCallerFor(null, model), null, model);
+        assertEquals(
+            await loggedCallerFor(null, model, SERVE_HEADERS),
+            null,
+            model,
+        );
+    }
+});
+
+//  =====================================================================
 //  The /command strip keeps the rest of the message
 //  =====================================================================
 //  A message can be parts: text beside an image or audio. Through

@@ -210,6 +210,12 @@ export function registerChatRoutes(app) {
             config,
         );
 
+        //  Who called through a trusted proxy, as the guard judged it
+        //  (main.js sets it from security/guard.js), or null. Taken
+        //  from the guard and never from the headers here: on a direct
+        //  request any local program could have sent them.
+        const proxyCaller = c.get("proxyCaller") ?? null;
+
         //  For every mode. A default belongs to the client, whichever
         //  way its request names a model.
         const clientDefaults = applyClientDefaults(body, client, config);
@@ -314,6 +320,7 @@ export function registerChatRoutes(app) {
                 systemPrefix,
                 clientDefaults,
                 messagePrefix,
+                proxyCaller,
             });
 
             //  Nothing in the catalog can serve a requirement. The row
@@ -401,6 +408,7 @@ export function registerChatRoutes(app) {
                 systemPrefix,
                 clientDefaults,
                 messagePrefix,
+                proxyCaller,
             });
         }
 
