@@ -352,6 +352,11 @@ export const SaxbyConfigSchema = v.strictObject({
     //  SQLite file: anyone who can read it reads every prompt, and
     //  the operator always can. Hashes group repeats without text.
     log_prompts: v.optional(v.boolean(), false),
+    //  Off unless the operator says so. A row that came through a
+    //  trusted proxy always says which kind of proxy; the caller's
+    //  login and tailnet address name a person or a device, and are
+    //  stored only with this on. The same shape as log_prompts.
+    log_proxy_users: v.optional(v.boolean(), false),
     //  Off unless the operator says so. Open WebUI's user headers name
     //  the person at the keyboard; a local backend ignores them, and a
     //  backend that meters per user can be given them. One switch for
