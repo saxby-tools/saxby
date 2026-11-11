@@ -45,7 +45,7 @@ import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
 import {
     buildAllowedHosts,
-    inspectRequest,
+    judgeRequest,
     TOKEN_VALID,
 } from "./security/guard.js";
 import { isInContainer, isLoopbackHost } from "./security/listen.js";
@@ -456,6 +456,7 @@ function applyReload(state, changed, parts) {
     parts.access.allowedHosts = buildAllowedHosts(config.allowed_hosts);
     parts.broker.reconfigure(config);
     parts.log?.setLogPrompts(config.log_prompts);
+    parts.log?.setLogProxyUsers(config.log_proxy_users);
 
     //  Tags live in these two. Repeating the boot's warnings after an
     //  edit that touched neither would bury the line that matters.
@@ -548,7 +549,10 @@ async function announceListen(config, apiToken) {
  * requests, Ollama's management paths, any request from another
  * machine without the API token, and any proxied request that does
  * not fit a proxy named in the config, before the request logger or
- * any route sees them (security/guard.js says why).
+ * any route sees them (security/guard.js says why). A request let in
+ * through a trusted proxy carries the guard's note of who called, for
+ * the decision log; the chat route reads it from the context, never
+ * from the headers.
  * @param {{ config: Object, apiToken: string | null,
  *     allowedHosts: Set<string> }} access - the token is fixed at
  *     boot; config and allowedHosts are replaced together when the
@@ -564,7 +568,7 @@ async function guardRequests(c, next, access) {
         c.set("sentApiToken", true);
     }
 
-    const verdict = inspectRequest({
+    const { verdict, proxyCaller } = judgeRequest({
         headers: c.req.raw.headers,
         path: c.req.path,
         method: c.req.method,
@@ -576,6 +580,10 @@ async function guardRequests(c, next, access) {
     });
 
     if (!verdict) {
+        if (proxyCaller) {
+            c.set("proxyCaller", proxyCaller);
+        }
+
         return await next();
     }
 
