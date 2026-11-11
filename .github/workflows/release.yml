@@ -30,6 +30,12 @@ jobs:
     release:
         runs-on: macos-latest
 
+        #  Signing needs the Developer ID certificate and the notary key
+        #  from the repository secrets (docs/releasing.md). A fork, or a
+        #  dry run before they exist, builds unsigned and says so.
+        env:
+            CAN_SIGN: ${{ secrets.MACOS_SIGNING_P12 != '' }}
+
         steps:
             #  actions/checkout v7.0.1
             - name: Check out
@@ -61,6 +67,52 @@ jobs:
 
             - name: Build
               run: deno task build all
+
+            - name: Import the signing certificate
+              if: env.CAN_SIGN == 'true'
+              env:
+                  P12_BASE64: ${{ secrets.MACOS_SIGNING_P12 }}
+                  P12_PASSWORD: ${{ secrets.MACOS_SIGNING_PASSWORD }}
+              run: |
+                  keychain="$RUNNER_TEMP/signing.keychain-db"
+                  password="$(uuidgen)"
+                  security create-keychain -p "$password" "$keychain"
+                  security set-keychain-settings -lut 3600 "$keychain"
+                  security unlock-keychain -p "$password" "$keychain"
+                  printf '%s' "$P12_BASE64" \
+                      | base64 --decode > "$RUNNER_TEMP/signing.p12"
+                  security import "$RUNNER_TEMP/signing.p12" \
+                      -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+                  rm "$RUNNER_TEMP/signing.p12"
+                  security set-key-partition-list \
+                      -S apple-tool:,apple:,codesign: \
+                      -s -k "$password" "$keychain"
+                  security list-keychains -d user \
+                      -s "$keychain" login.keychain-db
+                  identity="$(security find-identity -v -p codesigning \
+                      "$keychain" \
+                      | grep 'Developer ID Application' | head -1 \
+                      | sed -E 's/.*"(.*)"/\1/')"
+                  test -n "$identity"
+                  echo "SAXBY_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+            - name: Sign and notarize the macOS binaries
+              if: env.CAN_SIGN == 'true'
+              env:
+                  NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+                  SAXBY_NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+                  SAXBY_NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+              run: |
+                  printf '%s' "$NOTARY_KEY_P8" \
+                      | base64 --decode > "$RUNNER_TEMP/notary.p8"
+                  SAXBY_NOTARY_KEY="$RUNNER_TEMP/notary.p8" deno task sign-macos
+                  rm "$RUNNER_TEMP/notary.p8"
+
+            - name: Unsigned build
+              if: env.CAN_SIGN != 'true'
+              run: >-
+                  echo "No signing certificate in the secrets;
+                  the darwin binaries are unsigned."
 
             - name: Verify checksums
               working-directory: dist
