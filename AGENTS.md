@@ -657,7 +657,12 @@ semantic search over the prompt archive (prompts are already
 embedded); middleware hooks for response transforms; per-persona
 `num_ctx` via the Ollama-native capability layer; a multilingual
 extractor, which the canonical tag vocabulary was designed to accept
-as a drop-in; a machine-wide memory ledger across instances.
+as a drop-in; a machine-wide memory ledger across instances; for the
+decision log, column encryption of prompt text with a key held
+outside the instance folder (WebCrypto AES-GCM, no new dependency),
+a retention setting that blanks prompt text older than N days, and
+at-rest encryption from a server-backed store, where prompt logging
+would default on behind that store's own access control.
 
 **Discovery and UX:** user-defined custom tags, so specialised fields
 can adapt personas without forking; model capability auto-discovery
