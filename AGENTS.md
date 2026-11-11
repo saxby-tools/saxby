@@ -536,7 +536,11 @@ Saxby's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
 maintainer, no GFM tables, no position offsets); port-per-client
 identification (multiplies config); FFI for NLP (per-platform build
-matrix, against the portability story).
+matrix, against the portability story); `TAG_WRITER` and
+`TAG_LONG_CONTEXT` (removed Nov. 10, 2026 — writer prompts reach the
+writer persona through Tier 3 exemplars, and long context is already
+a requirement enforced by the context-fit check, so neither tag had a
+job; a writer tag belongs to user-defined custom tags, post-v1).
 
 ## Ecosystem facts
 
