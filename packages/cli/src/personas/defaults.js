@@ -77,8 +77,8 @@ export const PERSONA_DEFAULTS = {
     writer: {
         description: "Prose, editing and tone.",
 
-        //  No tags: nothing emits TAG_WRITER yet, so writer is
-        //  reached through its exemplars in Tier 3.
+        //  No tags, by design: prose has no structure to detect, so
+        //  writer is reached through its exemplars in Tier 3.
         tags: [],
 
         exemplars: [

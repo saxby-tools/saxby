@@ -75,18 +75,17 @@ deliberate.
 
 ## Saxby starts, with warnings
 
-### Reserved tags
+### A tag nothing emits
 
 ```
-⚠️  Tag 'TAG_WRITER' is reserved: nothing emits it yet, so claiming it never matches. Remove the claim.
+⚠️  Tag 'TAG_WRITER' is claimed in config but the extractor never emits it. Check for a typo — it will never match.
 ```
 
-A model or persona claims a tag nothing produces, so that claim does
-nothing. Delete it from the config. Configs generated before this
-check existed often have these.
-
-A similar warning that says **"Check for a typo"** means the tag is
-not in the vocabulary at all.
+A model or persona claims a tag that is not in the vocabulary, so
+that claim does nothing. Delete it from the config. Usually it is a
+typo. `TAG_WRITER` and `TAG_LONG_CONTEXT` are the other case: they
+were removed from the vocabulary, and older generated configs often
+claim them.
 
 ### Tier 3 is off
 

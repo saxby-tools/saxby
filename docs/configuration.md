@@ -234,10 +234,13 @@ A model that claims a tag in `capabilities` is a candidate for it.
 | `TAG_VISION`     | Image parts — a requirement                               |
 | `TAG_AUDIO`      | Audio parts — a requirement                               |
 
-`TAG_WRITER` and `TAG_LONG_CONTEXT` are **reserved**. They are in the
-vocabulary, but nothing emits them yet, so a claim on either never
-matches. Saxby warns at boot if a config claims one. Writing prompts
-reach a writer persona through its Tier 3 exemplars instead.
+That is the whole vocabulary: every tag in it is emitted. Writing
+prompts have no structure to detect, so they reach a writer persona
+through its Tier 3 exemplars, and a request too long for a model is
+already caught by the context-fit check. `TAG_WRITER` and
+`TAG_LONG_CONTEXT` once held places for those two and were removed;
+a config that still claims one gets the typo warning below. Delete
+the claim.
 
 [Routing](routing.md) covers exactly how each one is detected.
 
@@ -271,9 +274,8 @@ where it was told to.
 
 At boot, Saxby checks the tags in both directions and warns when:
 
-- a claimed tag is reserved, so the claim can never match;
-- a claimed tag is not in the vocabulary at all, which is almost
-  always a typo;
+- a claimed tag is not in the vocabulary, which is a typo or a tag
+  that has since been removed, and can never match;
 - nothing claims a tag that can match, which leaves Tier 2 doing
   nothing;
 - nothing claims `TAG_CODER` or `TAG_BACKGROUND`.

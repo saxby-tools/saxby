@@ -22,11 +22,6 @@
 //  suggest it — every modern generalist reports thinking, and that
 //  would put the tag back on all of them.
 //
-//  Only tags the extractor emits are suggested. TAG_WRITER and
-//  TAG_LONG_CONTEXT are reserved — nothing emits them yet — and
-//  seeding them wrote routing rules into every generated config that
-//  could never fire.
-//
 //  TAG_VISION and TAG_AUDIO never appear here. They are requirements,
 //  and a family name says nothing about one size: "gemma" covers
 //  text-only gemma3:1b and audio-less gemma4:31b. `config generate`
