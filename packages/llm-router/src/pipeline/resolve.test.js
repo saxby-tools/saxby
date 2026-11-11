@@ -341,7 +341,7 @@ Deno.test("abstentions — the sync tiers each record a reason", () => {
 //  Tier 3 — semantic fallback
 //  ---------------------------------------------------------------------
 
-Deno.test("tier 3 — a match above threshold routes to its persona", async () => {
+Deno.test("tier 3 — a match above threshold goes to its persona", async () => {
     const config = makeConfig();
 
     //  Points straight at the coder exemplar: similarity 1.0.
@@ -479,7 +479,7 @@ Deno.test("tier 3 — does not run when tier 2 matched", async () => {
 //  Phase 2 — context fit
 //  ---------------------------------------------------------------------
 
-Deno.test("selectModel — a too-small candidate is skipped with a reason", () => {
+Deno.test("selectModel — a too-small candidate is skipped, with reason", () => {
     const config = makeConfig();
 
     const intent = {
@@ -503,7 +503,7 @@ Deno.test("selectModel — exhausting every candidate is flagged", () => {
     assertEquals(result.exhausted, true);
 });
 
-Deno.test("selectModel — an uncatalogued candidate is skipped, not fatal", () => {
+Deno.test("selectModel — an uncatalogued candidate skips, not fatal", () => {
     const config = makeConfig();
 
     const intent = { candidates: ["ghost-model", "generalist-coder"] };

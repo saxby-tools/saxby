@@ -128,7 +128,8 @@ export class OllamaAdapter {
 
         if (!res.ok) {
             throw new Error(
-                `Ollama at ${url} returned HTTP ${res.status} while fetching model tags.`,
+                `Ollama at ${url} returned HTTP ${res.status} ` +
+                    "while fetching model tags.",
             );
         }
 
@@ -168,7 +169,8 @@ export class OllamaAdapter {
 
             if (!res.ok) {
                 console.warn(
-                    `⚠️  Could not inspect '${modelName}' (HTTP ${res.status}); ` +
+                    `⚠️  Could not inspect '${modelName}' ` +
+                        `(HTTP ${res.status}); ` +
                         `defaulting max_context to ${DEFAULT_MAX_CONTEXT}.`,
                 );
                 return fallback;

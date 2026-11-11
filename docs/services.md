@@ -1,10 +1,10 @@
-#  Services
+# Services
 
 Saxby runs as a user service: a LaunchAgent on macOS, a
 `systemd --user` unit on Linux. It runs as you, reads your config,
 and needs no root.
 
-##  Install
+## Install
 
 The service runs a compiled `saxbyd`, never a source checkout. A
 service that ran `deno run` from the repository would pick up any
@@ -27,12 +27,12 @@ service so the service reads the same config `saxby` does. Every
 service also gets `NO_COLOR=1`, which keeps terminal color codes out
 of its log.
 
-| | macOS | Linux |
-| --- | --- | --- |
-| Default instance | `tools.saxby.router` | `saxbyd.service` |
-| Named instance | `tools.saxby.router.<name>` | `saxbyd-<name>.service` |
-| Service file | `~/Library/LaunchAgents/` | `~/.config/systemd/user/` |
-| Logs | `~/Library/Logs/saxby/` | `journalctl --user -u <unit>` |
+|                  | macOS                       | Linux                         |
+| ---------------- | --------------------------- | ----------------------------- |
+| Default instance | `tools.saxby.router`        | `saxbyd.service`              |
+| Named instance   | `tools.saxby.router.<name>` | `saxbyd-<name>.service`       |
+| Service file     | `~/Library/LaunchAgents/`   | `~/.config/systemd/user/`     |
+| Logs             | `~/Library/Logs/saxby/`     | `journalctl --user -u <unit>` |
 
 On macOS, the first install shows a "Background Items Added"
 notification. That is expected.
@@ -41,7 +41,7 @@ On Linux, user units stop when you log out unless lingering is on for
 your user. On a desktop that is usually what you want. On a headless
 box, turn it on yourself with `loginctl enable-linger`.
 
-##  Day to day
+## Day to day
 
 ```bash
 saxby service status
@@ -61,7 +61,7 @@ files stay.
 `saxby instance list` shows every instance, whether it is running,
 its pid and version, and whether a service is installed for it.
 
-##  The default instance and the dev instance
+## The default instance and the dev instance
 
 Three ways to run Saxby, each with its own job.
 
@@ -103,14 +103,14 @@ That run writes to the default instance's decision log, which is why
 it stays a manual step. When done, stop it and bring the service back
 with `saxby service install`.
 
-##  Backend environment
+## Backend environment
 
 Saxby does not set the backend's environment. Ollama runs under its
 own supervisor, and whatever starts a process owns its environment.
 Variables such as `OLLAMA_MAX_LOADED_MODELS` and `OLLAMA_KEEP_ALIVE`
 belong there.
 
-###  macOS with Homebrew
+### macOS with Homebrew
 
 Editing Homebrew's plist does not stick. `brew services start`
 regenerates `~/Library/LaunchAgents/sh.brew.ollama.plist` (or the
@@ -180,13 +180,13 @@ restarts Ollama for you. After an upgrade, restart it yourself:
 launchctl kickstart -k gui/$(id -u)/local.ollama
 ```
 
-###  macOS with Ollama.app
+### macOS with Ollama.app
 
 `launchctl setenv` followed by restarting the app works until the
 next reboot, then the variables are gone. For settings that must
 survive a reboot, use the LaunchAgent above instead of the app.
 
-###  Linux
+### Linux
 
 Ollama's installer sets it up as a system unit, which a
 `systemd --user` service cannot reach. Add a drop-in instead:

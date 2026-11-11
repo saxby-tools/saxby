@@ -4,7 +4,8 @@ import plist from "plist";
  * Generates a macOS LaunchDaemon/LaunchAgent XML string.
  * @param {Object} options - Override properties for the plist.
  * @param {string} options.Label - REQUIRED: The domain identifier.
- * @param {string[]} options.ProgramArguments - REQUIRED: The command and arguments.
+ * @param {string[]} options.ProgramArguments - REQUIRED: The command
+ *     and arguments.
  */
 export const generatePlist = (options = {}) => {
     // 1. Guardrails for strictly required Apple properties

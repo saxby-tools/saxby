@@ -30,7 +30,8 @@ export const statusCommand = new Command()
             }`,
         );
 
-        // 2. Check the current VRAM ceiling applied to the kernel (readable by any user)
+        // 2. Check the current VRAM ceiling applied to the kernel
+        //    (readable by any user)
         const sysctlCmd = new Deno.Command("sysctl", {
             args: ["-n", "iogpu.wired_limit_mb"],
             stdout: "piped",

@@ -1,9 +1,9 @@
-#  Architecture
+# Architecture
 
 How Saxby is put together, for anyone changing it. The reasoning
 behind each decision lives in [`AGENTS.md`](../AGENTS.md); this page is the map.
 
-##  Packages
+## Packages
 
 ```
 packages/core            shared contracts: tags, config, instances,
@@ -27,7 +27,7 @@ Everything else is platform-agnostic.
 The build makes two binaries: `saxbyd` from `llm-router`, and `saxby`
 from `cli`, which includes the guard's shell script.
 
-##  Boot
+## Boot
 
 [`packages/llm-router/src/main.js`](../packages/llm-router/src/main.js),
 in order:
@@ -56,7 +56,7 @@ in order:
 Steps 4 and 5 can fail without stopping Saxby. Observability and
 cleverness are optional; routing is not.
 
-##  Reload
+## Reload
 
 After boot, saxbyd watches the instance folder and repeats steps 2,
 3 and 5 when the config file is saved
@@ -73,7 +73,7 @@ serving, and the reason goes to the log and to
 `memory` are fixed for the life of the process, and an edit to one
 declines the whole save.
 
-##  The guard
+## The guard
 
 Before any route — chat, `explain`, `status`, the catch-all — every
 request passes
@@ -92,7 +92,7 @@ non-browser client:
 It decides "browser" by `Origin` and `Host` only, never `Sec-Fetch-*`,
 which Node's own `fetch` sends from server code.
 
-##  A routed request
+## A routed request
 
 `POST /v1/chat/completions` with `model: "saxby"`, in
 [`routes/v1/chat.js`](../packages/llm-router/src/routes/v1/chat.js),
@@ -131,15 +131,15 @@ once the guard has let it through:
 `saxby/<model>` and other model names skip steps 2 to 4 but are still
 recorded, as `bypass` and `raw`.
 
-##  The other routes
+## The other routes
 
-| Route | What it does |
-| --- | --- |
-| `GET /v1/models` | Lists `saxby` and `saxby/<model>` |
-| `POST /saxby/v1/explain` | Runs steps 2 to 4 only; returns the decision |
-| `GET /saxby/v1/status` | Instance, port, pid and version |
-| `/saxby/v1/reservations` | The memory broker's API, for `saxby reserve` |
-| anything else | Proxied to the backend unchanged, minus management |
+| Route                    | What it does                                       |
+| ------------------------ | -------------------------------------------------- |
+| `GET /v1/models`         | Lists `saxby` and `saxby/<model>`                  |
+| `POST /saxby/v1/explain` | Runs steps 2 to 4 only; returns the decision       |
+| `GET /saxby/v1/status`   | Instance, port, pid and version                    |
+| `/saxby/v1/reservations` | The memory broker's API, for `saxby reserve`       |
+| anything else            | Proxied to the backend unchanged, minus management |
 
 Each route has its own file under `routes/`, named after it. The
 catch-all,
@@ -153,7 +153,7 @@ reserve` job holds memory, a JSON POST to one of Ollama's inference
 paths goes through the same memory gate as chat, on the model its
 body names ([Memory broker](memory-broker.md#which-paths-are-gated)).
 
-##  The decision log
+## The decision log
 
 [`log/db.js`](../packages/llm-router/src/log/db.js) and
 [`log/schema.js`](../packages/llm-router/src/log/schema.js). SQLite
@@ -198,7 +198,7 @@ keeps when each user message was first seen in `message_seen`, hashes
 only, written through the queue and read in one indexed lookup when
 the note is built.
 
-##  The memory broker
+## The memory broker
 
 How heavy GPU jobs and model loads share memory; the guide is
 [Memory broker](memory-broker.md).
@@ -226,7 +226,7 @@ need no backend, no processes and no real time.
 path: `kill`, plus `sysctl` and `vm_stat` on macOS. `scripts/build.js`
 holds the list.
 
-##  Instances and services
+## Instances and services
 
 An instance is a folder holding one config, one log and its vectors
 ([`core/src/config/instance.js`](../packages/core/src/config/instance.js)).
@@ -238,7 +238,7 @@ port. See [Instances](instances.md).
 adapter per platform (`cli/src/services/`), each with the same
 methods. See [Services](services.md).
 
-##  Tests
+## Tests
 
 Colocated as `*.test.js`, run with `deno task test`. They use fixture
 catalogs and an injected embedder, so they need no daemon, no

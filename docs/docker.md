@@ -1,4 +1,4 @@
-#  Docker
+# Docker
 
 `saxbytools/saxby` holds the same `saxbyd` and `saxby` a release
 tarball carries, on a base image with nothing else in it. It is for
@@ -9,16 +9,16 @@ and the memory broker are features of a native install.
 The image holds no backend. Saxby routes to an OpenAI-compatible
 server you run yourself, such as Ollama.
 
-##  What is in the image
+## What is in the image
 
-| Thing | Value |
-| --- | --- |
-| Binaries | `/usr/local/bin/saxbyd` (the entrypoint) and `/usr/local/bin/saxby` |
-| User | `nonroot`, uid 65532 |
-| Data | `/data`, one volume: config, decision log, vectors and API token, in `/data/saxby` |
-| Port | 11435 |
-| Health check | `saxby status` |
-| Platforms | `linux/amd64`, `linux/arm64` |
+| Thing        | Value                                                                              |
+| ------------ | ---------------------------------------------------------------------------------- |
+| Binaries     | `/usr/local/bin/saxbyd` (the entrypoint) and `/usr/local/bin/saxby`                |
+| User         | `nonroot`, uid 65532                                                               |
+| Data         | `/data`, one volume: config, decision log, vectors and API token, in `/data/saxby` |
+| Port         | 11435                                                                              |
+| Health check | `saxby status`                                                                     |
+| Platforms    | `linux/amd64`, `linux/arm64`                                                       |
 
 There is no shell in the image. Run the CLI by naming it as the
 entrypoint, or with `docker exec` once Saxby is up, as below.
@@ -27,7 +27,7 @@ The examples use the tag `0.9`, which follows the newest 0.9 release.
 There is no `latest` yet, so a pull with no tag fails; see
 [Tags](#tags).
 
-##  The one thing to know first
+## The one thing to know first
 
 Saxby asks nothing of a client on its own machine and the API token
 of every other; see [The API token](configuration.md#the-api-token).
@@ -42,7 +42,7 @@ address publishes to every interface on the host, and a Compose
 network is shared by every service on it. The token is what stands
 between those and your models.
 
-##  First run
+## First run
 
 A container's own loopback cannot be reached from outside it, so in
 a container Saxby must listen on every interface. That is one flag
@@ -77,7 +77,7 @@ written without `--listen-host 0.0.0.0`. Saxby says so in its log;
 see "A container's published port does not answer" in
 [Troubleshooting](troubleshooting.md).
 
-##  Compose
+## Compose
 
 A client in another container reaches Saxby by its service name and
 sends that name as `Host`. Saxby refuses names it was not told about,
@@ -117,7 +117,7 @@ Clients on the same Compose network use `http://saxby:11435/v1` and
 the token. For Open WebUI that is `OPENAI_API_BASE_URL` and
 `OPENAI_API_KEY`.
 
-##  Reaching a backend on the host
+## Reaching a backend on the host
 
 `http://127.0.0.1:11434` inside a container is the container itself.
 If Ollama runs on the host and not in the stack:
@@ -133,7 +133,7 @@ If Ollama runs on the host and not in the stack:
   then listen on an address the container can reach, which its
   default, `127.0.0.1`, is not; see `OLLAMA_HOST` in Ollama's docs.
 
-##  Editing the config
+## Editing the config
 
 A saved config is applied live in a container too; see
 [Edits apply on save](configuration.md#edits-apply-on-save). Both
@@ -148,7 +148,7 @@ even though saxbyd keeps serving the config it had. That is a fair
 warning: the container would not survive a restart. Docker itself
 does not restart an unhealthy container.
 
-##  What does not work in a container
+## What does not work in a container
 
 - **`saxby reserve`.** The memory broker checks that a job's process
   is alive, and a container cannot see the host's processes. A
@@ -160,12 +160,12 @@ does not restart an unhealthy container.
 - **`/v1/embeddings` and Ollama's own API from another container.**
   They are not among the routes another machine may reach.
 
-##  Tags
+## Tags
 
 `X.Y.Z` is one release and never moves. `X.Y` follows the newest
 patch release. There is no `latest` until v1.0.0.
 
-##  Building it yourself
+## Building it yourself
 
 ```bash
 deno task build linux-arm64

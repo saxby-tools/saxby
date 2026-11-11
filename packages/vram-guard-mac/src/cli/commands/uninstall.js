@@ -14,7 +14,7 @@ export const uninstallCommand = new Command()
         console.log("🗑️  Preparing to remove vram-guard-mac...");
 
         const rootScript = `
-            # 1. Unload it from the kernel (ignore error if it's already unloaded)
+            # 1. Unload it from the kernel (ignore error if already unloaded)
             launchctl unload -w ${PLIST_DESTINATION} || true
 
             # 2. Delete the plist file and the script directory

@@ -30,7 +30,7 @@
         "useTabs": false,
         "indentWidth": 4,
         "proseWrap": "preserve",
-        "exclude": ["**/node_modules/", "**/*.sh"]
+        "exclude": ["**/node_modules/", "**/*.sh", ".scratch/"]
     },
     "publish": {
         "exclude": ["**/*.test.js"]

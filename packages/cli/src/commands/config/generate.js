@@ -65,7 +65,8 @@ const CONFIG_COMMENTS = {
     ],
     semantic: [
         "Semantic fallback routing configuration.",
-        "WARNING: Changing the active model invalidates cached vectors and starts a new comparison epoch.",
+        "WARNING: Changing the active model invalidates cached vectors",
+        "and starts a new comparison epoch.",
     ],
     personas: [
         "Intent personas.",
@@ -128,7 +129,8 @@ export function renderJsoncConfig(payload) {
     for (const line of json.split("\n")) {
         const match = line.match(topLevelKey);
         if (match && CONFIG_COMMENTS[match[1]]) {
-            // Blank line between sections, but not right after the opening brace.
+            // Blank line between sections, but not right after the opening
+            // brace.
             if (out[out.length - 1].trim() !== "{") out.push("");
             for (const c of CONFIG_COMMENTS[match[1]]) {
                 out.push(`${pad}// ${c}`);
@@ -276,8 +278,8 @@ export const generateCommand = new Command()
 
         if (activeAdapters.length > 1) {
             const choice = await Select.prompt({
-                message:
-                    "Multiple local AI backends detected. Select one to configure:",
+                message: "Multiple local AI backends detected. " +
+                    "Select one to configure:",
                 options: activeAdapters.map((a) => ({
                     name: `${a.entry.adapter.displayName} (${a.targetUrl})`,
                     value: a.entry.adapter.id,
@@ -288,7 +290,9 @@ export const generateCommand = new Command()
             );
         } else {
             console.log(
-                `✅ Detected active backend: ${selected.entry.adapter.displayName} (${selected.targetUrl})`,
+                `✅ Detected active backend: ` +
+                    `${selected.entry.adapter.displayName} ` +
+                    `(${selected.targetUrl})`,
             );
         }
 
@@ -301,7 +305,8 @@ export const generateCommand = new Command()
             validate: (value) => {
                 const port = parseInt(value, 10);
                 if (isNaN(port) || port < 1024 || port > 65535) {
-                    return "Port must be a valid number between 1024 and 65535.";
+                    return "Port must be a valid number " +
+                        "between 1024 and 65535.";
                 }
                 return true; // Validation passed
             },
@@ -330,14 +335,14 @@ export const generateCommand = new Command()
 
             // 4b. Universal Persona Prompts
             const coderModel = await Select.prompt({
-                message:
-                    "'Coder' persona model (optimized for code and refactoring):",
+                message: "'Coder' persona model " +
+                    "(optimized for code and refactoring):",
                 options: chatModels,
             });
 
             const writerModel = await Select.prompt({
-                message:
-                    "'Writer' persona model (optimized for prose and reasoning):",
+                message: "'Writer' persona model " +
+                    "(optimized for prose and reasoning):",
                 options: chatModels,
             });
 
@@ -355,7 +360,8 @@ export const generateCommand = new Command()
             if (remainingModels.length > 0) {
                 additionalModels = await Checkbox.prompt({
                     message:
-                        "Select any additional models to add to the routing catalog (capabilities are manually tagged later):",
+                        "Select any additional models to add to the routing " +
+                        "catalog (capabilities are manually tagged later):",
                     options: remainingModels,
                 });
             }
@@ -364,7 +370,8 @@ export const generateCommand = new Command()
             const catalog = {};
 
             console.log(
-                "\n⚙️  Inspecting selected models for hardware specifications...",
+                "\n⚙️  Inspecting selected models for hardware " +
+                    "specifications...",
             );
             for (const model of uniqueModels) {
                 const details = await selected.entry.adapter.fetchModelDetails(
@@ -410,7 +417,9 @@ export const generateCommand = new Command()
 
             const configureSemantic = await Confirm.prompt({
                 message:
-                    "Configure a Semantic Fallback model now? (Requires a dedicated embedding model like bge-m3 or nomic-embed-text)",
+                    "Configure a Semantic Fallback model now? (Requires a " +
+                    "dedicated embedding model like bge-m3 or " +
+                    "nomic-embed-text)",
                 default: false,
             });
 
@@ -435,16 +444,16 @@ export const generateCommand = new Command()
                 const defaultThreshold = String(semanticDefaults.threshold);
 
                 const semanticDimInput = await Input.prompt({
-                    message:
-                        `Vector dimensions for ${semanticModel}? (e.g., 1024 for bge-m3):`,
+                    message: `Vector dimensions for ${semanticModel}? ` +
+                        "(e.g., 1024 for bge-m3):",
                     default: defaultDim,
                     validate: (v) =>
                         !isNaN(parseInt(v, 10)) || "Must be a valid integer.",
                 });
 
                 const semanticThresholdInput = await Input.prompt({
-                    message:
-                        `Confidence threshold for ${semanticModel}? (0.0 to 1.0):`,
+                    message: `Confidence threshold for ${semanticModel}? ` +
+                        "(0.0 to 1.0):",
                     default: defaultThreshold,
                     validate: (v) => {
                         const parsed = parseFloat(v);

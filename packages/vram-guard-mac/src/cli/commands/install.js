@@ -1,8 +1,5 @@
 import { Command } from "@cliffy/command";
-import {
-    executeAsRootMac as executeAsRoot,
-    generatePlist,
-} from "@saxby/core";
+import { executeAsRootMac as executeAsRoot, generatePlist } from "@saxby/core";
 import {
     DAEMON_DIR,
     DAEMON_SCRIPT_DESTINATION,
@@ -70,7 +67,8 @@ export const installCommand = new Command()
         const tempPlistPath = await Deno.makeTempFile({ suffix: ".plist" });
         await Deno.writeTextFile(tempPlistPath, plistContent);
 
-        // 4. The Single Root Transaction: Move, permission, and load everything at once
+        // 4. The Single Root Transaction: Move, permission, and load
+        //    everything at once
         //  Unload first: launchctl load on a job that is already loaded
         //  prints "Load failed" yet exits 0, so a reinstall would report
         //  success while the old daemon kept running.

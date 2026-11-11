@@ -1,4 +1,4 @@
-#  Instances
+# Instances
 
 An instance is one running copy of Saxby with its own config, its own
 decision log and its own cached exemplar vectors. Run several side by
@@ -9,7 +9,7 @@ default instance is the one your clients use, on `:11435`. The dev
 instance runs the code you are changing on its own port, and its
 traffic never lands in the default instance's log.
 
-##  Why isolation is total
+## Why isolation is total
 
 The decision log is the point of Saxby. Threshold calibration and
 exemplar tuning are only as good as the rows they read. If the dev
@@ -17,7 +17,7 @@ instance's traffic landed beside the default instance's rows, it would
 quietly skew that data, with nothing to tell the two apart later. So
 an instance shares nothing: not config, not the log, not the vectors.
 
-##  Where instances live
+## Where instances live
 
 ```
 ~/.config/saxby/               the default instance
@@ -52,7 +52,7 @@ instance at whatever file you name, and if that is the default
 instance's log, the isolation is gone. `saxby config generate` never
 writes it.
 
-##  Naming an instance
+## Naming an instance
 
 Names use lowercase letters, digits and hyphens, and start with a
 letter or digit: `dev`, `bge-m3`, `2`. One name becomes a folder, a
@@ -68,7 +68,7 @@ which folder they used. Nothing ever creates `instances/default/`.
 `dev` is an ordinary name, not a reserved one. It is special only
 because `deno task dev` runs the source tree as the dev instance.
 
-##  Choosing an instance
+## Choosing an instance
 
 Every `saxby` command takes `-i <name>` or `--instance <name>`,
 before or after the command:
@@ -92,7 +92,7 @@ A misspelled name fails instead of creating anything. Only
 `saxby config generate` creates an instance folder, so `-i dve` stops
 with "No config found" and leaves no empty instance behind.
 
-##  Creating one
+## Creating one
 
 ```bash
 saxby -i dev config generate
@@ -107,7 +107,7 @@ To make an instance route exactly like the default instance, copy
 `listen_port`. A freshly generated config lacks any exemplars you
 added by hand.
 
-##  Seeing them all
+## Seeing them all
 
 ```bash
 saxby instance list
@@ -125,12 +125,12 @@ health check wants.
 
 STATE is one of four values:
 
-| State | Meaning |
-| --- | --- |
-| `running` | The saxbyd on this port says it is this instance |
-| `stopped` | Nothing holds this port; this instance can start |
+| State     | Meaning                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------- |
+| `running` | The saxbyd on this port says it is this instance                                          |
+| `stopped` | Nothing holds this port; this instance can start                                          |
 | `blocked` | Another instance, or a program that is not saxbyd, holds this port; this one cannot start |
-| `error` | Config missing or invalid; the reason prints below the table |
+| `error`   | Config missing or invalid; the reason prints below the table                              |
 
 SERVICE shows whether a user service is installed for the instance.
 See [Services](services.md).
@@ -144,12 +144,12 @@ curl -s http://127.0.0.1:11436/saxby/v1/status
 ```
 
 ```json
-{"instance":"dev","port":11436,"pid":80797,"version":"0.1.0"}
+{ "instance": "dev", "port": 11436, "pid": 80797, "version": "0.1.0" }
 ```
 
 `instance` is `null` for the default instance.
 
-##  When two instances want one port
+## When two instances want one port
 
 Each instance's config sets its own `listen_port`, and nothing stops
 two configs from naming the same one. The second saxbyd to start
@@ -166,7 +166,7 @@ open — and the message says so. If the holder is not saxbyd at all,
 the message says that too, and names the instance folder whose
 `listen_port` to change.
 
-##  Probing one
+## Probing one
 
 `saxby probe` scores prompts against one instance's Tier 3
 exemplars without generating a token:
@@ -178,7 +178,7 @@ saxby -i dev probe "the loop runs one too many times"
 It refuses to run if the port answers as a different instance, so it
 never scores the wrong instance's exemplars.
 
-##  Removing one
+## Removing one
 
 There is no command for it. Uninstall its service first, if it has
 one, then delete its folder:
