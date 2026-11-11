@@ -177,19 +177,43 @@ function mapCatalogSizes(config, canonicalName) {
     return sizes;
 }
 
+//  size_gib is a floor under what the backend reports, not a stand-in
+//  that the first report replaces. Ollama books a model on its MLX
+//  runner at the runner's memory at load time, which leaves out the
+//  KV cache that grows with every conversation: the runner that
+//  panicked the reference machine on Oct. 30, 2026, was booked at
+//  16.9 GiB and held 78.8 (issue #45). The budget cannot see that
+//  growth, so the catalog's number is the one thing the operator can
+//  set that the budget will never count less than. A larger report
+//  still wins: a bigger size only makes the broker more careful. The
+//  source says which number was counted.
+function floorSize(bytes, source, sizeGib) {
+    if (sizeGib === undefined) {
+        return { bytes, source };
+    }
+
+    const floor = gibToBytes(sizeGib);
+
+    if (floor <= bytes) {
+        return { bytes, source };
+    }
+
+    return { bytes: floor, source: "size_gib" };
+}
+
 /**
  * A model's size, best source first: loaded now, largest measured,
- * then the config's size_gib.
+ * then the config's size_gib, which also floors the first two.
  */
 function sizeModel(model, sizeGib, loadedByName, sizes) {
     if (loadedByName.has(model)) {
-        return { bytes: loadedByName.get(model), source: "loaded" };
+        return floorSize(loadedByName.get(model), "loaded", sizeGib);
     }
 
     const measured = sizes.get(model);
 
     if (measured) {
-        return { bytes: measured.bytes, source: "measured" };
+        return floorSize(measured.bytes, "measured", sizeGib);
     }
 
     if (sizeGib !== undefined) {
@@ -367,9 +391,20 @@ export function createBroker(options) {
             ...sizeModel(term.model, term.sizeGib, loadedByName, options.sizes),
         }));
 
+        //  A pinned model is in pinnedTerms, floored there, and is
+        //  left out here so it counts once. Every other loaded model
+        //  is floored by its own size_gib (floorSize); a model the
+        //  catalog does not know keeps the backend's number.
         const others = loaded
             .filter((model) => !pinnedNames.has(model.name))
-            .map((model) => ({ model: model.name, bytes: model.bytes }));
+            .map((model) => ({
+                model: model.name,
+                bytes: floorSize(
+                    model.bytes,
+                    "loaded",
+                    catalogSizes.get(model.name),
+                ).bytes,
+            }));
 
         return computeBudget({
             ...readCeiling(machine.reading, memory),
@@ -833,11 +868,11 @@ export function createBroker(options) {
      * admitted into the space of a model the backend has not listed
      * yet. Synchronous, with no call to the backend: it is the chat
      * route's fast path, run for every request that took no hold from
-     * gateLoad. The model is counted at its known size, measured
-     * first and then the catalog's size_gib, until the backend lists
-     * it or the hold is released; with neither size it is counted as
-     * unknown, which makes a job wait. A model loading for another
-     * request shares its hold. A pinned model needs none.
+     * gateLoad. The model is counted at its known size, the largest
+     * measured with the catalog's size_gib as its floor, until the
+     * backend lists it or the hold is released; with neither size it
+     * is counted as unknown, which makes a job wait. A model loading
+     * for another request shares its hold. A pinned model needs none.
      * @param {string} model - The model the request will be sent to.
      * @param {{ requestId: string }} context
      * @returns {{ release: () => void } | null}
