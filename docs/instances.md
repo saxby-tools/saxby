@@ -7,7 +7,10 @@ side and none of them sees the others' data.
 The usual pair is the default instance and the dev instance. The
 default instance is the one your clients use, on `:11435`. The dev
 instance runs the code you are changing on its own port, and its
-traffic never lands in the default instance's log.
+traffic never lands in the default instance's log. Its memory broker
+is its own too: reserve through the instance your clients use, and at
+boot each saxbyd names the other instances it found running
+([Memory broker](memory-broker.md#limits)).
 
 ## Why isolation is total
 
