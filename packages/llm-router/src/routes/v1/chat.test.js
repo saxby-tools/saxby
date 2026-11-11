@@ -386,6 +386,90 @@ Deno.test("token — any other Authorization is passed on", async () => {
 });
 
 //  =====================================================================
+//  Open WebUI's user headers
+//  =====================================================================
+//  The route sends the backend Content-Type and Authorization and
+//  nothing else of the client's, so Open WebUI's X-OpenWebUI-User-*
+//  headers stop here. forward_user_headers passes them on as sent,
+//  the catch-all reads the same switch (issue #22), and a header that
+//  only shares the vendor prefix is never copied.
+
+const USER_HEADERS = {
+    "X-OpenWebUI-User-Name": "Someone",
+    "X-OpenWebUI-User-Id": "00000000-0000-0000-0000-000000000000",
+    "X-OpenWebUI-User-Email": "someone@example.com",
+    "X-OpenWebUI-User-Role": "admin",
+    "X-OpenWebUI-User-Jwt": "a.b.c",
+};
+
+const OTHER_HEADER = "X-OpenWebUI-Other";
+
+function appWithConfig(config) {
+    const server = new Hono();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    server.use("*", async (c, next) => {
+        c.set("config", config);
+        c.set("log", null);
+        c.set("semantic", null);
+        c.set("broker", broker);
+        await next();
+    });
+
+    registerChatRoutes(server);
+
+    return server;
+}
+
+async function upstreamHeadersWith(config) {
+    const upstream = stubUpstream();
+
+    try {
+        const res = await quietly(() =>
+            appWithConfig(config).request("/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...USER_HEADERS,
+                    [OTHER_HEADER]: "kept",
+                },
+                body: JSON.stringify({
+                    model: "saxby/voxtral:32k",
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            })
+        );
+
+        await res.text();
+
+        return upstream.requests[0].headers;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("chat — user headers stop at Saxby by default", async () => {
+    const headers = await upstreamHeadersWith(CONFIG);
+
+    assertEquals(Object.keys(headers), ["Content-Type"]);
+});
+
+Deno.test("chat — the switch passes them on as sent", async () => {
+    const headers = await upstreamHeadersWith({
+        ...CONFIG,
+        forward_user_headers: true,
+    });
+
+    for (const [name, value] of Object.entries(USER_HEADERS)) {
+        assertEquals(headers[name.toLowerCase()], value, name);
+    }
+
+    assertEquals(headers["Content-Type"], "application/json");
+    assertEquals(OTHER_HEADER.toLowerCase() in headers, false);
+    assertEquals(Object.keys(headers).length, 6);
+});
+
+//  =====================================================================
 //  The /command strip keeps the rest of the message
 //  =====================================================================
 //  A message can be parts: text beside an image or audio. Through
