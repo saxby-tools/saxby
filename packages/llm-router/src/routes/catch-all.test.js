@@ -7,14 +7,16 @@ import { registerCatchAll } from "./catch-all.js";
 //  =====================================================================
 //  The broker's own decisions are tested in memory/broker.test.js and
 //  the shared gate in memory/gate.js. These pin the catch-all's side:
-//  with no job held nothing is read and the broker is not asked; with
-//  one held, a JSON POST to an inference path is gated on its model,
-//  a refusal never reaches the backend, and an admitted load's hold is
-//  freed. Everything else is forwarded as it came.
+//  a JSON POST to an inference path is read for its model on every
+//  request. With no job held the broker is not asked, but the load is
+//  counted until the first byte; with one held, the load is gated on
+//  its model, a refusal never reaches the backend, and an admitted
+//  load's hold is freed. Everything else is forwarded as it came, and
+//  takes no hold.
 
 const CONFIG = { upstream_url: "http://ollama.test" };
 
-const GATED_PATHS = [
+const LOAD_PATHS = [
     "/api/chat",
     "/api/generate",
     "/api/embed",
@@ -24,7 +26,7 @@ const GATED_PATHS = [
 ];
 
 function fakeBroker(options = {}) {
-    const calls = { gate: [], released: 0 };
+    const calls = { gate: [], tracked: [], released: 0 };
 
     const broker = {
         hasJobs: () => options.hasJobs ?? false,
@@ -37,6 +39,11 @@ function fakeBroker(options = {}) {
                     hold: { release: () => calls.released++ },
                 },
             );
+        },
+        trackLoad: (model, context) => {
+            calls.tracked.push({ model, requestId: context.requestId });
+
+            return { release: () => calls.released++ };
         },
     };
 
@@ -137,8 +144,39 @@ Deno.test("catch-all — no job held: the broker is not asked", async () => {
     }
 });
 
+Deno.test("catch-all — no job held: every load is counted", async () => {
+    for (const path of LOAD_PATHS) {
+        const upstream = stubUpstream();
+        const { broker, calls } = fakeBroker({ hasJobs: false });
+
+        try {
+            const res = await quietly(() =>
+                postJson(app(broker), path, { model: "voxtral:32k" })
+            );
+
+            assertEquals(calls.gate, [], path);
+            assertEquals(calls.tracked.length, 1, path);
+            assertEquals(calls.tracked[0].model, "voxtral:32k", path);
+            assertEquals(calls.released, 0, path);
+
+            await res.text();
+
+            assertEquals(res.status, 200, path);
+            assertEquals(calls.released, 1, path);
+            assertEquals(upstream.requests.length, 1, path);
+            assertEquals(
+                JSON.parse(upstream.requests[0].body).model,
+                "voxtral:32k",
+                path,
+            );
+        } finally {
+            upstream.restore();
+        }
+    }
+});
+
 Deno.test("catch-all — every inference path is gated", async () => {
-    for (const path of GATED_PATHS) {
+    for (const path of LOAD_PATHS) {
         const upstream = stubUpstream();
         const { broker, calls } = fakeBroker({ hasJobs: true });
 
@@ -175,6 +213,25 @@ Deno.test("catch-all — an admitted load's hold is freed", async () => {
 
         await res.text();
 
+        assertEquals(calls.released, 1);
+    } finally {
+        upstream.restore();
+    }
+});
+
+Deno.test("catch-all — a gated load takes no second hold", async () => {
+    const upstream = stubUpstream();
+    const { broker, calls } = fakeBroker({ hasJobs: true });
+
+    try {
+        const res = await quietly(() =>
+            postJson(app(broker), "/api/generate", { model: "voxtral:32k" })
+        );
+
+        await res.text();
+
+        assertEquals(calls.gate.length, 1);
+        assertEquals(calls.tracked, []);
         assertEquals(calls.released, 1);
     } finally {
         upstream.restore();
@@ -243,6 +300,7 @@ Deno.test("catch-all — a non-JSON body goes through ungated", async () => {
 
         assertEquals(res.status, 200);
         assertEquals(calls.gate, []);
+        assertEquals(calls.tracked, []);
         assertEquals(upstream.requests[0].body, "model: voxtral:32k");
     } finally {
         upstream.restore();
@@ -270,6 +328,7 @@ Deno.test("catch-all — no model named: goes through ungated", async () => {
 
             assertEquals(res.status, 200);
             assertEquals(calls.gate, []);
+            assertEquals(calls.tracked, []);
             assertEquals(upstream.requests[0].body, JSON.stringify(body));
         } finally {
             upstream.restore();
@@ -277,7 +336,7 @@ Deno.test("catch-all — no model named: goes through ungated", async () => {
     }
 });
 
-Deno.test("catch-all — other paths and methods are never gated", async () => {
+Deno.test("catch-all — other paths and methods take no hold", async () => {
     const cases = [
         ["GET", "/api/tags", undefined],
         ["GET", "/api/chat", undefined],
@@ -285,25 +344,28 @@ Deno.test("catch-all — other paths and methods are never gated", async () => {
         ["POST", "/api/ps", JSON.stringify({ model: "voxtral:32k" })],
     ];
 
-    for (const [method, path, body] of cases) {
-        const upstream = stubUpstream();
-        const { broker, calls } = fakeBroker({ hasJobs: true });
+    for (const hasJobs of [false, true]) {
+        for (const [method, path, body] of cases) {
+            const upstream = stubUpstream();
+            const { broker, calls } = fakeBroker({ hasJobs });
 
-        try {
-            const res = await quietly(() =>
-                app(broker).request(path, { method, body })
-            );
+            try {
+                const res = await quietly(() =>
+                    app(broker).request(path, { method, body })
+                );
 
-            await res.text();
+                await res.text();
 
-            const label = `${method} ${path}`;
+                const label = `${method} ${path} hasJobs=${hasJobs}`;
 
-            assertEquals(res.status, 200, label);
-            assertEquals(calls.gate, [], label);
-            assertEquals(upstream.requests.length, 1, label);
-            assertEquals(upstream.requests[0].method, method, label);
-        } finally {
-            upstream.restore();
+                assertEquals(res.status, 200, label);
+                assertEquals(calls.gate, [], label);
+                assertEquals(calls.tracked, [], label);
+                assertEquals(upstream.requests.length, 1, label);
+                assertEquals(upstream.requests[0].method, method, label);
+            } finally {
+                upstream.restore();
+            }
         }
     }
 });

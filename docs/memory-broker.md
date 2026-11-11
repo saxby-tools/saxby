@@ -15,9 +15,9 @@ saxbyd can't be asked at all, the job does not run.
 While a job holds memory, Saxby also makes requests wait before they
 load a model that would not fit, whether they come to its chat route
 or to one of Ollama's own inference paths through the catch-all. With
-no job running, requests are not checked, but every model the chat
-route loads is counted until the backend lists it, so a job cannot
-start in its space.
+no job running, requests are not checked, but every model a request
+loads, on either path, is counted until the backend lists it, so a
+job cannot start in its space.
 
 ## Why it exists
 
@@ -270,11 +270,15 @@ paths the catch-all forwards whose body names a model:
 | `/api/embed`, `/api/embeddings`     | Ollama's own embedding           |
 | `/v1/completions`, `/v1/embeddings` | OpenAI-style, passed through     |
 
-On the catch-all paths, a JSON POST is read for its `model` field
-only while a job holds memory. With no job held, and on every other
-path, the request streams through untouched. A body that is not
-JSON, or names no model, is forwarded as it came: the broker cannot
-judge a load it cannot name, and the backend answers for the request.
+On the catch-all paths, a POST is read for its `model` field on every
+request, job or no job: the broker needs the name to gate the load
+while a job holds memory, and to count it while none does. Reading a
+JSON body is one small wait, and the price of leaving no load
+uncounted. On every other path and method, the request streams
+through untouched and nothing is read. A body that is not JSON, or
+names no model, is forwarded as it came and takes no hold: the broker
+cannot judge a load it cannot name, and the backend answers for the
+request.
 
 A catch-all request has no decision-log row, so a refused one has no
 `memory_refused` outcome there, but its `memory_events` row is
@@ -284,13 +288,12 @@ own is post-v1 backlog.
 Clients that call Ollama directly, on its own port, never pass
 through Saxby and cannot be gated by it (see [Limits](#limits)).
 
-Every forwarded chat request's model is held in the ledger until
-the response's first byte arrives, job or no job; a catch-all request
-takes a hold only when it was gated
-([#71](https://github.com/saxby-tools/saxby/issues/71)). By then the backend
-lists the model, and its size counts as loaded instead; a model the
-backend lists is never counted twice. Until then, the space the model
-is about to take is not free: without the hold, two different models
+Every forwarded request's model, through the chat route or one of
+the catch-all paths above, is held in the ledger until the response's
+first byte arrives, job or no job. By then the backend lists the
+model, and its size counts as loaded instead; a model the backend
+lists is never counted twice. Until then, the space the model is
+about to take is not free: without the hold, two different models
 could both be let through into the same free space, and a job that
 arrives while a model is still loading could be admitted into its
 space. The hold costs no call to the backend: the model is counted
