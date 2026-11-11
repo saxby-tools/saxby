@@ -11,9 +11,14 @@
 //  with no error at all. That is the failure that shipped in M3.
 
 /**
- * The tag vocabulary, by constant name: every tag the extractor may
- * emit and a catalog or persona may claim. Add a tag here first; the
- * contract between the two sides is checked by validateTagContract.
+ * The tag vocabulary, by constant name: every tag the extractor
+ * emits and a catalog or persona may claim. Every tag here IS
+ * emitted. A tag kept in the vocabulary ahead of a detector is a
+ * routing rule that looks real and never fires, which is why
+ * TAG_WRITER and TAG_LONG_CONTEXT were removed rather than kept as
+ * placeholders. Add a tag here in the same change that makes
+ * extract.js emit it; extract.test.js holds the two sides together,
+ * and validateTagContract checks a config against them at boot.
  */
 export const TAGS = {
     CODER: "TAG_CODER",
@@ -22,8 +27,6 @@ export const TAGS = {
     DATA: "TAG_DATA",
     MATH: "TAG_MATH",
     REASONING: "TAG_REASONING",
-    WRITER: "TAG_WRITER",
-    LONG_CONTEXT: "TAG_LONG_CONTEXT",
     BACKGROUND: "TAG_BACKGROUND",
     //  REQUIREMENTS, not preferences. These filter the candidate set
     //  in resolve.js rather than contributing to a score — a model
@@ -38,28 +41,11 @@ export const TAGS = {
 };
 
 /**
- * Every tag the extractor actually emits — listed by hand, not
- * derived from TAGS. TAG_WRITER and TAG_LONG_CONTEXT are in the
- * vocabulary but nothing emits them yet, and deriving this set from
- * TAGS let configs claim them with no warning: a routing rule that
- * looked real and never fired. Add a tag here in the same change
- * that makes extract.js emit it.
+ * The vocabulary as a set, for membership checks. It is TAGS in
+ * another shape, not a second list: nothing is in the vocabulary
+ * that the extractor does not emit.
  */
-export const EMITTABLE_TAGS = new Set([
-    TAGS.CODER,
-    TAGS.MULTI_FILE,
-    TAGS.DEBUG,
-    TAGS.DATA,
-    TAGS.MATH,
-    TAGS.REASONING,
-    TAGS.BACKGROUND,
-    TAGS.VISION,
-    TAGS.AUDIO,
-]);
-
-//  In the vocabulary, not yet emitted. Claiming one is not a typo, so
-//  it gets its own warning.
-const KNOWN_TAGS = new Set(Object.values(TAGS));
+export const EMITTABLE_TAGS = new Set(Object.values(TAGS));
 
 /**
  * Default tag sets for the personas `saxby config generate`
@@ -67,8 +53,8 @@ const KNOWN_TAGS = new Set(Object.values(TAGS));
  */
 export const PERSONA_TAG_DEFAULTS = {
     coder: [TAGS.CODER, TAGS.MULTI_FILE, TAGS.DEBUG],
-    //  Empty until something emits TAG_WRITER: writer is reached
-    //  through Tier 3 exemplars.
+    //  No tags, by design: prose has no structure to detect, so
+    //  writer is reached through its Tier 3 exemplars.
     writer: [],
     reasoner: [TAGS.REASONING, TAGS.MATH],
     data: [TAGS.DATA],
@@ -114,17 +100,9 @@ export function validateTagContract(config) {
     const claimed = collectClaimedTags(config);
 
     //  Direction 1: a claimed tag the extractor never emits will never
-    //  match anything — reserved, or a typo.
+    //  match anything — a typo, or a tag the vocabulary has dropped.
     for (const tag of claimed) {
         if (EMITTABLE_TAGS.has(tag)) {
-            continue;
-        }
-
-        if (KNOWN_TAGS.has(tag)) {
-            warnings.push(
-                `Tag '${tag}' is reserved: nothing emits it yet, so ` +
-                    `claiming it never matches. Remove the claim.`,
-            );
             continue;
         }
 
@@ -136,7 +114,7 @@ export function validateTagContract(config) {
 
     //  Direction 2: nothing claims ANY tag that can match. Tier 2 is
     //  dead weight and every structural match silently falls through.
-    //  Reserved claims do not count: they can never match either.
+    //  Claims from direction 1 do not count: they can never match.
     const live = [...claimed].filter((tag) => EMITTABLE_TAGS.has(tag));
 
     if (live.length === 0) {
