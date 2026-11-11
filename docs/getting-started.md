@@ -131,9 +131,10 @@ install -m 755 saxby-$VERSION-$TARGET/{saxbyd,saxby} ~/.local/bin/
 ```
 
 Make sure `~/.local/bin` is on your `PATH`; `saxby --version` should
-answer. Downloading with `curl` avoids the macOS quarantine flag that
-a browser download gets. If you did use a browser, see
-[Troubleshooting](troubleshooting.md).
+answer. Releases after v0.9.9 are signed and notarized, so a browser
+download runs as it is. For v0.9.9 and earlier, downloading with
+`curl` avoids the quarantine flag a browser download gets; if you did
+use a browser, see [Troubleshooting](troubleshooting.md).
 
 ### From source
 
