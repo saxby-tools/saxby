@@ -30,6 +30,55 @@ Deno.test("client — Open WebUI's JWT mode names the app too", () => {
     assertEquals(found.id, "open-webui");
 });
 
+Deno.test("client — X-Title names the client, lowercased", () => {
+    const found = identify({
+        "User-Agent": "OpenAI/JS 7.20.0",
+        "X-Title": "OpenClaw",
+    });
+
+    assertEquals(found.signature, "openclaw");
+    assertEquals(found.source, "app_header");
+    assertEquals(found.userAgent, "OpenAI/JS 7.20.0");
+});
+
+Deno.test("client — a title is reduced to a signature's shape", () => {
+    const found = identify({
+        "User-Agent": "OpenAI/JS 7.20.0",
+        "X-Title": "  My Agent (dev) ",
+    });
+
+    assertEquals(found.signature, "my-agent-dev");
+});
+
+Deno.test("client — a blank X-Title is no name, User-Agent applies", () => {
+    const found = identify({
+        "User-Agent": "OpenAI/JS 7.20.0",
+        "X-Title": "   ",
+    });
+
+    assertEquals(found.signature, "openai");
+    assertEquals(found.source, "user_agent");
+});
+
+Deno.test("client — client_names keys on the X-Title signature", () => {
+    const found = identify(
+        { "User-Agent": "OpenAI/JS 7.20.0", "X-Title": "OpenClaw" },
+        { client_names: { openclaw: "OpenClaw" } },
+    );
+
+    assertEquals(found.id, "OpenClaw");
+});
+
+Deno.test("client — X-Title beats Open WebUI's presence headers", () => {
+    const found = identify({
+        "User-Agent": AIOHTTP,
+        "X-OpenWebUI-User-Id": "u1",
+        "X-Title": "My Pipeline",
+    });
+
+    assertEquals(found.signature, "my-pipeline");
+});
+
 Deno.test("client — without app headers, the User-Agent decides", () => {
     const found = identify({ "User-Agent": "OpenAI/JS 7.20.0" });
 
@@ -72,6 +121,17 @@ Deno.test("client — a Firefox extension id keeps a legal signature", () => {
         found.signature,
         "ext-1b2c3d4e-0000-4000-8000-123456789abc",
     );
+});
+
+Deno.test("client — an extension's origin beats its X-Title", () => {
+    const found = identify({
+        "User-Agent": CHROME,
+        "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "X-Title": "Grammar Check",
+    });
+
+    assertEquals(found.signature, "ext-abcdefghijklmnopabcdefghijklmnop");
+    assertEquals(found.source, "origin");
 });
 
 Deno.test("client — client_names renames an extension", () => {
