@@ -55,6 +55,7 @@ jobs:
                   scripts/deploy.js
                   scripts/docker-context.js
                   scripts/package.js
+                  scripts/sign-macos.js
                   scripts/version.js
 
             - name: Build for this runner
