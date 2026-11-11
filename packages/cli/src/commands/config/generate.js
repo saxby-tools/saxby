@@ -84,6 +84,13 @@ const CONFIG_COMMENTS = {
         "which still groups repeats. Routing, tags and timings are",
         "logged either way.",
     ],
+    log_proxy_users: [
+        "Store who called through a trusted proxy in the decision log.",
+        "A row that came through one always says which kind of proxy.",
+        "False by default: the caller's login and tailnet address name",
+        "a person or a device, so they are kept only when this is true.",
+        "The display name is never stored.",
+    ],
     forward_user_headers: [
         "Pass Open WebUI's X-OpenWebUI-User-* headers on to the backend.",
         "False by default: they name the person at the keyboard, and a",
@@ -545,6 +552,10 @@ export const generateCommand = new Command()
                 personas,
                 //  Written either way, so the file shows the choice.
                 log_prompts: logPrompts,
+                //  Written off, not asked: with no proxy trusted it
+                //  does nothing, and the comment above it says what
+                //  flipping it stores.
+                log_proxy_users: false,
                 //  Written off, not asked: the default is right for a
                 //  local backend, and the comment above it says when
                 //  to flip it.
