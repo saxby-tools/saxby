@@ -1,8 +1,4 @@
-import {
-    assertEquals,
-    assertStringIncludes,
-    assertThrows,
-} from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
     instanceLabel,
     instancePhrase,
