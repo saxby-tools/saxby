@@ -356,7 +356,7 @@ Deno.test({
         const log = await openDecisionLog(path, { log_prompts: false });
 
         assertEquals(log.migration.from, 4);
-        assertEquals(log.migration.to, 7);
+        assertEquals(log.migration.to, 8);
 
         const old = log.db.prepare(
             "SELECT prompt_hash, prompt_hash_scheme FROM decision_log",
@@ -400,6 +400,110 @@ Deno.test({
 
         assertEquals(JSON.parse(rows[0]), { reasoning_effort: "none" });
         assertEquals(rows[1], null);
+
+        log.close();
+    },
+});
+
+//  =====================================================================
+//  Who called through a proxy
+//  =====================================================================
+//  The guard's judgement of a proxied caller (security/guard.test.js
+//  pins what it says). The row always keeps which proxy; the login
+//  and address only while log_proxy_users is on.
+
+const CALLER = {
+    kind: "tailscale-serve",
+    user: "someone@example.com",
+    addr: "100.64.0.7",
+};
+
+const SELECT_CALLER = "SELECT proxy_kind AS k, proxy_user AS u, " +
+    "proxy_addr AS a FROM decision_log ORDER BY id";
+
+Deno.test({
+    name: "log — a proxied row keeps the proxy, not the person",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+        const proxied = await entryFor(log, "hello");
+        const tagged = await entryFor(log, "hello");
+        const local = await entryFor(log, "hello");
+
+        proxied.proxyCaller = CALLER;
+        tagged.proxyCaller = { ...CALLER, user: null };
+        local.proxyCaller = null;
+
+        log.record(proxied);
+        log.record(tagged);
+        log.record(local);
+        log.flush();
+
+        assertEquals(log.db.prepare(SELECT_CALLER).all(), [
+            { k: "tailscale-serve", u: null, a: null },
+            { k: "tailscale-serve", u: null, a: null },
+            { k: null, u: null, a: null },
+        ]);
+
+        log.close();
+    },
+});
+
+Deno.test({
+    name: "log — log_proxy_users stores the login and address",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openDecisionLog(":memory:", {
+            log_proxy_users: true,
+        });
+        const proxied = await entryFor(log, "hello");
+        const tagged = await entryFor(log, "hello");
+        const local = await entryFor(log, "hello");
+
+        proxied.proxyCaller = CALLER;
+        tagged.proxyCaller = { ...CALLER, user: null };
+
+        log.record(proxied);
+        log.record(tagged);
+        log.record(local);
+        log.flush();
+
+        assertEquals(log.db.prepare(SELECT_CALLER).all(), [
+            { k: "tailscale-serve", u: "someone@example.com", a: "100.64.0.7" },
+            { k: "tailscale-serve", u: null, a: "100.64.0.7" },
+            { k: null, u: null, a: null },
+        ]);
+
+        log.close();
+    },
+});
+
+Deno.test({
+    name: "log — setLogProxyUsers changes what the next row stores",
+    sanitizeResources: false,
+    fn: async () => {
+        const log = await openLog();
+        const entries = [];
+
+        for (let i = 0; i < 3; i += 1) {
+            const entry = await entryFor(log, "hello");
+
+            entry.proxyCaller = CALLER;
+            entries.push(entry);
+        }
+
+        log.record(entries[0]);
+        log.setLogProxyUsers(true);
+        log.record(entries[1]);
+        log.setLogProxyUsers(false);
+        log.record(entries[2]);
+        log.flush();
+
+        assertEquals(log.db.prepare(SELECT_CALLER).all(), [
+            { k: "tailscale-serve", u: null, a: null },
+            { k: "tailscale-serve", u: "someone@example.com", a: "100.64.0.7" },
+            { k: "tailscale-serve", u: null, a: null },
+        ]);
 
         log.close();
     },

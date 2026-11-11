@@ -101,6 +101,9 @@ const INSERT_COLUMNS = [
     "client_defaults",
     "message_prefix",
     "message_prefix_gap_hours",
+    "proxy_kind",
+    "proxy_user",
+    "proxy_addr",
 ];
 
 const INSERT_SQL = `
@@ -424,8 +427,9 @@ export function openDecisionLogReadOnly(path) {
  * Opens (and migrates) the decision log, returning a writer.
  *
  * @param {string} path
- * @param {Object} config - reads config.log_prompts, once; a reload
- *   passes the new value to setLogPrompts
+ * @param {Object} config - reads config.log_prompts and
+ *   config.log_proxy_users, once; a reload passes the new values to
+ *   setLogPrompts and setLogProxyUsers
  * @param {string | null} keyPath - the instance's prompt-hash.key;
  *   null keeps a key for this process only
  */
@@ -469,8 +473,10 @@ export async function openDecisionLog(path, config, keyPath = null) {
     let dropped = 0;
     let seenPrunedAt = 0;
 
-    //  Changed only by setLogPrompts, when the config is reloaded.
+    //  Changed only by setLogPrompts and setLogProxyUsers, when the
+    //  config is reloaded.
     let logPrompts = Boolean(config.log_prompts);
+    let logProxyUsers = Boolean(config.log_proxy_users);
 
     //  ---- Flush -----------------------------------------------------
 
@@ -543,6 +549,13 @@ export async function openDecisionLog(path, config, keyPath = null) {
     function record(entry) {
         const logId = crypto.randomUUID();
 
+        //  What the guard established about a caller that came through
+        //  a trusted proxy (security/guard.js), or null. The kind is a
+        //  fact about the path; the login and address name a person or
+        //  a device, and are kept only when asked, like prompt text.
+        const caller = entry.proxyCaller ?? null;
+        const identified = logProxyUsers ? caller : null;
+
         const row = {
             log_id: logId,
             request_id: entry.requestId,
@@ -595,6 +608,10 @@ export async function openDecisionLog(path, config, keyPath = null) {
             //  latest note named. NULL gap means no sentence.
             message_prefix: toBool(Boolean(entry.messagePrefix)),
             message_prefix_gap_hours: entry.messagePrefix?.gapHours ?? null,
+
+            proxy_kind: caller?.kind ?? null,
+            proxy_user: identified?.user ?? null,
+            proxy_addr: identified?.addr ?? null,
         };
 
         enqueue({
@@ -755,6 +772,15 @@ export async function openDecisionLog(path, config, keyPath = null) {
         logPrompts = Boolean(enabled);
     }
 
+    /**
+     * Turns a proxied caller's login and address on or off for rows
+     * written from now on. The proxy's kind is stored either way.
+     * @param {boolean} enabled - the reloaded config's log_proxy_users
+     */
+    function setLogProxyUsers(enabled) {
+        logProxyUsers = Boolean(enabled);
+    }
+
     //  ---- Lifecycle --------------------------------------------------
 
     function close() {
@@ -799,6 +825,7 @@ export async function openDecisionLog(path, config, keyPath = null) {
         findFirstSeen,
         rememberFirstSeen,
         setLogPrompts,
+        setLogProxyUsers,
         flush,
         close,
         stats,

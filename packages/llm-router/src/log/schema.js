@@ -30,7 +30,7 @@
  * The schema version a fully migrated file carries in its meta table.
  * Equals the number of migrations.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /**
  * The migrations, applied in order; the index plus one is the version
@@ -301,6 +301,25 @@ export const MIGRATIONS = [
 
     ALTER TABLE decision_log ADD COLUMN message_prefix INTEGER;
     ALTER TABLE decision_log ADD COLUMN message_prefix_gap_hours REAL;
+    `,
+    //  ---- v8 --------------------------------------------------------
+    //  Who called through a trusted proxy (docs/configuration.md,
+    //  "Trusted proxies"). client_id stays the app, from its
+    //  User-Agent, so the client-mix view keeps counting apps.
+    //
+    //  proxy_kind is a fact about the path, the configured proxy's
+    //  kind, on every row that came through one; NULL on every other.
+    //  proxy_user is the login Serve attached, NULL for a tagged
+    //  device, and proxy_addr the one tailnet address it wrote. Those
+    //  two name a person or a device, so they are stored only with
+    //  log_proxy_users on (db.js), the way prompt text is. The display
+    //  name Serve sends beside the login is never stored. All three
+    //  come from the guard's own judgement, never from a header on a
+    //  direct request, which any local program could have sent.
+    `
+    ALTER TABLE decision_log ADD COLUMN proxy_kind TEXT;
+    ALTER TABLE decision_log ADD COLUMN proxy_user TEXT;
+    ALTER TABLE decision_log ADD COLUMN proxy_addr TEXT;
     `,
 ];
 
