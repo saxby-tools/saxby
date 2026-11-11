@@ -1,7 +1,7 @@
-#  Saxby
+# Saxby
 
 A local-first LLM routing daemon in a Deno/JSR monorepo. It sits in
-front of an OpenAI-compatible backend, listens on `:11435` by default, and 
+front of an OpenAI-compatible backend, listens on `:11435` by default, and
 routes each request to the right local model. The goal is closing the gap to
 a frontier-model experience on owned hardware, with a transparent
 archive of every routing decision so the system gets tuned against
@@ -18,7 +18,7 @@ migration.
 > it is required, and none of it should be treated as a constraint on
 > a contribution.
 
-##  Packages
+## Packages
 
 ```
 packages/core            shared contracts: tags, config, plist, root,
@@ -40,15 +40,15 @@ share with kernel parameters at boot, which is a docs recipe, not a
 daemon. The platform goes last in the name so a sibling, if one ever
 appears, sorts beside it.
 
-##  Routing tiers
+## Routing tiers
 
-| Tier | Mechanism | Resolves to |
-| ---- | --------- | ----------- |
-| 1 | `/coder`, `saxby/<model>` bypass, raw model name | exactly what was asked |
-| 2a | structural tags ∩ catalog `capabilities` | best-scoring model |
-| 2b | structural tags ∩ persona `tags` | persona `default_model` |
-| 3 | embedding similarity vs persona exemplars | persona `default_model` |
-| — | global fallback | `global_default_model` |
+| Tier | Mechanism                                        | Resolves to             |
+| ---- | ------------------------------------------------ | ----------------------- |
+| 1    | `/coder`, `saxby/<model>` bypass, raw model name | exactly what was asked  |
+| 2a   | structural tags ∩ catalog `capabilities`         | best-scoring model      |
+| 2b   | structural tags ∩ persona `tags`                 | persona `default_model` |
+| 3    | embedding similarity vs persona exemplars        | persona `default_model` |
+| —    | global fallback                                  | `global_default_model`  |
 
 Tiers 1 and 2 are synchronous. Tier 3 makes one embedding call and
 runs **only** when 1 and 2 both abstain, so the fast path never
@@ -57,7 +57,7 @@ awaits. `resolveIntent` stays sync; `resolvePipeline` is async.
 Every tier that declines records a REASON. A silent fallback once made
 a config bug look like correct behaviour for an entire milestone.
 
-##  Working in this repo
+## Working in this repo
 
 Read the file before answering anything about it. Do not reconstruct
 contents from an earlier turn — open it. If a fact can be checked with
@@ -70,14 +70,17 @@ Never propose a commit for code that does not exist yet, and never
 propose one that leaves the tree broken — files that cannot work
 independently go in the same commit.
 
-###  Code style
+### Code style
 
 Hard 80-column limit. Generous vertical whitespace. One condition per
 line. Modular if-guards rather than else chains. Constants at the top
 of the file. Functions ordered by call order, never called before they
 are defined. Filenames use dots, never underscores (`detect.test.js`).
+`deno fmt` owns the formatting, Markdown included, and CI checks it;
+headings take one space after the hashes, as the formatter writes
+them.
 
-###  Commands
+### Commands
 
 ```bash
 deno task test                                    # unit tests
@@ -101,7 +104,7 @@ daemon and no user config. Assertions naming real model ids belong in
 a personal smoke script, not the suite — one machine's catalog is not
 a project invariant.
 
-##  Milestones
+## Milestones
 
 M1 config chokepoint, M2 proxy and SSE, M3 tiers 1–2, M4 SQLite
 decision log, M5 Tier 3 semantic — **all complete**.
@@ -119,11 +122,11 @@ Then cross-compilation for four targets with `--include` for the vram
 script. Then a `ServiceAdapter` registry (`LaunchdAdapter`,
 `SystemdAdapter`) behind `saxby service
 install|uninstall|status|restart`. Then release
-automation and packaging *scaffolding* (nfpm, PKGBUILD, Homebrew
+automation and packaging _scaffolding_ (nfpm, PKGBUILD, Homebrew
 templates — no maintained repos). Documentation last, since it
 describes a surface that moves until the service work lands.
 
-##  Decisions already made
+## Decisions already made
 
 These are settled with reasoning attached. Changing one is fine — but
 bring evidence against the reasoning, not a preference.
@@ -147,7 +150,7 @@ Tier 3 embeddings for free.
 
 **Tags are routing preferences, not capability claims.** If two models
 claim the same tag it stops differentiating, so a model that is
-*capable* of something should not claim the tag unless it is the one
+_capable_ of something should not claim the tag unless it is the one
 that work should reach.
 
 **`TAG_VISION` and `TAG_AUDIO` are REQUIREMENTS, not preferences.**
@@ -535,7 +538,7 @@ maintainer, no GFM tables, no position offsets); port-per-client
 identification (multiplies config); FFI for NLP (per-platform build
 matrix, against the portability story).
 
-##  Ecosystem facts
+## Ecosystem facts
 
 True regardless of whose machine this runs on.
 
@@ -600,7 +603,7 @@ LaunchAgent that re-runs it at login races the backend's own agent —
 login items start in no fixed order. The reliable place for a
 backend's environment is the supervisor that starts it.
 
-##  Open questions — revisit with data, not intuition
+## Open questions — revisit with data, not intuition
 
 Each question below is also a public Discussion, where the human
 side of the conversation happens: margin gate #14, Tier 2 confidence
@@ -614,7 +617,7 @@ personas are within a hair) is designed but not built. Wait until
 logged traffic shows whether tight margins actually correlate with
 misroutes.
 
-Escalating *weak* Tier 2 matches to Tier 3 needs a notion of Tier 2
+Escalating _weak_ Tier 2 matches to Tier 3 needs a notion of Tier 2
 confidence that does not exist yet.
 
 Threshold calibration from logged `confidence` values, bucketed by
@@ -624,7 +627,7 @@ Override capture — nothing currently records "the router chose X and
 the user forced Y." It is the highest-value missing signal, because it
 is the only ground truth the system can collect about itself.
 
-##  Post-v1 backlog
+## Post-v1 backlog
 
 Not scheduled. Grouped by what unlocks what. Discussed publicly as
 routing #18, infrastructure #19, and discovery and UX #20.
@@ -647,7 +650,7 @@ as a drop-in.
 
 **Discovery and UX:** user-defined custom tags, so specialised fields
 can adapt personas without forking; model capability auto-discovery
-for *measurable* facts only (params, quant; context length and
+for _measurable_ facts only (params, quant; context length and
 TAG_VISION / TAG_AUDIO are already discovered), with preference tags
 staying curated; optional-dependency presets for third-party
 SQLite viewers, delegating rather than vendoring; a hardware analyser
@@ -656,7 +659,7 @@ the hot path.
 
 ---
 
-##  Reference environment
+## Reference environment
 
 **This section describes the maintainer's setup. It is not a
 requirement and not a constraint on contributions.** It is here
