@@ -112,10 +112,11 @@ Deno.test("override — a slash command is stripped from the prompt", () => {
 //  ---------------------------------------------------------------------
 //  Tag contract
 //  ---------------------------------------------------------------------
-//  EMITTABLE_TAGS in core is a hand-written list of what this file
-//  emits. The boot-time contract check trusts it, so if the two drift
-//  a config can claim a tag that never fires, with no warning. One
-//  request per tag; the union must equal the list exactly.
+//  EMITTABLE_TAGS in core is the whole vocabulary, and the boot-time
+//  contract check trusts it. A tag added to the vocabulary that this
+//  file never emits lets a config claim a rule that never fires, with
+//  no warning. One request per tag; the union must equal the
+//  vocabulary exactly.
 
 Deno.test("contract — EMITTABLE_TAGS is exactly what extract emits", () => {
     const traceback = [

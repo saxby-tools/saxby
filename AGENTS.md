@@ -500,8 +500,11 @@ nothing. If saxbyd can't be asked, the job does not run: no answer
 from the broker is never a yes. `--no-broker` runs anyway, loudly.
 The gate runs only while a job holds a reservation, chat and
 catch-all alike; with none, the chat route only notes the load in
-the ledger, synchronously, so the fast path never awaits. The gate
-is load-bearing; its log rows are not.
+the ledger, synchronously, so the fast path never awaits. Each
+instance's broker is its own, and a boot names every other instance
+it finds running, since a job reserved there is invisible here; a
+shared ledger is post-v1 work. The gate is load-bearing; its log
+rows are not.
 
 **saxbyd may start exactly `kill`, `sysctl` and `vm_stat`, by absolute
 path.** It used to start nothing, so a bug in request handling could
@@ -538,7 +541,11 @@ Saxby's own job); a hosted typed-classification API (unpublished
 architecture, breaks local-first); `lil-marky` (young, single
 maintainer, no GFM tables, no position offsets); port-per-client
 identification (multiplies config); FFI for NLP (per-platform build
-matrix, against the portability story).
+matrix, against the portability story); `TAG_WRITER` and
+`TAG_LONG_CONTEXT` (removed Nov. 10, 2026 — writer prompts reach the
+writer persona through Tier 3 exemplars, and long context is already
+a requirement enforced by the context-fit check, so neither tag had a
+job; a writer tag belongs to user-defined custom tags, post-v1).
 
 ## Ecosystem facts
 
@@ -648,7 +655,7 @@ semantic search over the prompt archive (prompts are already
 embedded); middleware hooks for response transforms; per-persona
 `num_ctx` via the Ollama-native capability layer; a multilingual
 extractor, which the canonical tag vocabulary was designed to accept
-as a drop-in.
+as a drop-in; a machine-wide memory ledger across instances.
 
 **Discovery and UX:** user-defined custom tags, so specialised fields
 can adapt personas without forking; model capability auto-discovery

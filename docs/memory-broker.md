@@ -613,7 +613,8 @@ the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
   sooner. [Issue #35](https://github.com/saxby-tools/saxby/issues/35).
 - **Linux is minimal**, as described under Platforms.
   [Issue #36](https://github.com/saxby-tools/saxby/issues/36).
-- **Instances do not share a ledger.** A job reserved through the dev
-  instance is invisible to the default instance's gate. Reserve
-  through the instance your clients use.
-  [Issue #37](https://github.com/saxby-tools/saxby/issues/37).
+- **Instances do not share a ledger.** Each instance's broker is its
+  own, so a job reserved through the dev instance is invisible to the
+  default instance's gate. Reserve through the instance your clients
+  use. At boot, saxbyd names every other instance running on this
+  machine, with its port, so the gap is seen rather than silent.

@@ -29,6 +29,8 @@ const BIG_CONTEXT = 100000;
 //  `specialist` and `generalist-coder` deliberately overlap on
 //  TAG_CODER so tie-break behaviour is exercised. Only `specialist`
 //  claims TAG_MULTI_FILE. Only `seeing-model` claims TAG_VISION.
+//  `fallback-model` and the writer persona claim nothing: writer is
+//  a Tier 3 destination, reached by exemplar and by /writer only.
 function makeConfig(overrides = {}) {
     return {
         global_default_model: "fallback-model",
@@ -37,7 +39,7 @@ function makeConfig(overrides = {}) {
             "fallback-model": {
                 name: "fallback-model",
                 max_context: BIG_CONTEXT,
-                capabilities: ["TAG_WRITER"],
+                capabilities: [],
             },
             "generalist-coder": {
                 name: "generalist-coder",
@@ -52,7 +54,7 @@ function makeConfig(overrides = {}) {
             "seeing-model": {
                 name: "seeing-model",
                 max_context: BIG_CONTEXT,
-                capabilities: ["TAG_WRITER", "TAG_VISION"],
+                capabilities: ["TAG_VISION"],
             },
             "tiny-model": {
                 name: "tiny-model",
@@ -67,7 +69,7 @@ function makeConfig(overrides = {}) {
             },
             writer: {
                 default_model: "fallback-model",
-                tags: ["TAG_WRITER"],
+                tags: [],
             },
         },
         ...overrides,

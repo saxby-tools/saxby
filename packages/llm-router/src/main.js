@@ -40,6 +40,7 @@ import { openDecisionLog } from "./log/db.js";
 import { createBroker } from "./memory/broker.js";
 import { describePinnedGap } from "./memory/budget.js";
 import { isProcessAlive } from "./memory/liveness.js";
+import { announceNeighbours } from "./memory/neighbours.js";
 import { createSizeCache } from "./memory/sizes.js";
 import { probeProfile } from "./semantic/embed.js";
 import { warmExemplars } from "./semantic/exemplars.js";
@@ -716,6 +717,12 @@ async function main() {
     const broker = startBroker(config, log);
 
     await announceBroker(broker);
+
+    //  Each instance's broker is its own. One line per other instance
+    //  whose saxbyd answers, so a job reserved there is a known gap,
+    //  not a silent one. Observability only: never on the request
+    //  path, and never allowed to stop a boot.
+    await announceNeighbours({ instance }).catch(() => {});
 
     const app = new Hono();
 
