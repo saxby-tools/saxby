@@ -165,6 +165,7 @@ live, like any other saxbyd.
 | `semantic`               | off                      | Tier 3 settings; leave out to disable                                                   |
 | `route_background_tasks` | `true`                   | Treat `stream: false` as background                                                     |
 | `log_prompts`            | `false`                  | Store prompt text in the decision log                                                   |
+| `log_proxy_users`        | `false`                  | Store who called through a trusted proxy; see [Logging](#logging)                       |
 | `forward_user_headers`   | `false`                  | Pass Open WebUI's user headers to the backend; see [User headers](#user-headers)        |
 | `client_names`           | `{}`                     | Friendly names for client signatures                                                    |
 | `client_defaults`        | `{}`                     | Request fields filled in for a client; see [Client defaults](#client-defaults)          |
@@ -512,6 +513,26 @@ many file paths or code fences it held. Never the paths, never the
 code, never a heading. A fence's language name is kept when it looks
 like one (`js`, `c++`), and dropped when it does not.
 
+**Who called through a proxy is off unless you turn it on.** A
+request that came in through a [trusted proxy](#trusted-proxies)
+always records which kind of proxy it took, in `proxy_kind`; every
+other row has NULL there. The caller's login, from
+`Tailscale-User-Login`, and the device's tailnet address, from
+`X-Forwarded-For`, name a person or a device, so they are stored, in
+`proxy_user` and `proxy_addr`, only with `log_proxy_users` set to
+`true`. A tagged device sends no login, so its row keeps the address
+alone. The display name is never stored. `client_id` stays the app,
+from its `User-Agent`, so client counts are unchanged. All three
+columns come from the guard's own judgement that the request came
+through the proxy: a program on this machine that sends the same
+headers directly is logged as a local client, with nothing in them.
+Edits apply on save. `saxby config generate` writes the key off, with
+a comment saying what it stores.
+
+```jsonc
+"log_proxy_users": true
+```
+
 **The hash is keyed per instance.** The key is 32 random bytes in
 `prompt-hash.key`, beside the config, made on first boot and never
 rotated by Saxby. A plain hash would let anyone with the file hash a
@@ -742,16 +763,15 @@ Proxied clients reach `/v1/chat/completions` and `/v1/models` only.
 The memory broker, the status and explain routes and Ollama's own API
 stay on this machine.
 
-Two limits to know:
+The decision log names the app, from its `User-Agent`, as it does
+for local clients, and marks every row that came through the proxy
+with its kind. Which person or device called is stored only with
+`log_proxy_users` on; see [Logging](#logging).
 
-- The decision log names the app, from its `User-Agent`, as it does
-  for local clients. It does not record which person or device
-  called.
-  [Issue #50](https://github.com/saxby-tools/saxby/issues/50) tracks
-  that.
-- A program on this machine can send the same headers Serve does.
-  It could already call Saxby directly, so this gives it nothing
-  new, and it would need the token to be treated as proxied.
+One limit to know: a program on this machine can send the same
+headers Serve does. It could already call Saxby directly, so this
+gives it nothing new, and it would need the token to be treated as
+proxied.
 
 ## Browser extensions
 
