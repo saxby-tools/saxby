@@ -8,7 +8,7 @@ coding model, a photo to a model that can see, a quick question to a
 fast one. Every decision is logged with its reasons. The
 command-line tool that configures it is `@saxby/cli`.
 
-##  Install
+## Install
 
 With Deno 2.9 or newer. The daemon may start only the programs the
 memory broker needs, each by its full path.
@@ -24,7 +24,7 @@ On Linux, use `--allow-run=/usr/bin/kill` instead. Release binaries,
 a Homebrew tap, an AUR package and a Docker image are listed in
 [Getting started](https://github.com/saxby-tools/saxby/blob/main/docs/getting-started.md).
 
-##  Example
+## Example
 
 Run the daemon, then ask it how it would route a request. The explain
 route returns the full decision as JSON and never calls the backend,
@@ -44,7 +44,7 @@ curl -s http://127.0.0.1:11435/saxby/v1/explain \
 Point your apps at `http://127.0.0.1:11435/v1` with the model
 `saxby`, or at `saxby/<model>` to bypass routing.
 
-##  Options
+## Options
 
 ```
 Usage: saxbyd [options]
@@ -57,7 +57,7 @@ Options:
   -h, --help             Print this help and exit.
 ```
 
-##  Documentation
+## Documentation
 
 - [Routing](https://github.com/saxby-tools/saxby/blob/main/docs/routing.md)
 - [Configuration](https://github.com/saxby-tools/saxby/blob/main/docs/configuration.md)
@@ -65,6 +65,6 @@ Options:
 - [Memory broker](https://github.com/saxby-tools/saxby/blob/main/docs/memory-broker.md)
 - [Architecture](https://github.com/saxby-tools/saxby/blob/main/docs/architecture.md)
 
-##  License
+## License
 
 AGPL-3.0-or-later.
