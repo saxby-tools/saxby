@@ -1,4 +1,4 @@
-#  Configuration
+# Configuration
 
 Saxby reads one config file per instance: at boot, and again each
 time the file is saved. The quickest way to get one is to let `saxby`
@@ -12,7 +12,7 @@ It finds the backend, asks which model plays which role, suggests
 capability tags, and writes the file. Everything below is for reading
 and editing that file afterward.
 
-##  Where it lives
+## Where it lives
 
 The default instance reads `~/.config/saxby/config.jsonc`. A named
 instance reads `~/.config/saxby/instances/<name>/config.jsonc`. If
@@ -24,7 +24,7 @@ works too. If both exist, Saxby loads `config.jsonc` and warns that
 it is ignoring the other one, so an edit to the wrong file does not
 silently do nothing.
 
-##  Edits apply on save
+## Edits apply on save
 
 saxbyd watches the file and applies an edit when you save it. There
 is nothing to restart. A request already in flight finishes on the
@@ -97,7 +97,7 @@ are no longer watched; restart once.
 `deno task dev` restarts on code changes and applies config changes
 live, like any other saxbyd.
 
-##  A complete example
+## A complete example
 
 ```jsonc
 {
@@ -151,49 +151,49 @@ live, like any other saxbyd.
 }
 ```
 
-##  Top-level fields
+## Top-level fields
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `listen_port` | `11435` | Port Saxby listens on, 1024 to 65535 |
-| `listen_host` | `127.0.0.1` | Address Saxby binds; see [Listening](#listening) |
-| `allowed_hosts` | `[]` | Extra `Host` names the guard accepts; see [Listening](#listening) |
-| `upstream_url` | `http://127.0.0.1:11434` | The OpenAI-compatible backend |
-| `global_default_model` | required | Catalog key used when nothing matches |
-| `catalog` | required | The models Saxby may route to |
-| `personas` | required | Named routing roles; may be empty |
-| `semantic` | off | Tier 3 settings; leave out to disable |
-| `route_background_tasks` | `true` | Treat `stream: false` as background |
-| `log_prompts` | `false` | Store prompt text in the decision log |
-| `forward_user_headers` | `false` | Pass Open WebUI's user headers to the backend; see [User headers](#user-headers) |
-| `client_names` | `{}` | Friendly names for client signatures |
-| `client_defaults` | `{}` | Request fields filled in for a client; see [Client defaults](#client-defaults) |
-| `message_prefix` | off | A time note on every user message; see [Message prefix](#message-prefix) |
-| `log_path` | instance folder | Where the decision log lives |
-| `memory` | all defaults | Memory broker settings; see [Memory](#memory) |
-| `trusted_proxies` | `[]` | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies) |
-| `allowed_origins` | `[]` | Browser extensions allowed to call Saxby; see [Browser extensions](#browser-extensions) |
+| Field                    | Default                  | Meaning                                                                                 |
+| ------------------------ | ------------------------ | --------------------------------------------------------------------------------------- |
+| `listen_port`            | `11435`                  | Port Saxby listens on, 1024 to 65535                                                    |
+| `listen_host`            | `127.0.0.1`              | Address Saxby binds; see [Listening](#listening)                                        |
+| `allowed_hosts`          | `[]`                     | Extra `Host` names the guard accepts; see [Listening](#listening)                       |
+| `upstream_url`           | `http://127.0.0.1:11434` | The OpenAI-compatible backend                                                           |
+| `global_default_model`   | required                 | Catalog key used when nothing matches                                                   |
+| `catalog`                | required                 | The models Saxby may route to                                                           |
+| `personas`               | required                 | Named routing roles; may be empty                                                       |
+| `semantic`               | off                      | Tier 3 settings; leave out to disable                                                   |
+| `route_background_tasks` | `true`                   | Treat `stream: false` as background                                                     |
+| `log_prompts`            | `false`                  | Store prompt text in the decision log                                                   |
+| `forward_user_headers`   | `false`                  | Pass Open WebUI's user headers to the backend; see [User headers](#user-headers)        |
+| `client_names`           | `{}`                     | Friendly names for client signatures                                                    |
+| `client_defaults`        | `{}`                     | Request fields filled in for a client; see [Client defaults](#client-defaults)          |
+| `message_prefix`         | off                      | A time note on every user message; see [Message prefix](#message-prefix)                |
+| `log_path`               | instance folder          | Where the decision log lives                                                            |
+| `memory`                 | all defaults             | Memory broker settings; see [Memory](#memory)                                           |
+| `trusted_proxies`        | `[]`                     | Proxies allowed to pass requests in; see [Trusted proxies](#trusted-proxies)            |
+| `allowed_origins`        | `[]`                     | Browser extensions allowed to call Saxby; see [Browser extensions](#browser-extensions) |
 
 The API token is not in this file; see [The API token](#the-api-token).
 
 Unknown fields are an error, not a warning. A misspelled key such as
 `listen_prot` stops the boot instead of being ignored.
 
-##  The catalog
+## The catalog
 
 Each key is a model id exactly as the backend knows it. The key is
 what Saxby sends upstream, and what `global_default_model`,
 `default_model` and the `saxby/<model>` bypass refer to.
 
-| Field | Meaning |
-| --- | --- |
-| `name` | Required. Set it to the key; routing uses the key |
-| `max_context` | The model's context window in tokens |
-| `capabilities` | Tags this model should win, default none |
-| `system_prefix` | Optional text sent as a system message to this model only |
-| `description` | Optional note for humans |
-| `pinned` | `true` keeps this model's space safe from heavy jobs, default `false` |
-| `size_gib` | Optional size in GiB, used until the backend reports a whole load |
+| Field           | Meaning                                                               |
+| --------------- | --------------------------------------------------------------------- |
+| `name`          | Required. Set it to the key; routing uses the key                     |
+| `max_context`   | The model's context window in tokens                                  |
+| `capabilities`  | Tags this model should win, default none                              |
+| `system_prefix` | Optional text sent as a system message to this model only             |
+| `description`   | Optional note for humans                                              |
+| `pinned`        | `true` keeps this model's space safe from heavy jobs, default `false` |
+| `size_gib`      | Optional size in GiB, used until the backend reports a whole load     |
 
 `max_context` matters. Saxby estimates the size of the whole
 request, every message and not just the last one, and skips any model
@@ -216,23 +216,23 @@ space counts as taken whether it is loaded or not, so a job started
 with `saxby reserve` can never displace it. Pin the models you keep
 loaded. See [Memory broker](memory-broker.md).
 
-##  Capability tags
+## Capability tags
 
 Tags are how Tier 2 routes. Each request is scanned for structure —
 code fences, file paths, stack traces, tables, math — and gets tags.
 A model that claims a tag in `capabilities` is a candidate for it.
 
-| Tag | Emitted for |
-| --- | --- |
-| `TAG_CODER` | Code fences, inline code, diffs, stack traces, file paths |
-| `TAG_MULTI_FILE` | Two or more distinct file paths |
-| `TAG_DEBUG` | Stack traces |
-| `TAG_DATA` | JSON payloads, CSV-style rows, Markdown tables |
-| `TAG_MATH` | Block math, LaTeX environments, TeX macros |
-| `TAG_REASONING` | Math, alongside `TAG_MATH` |
-| `TAG_BACKGROUND` | Requests that set `stream: false` |
-| `TAG_VISION` | Image parts — a requirement |
-| `TAG_AUDIO` | Audio parts — a requirement |
+| Tag              | Emitted for                                               |
+| ---------------- | --------------------------------------------------------- |
+| `TAG_CODER`      | Code fences, inline code, diffs, stack traces, file paths |
+| `TAG_MULTI_FILE` | Two or more distinct file paths                           |
+| `TAG_DEBUG`      | Stack traces                                              |
+| `TAG_DATA`       | JSON payloads, CSV-style rows, Markdown tables            |
+| `TAG_MATH`       | Block math, LaTeX environments, TeX macros                |
+| `TAG_REASONING`  | Math, alongside `TAG_MATH`                                |
+| `TAG_BACKGROUND` | Requests that set `stream: false`                         |
+| `TAG_VISION`     | Image parts — a requirement                               |
+| `TAG_AUDIO`      | Audio parts — a requirement                               |
 
 `TAG_WRITER` and `TAG_LONG_CONTEXT` are **reserved**. They are in the
 vocabulary, but nothing emits them yet, so a claim on either never
@@ -242,7 +242,7 @@ reach a writer persona through its Tier 3 exemplars instead.
 [Routing](routing.md) covers exactly how each one is detected.
 
 **A tag is a routing preference, not a capability claim.** A model
-that *can* write code should not claim `TAG_CODER` unless it is the
+that _can_ write code should not claim `TAG_CODER` unless it is the
 model code should go to. If two models claim the same tag, the tag
 stops telling them apart. For that reason `config generate` suggests
 `TAG_REASONING` for reasoning specialists only; a generalist that
@@ -282,7 +282,7 @@ These are warnings, not errors. The router still runs, but the
 symptom — everything falls back to the global default — looks like
 working software, so read them.
 
-##  Background tasks
+## Background tasks
 
 With `route_background_tasks` on, which is the default, any request
 that sets `stream: false` is tagged `TAG_BACKGROUND` and skips the
@@ -301,16 +301,16 @@ yours does, those requests take the background route too. Set
 `route_background_tasks` to `false` to turn the shortcut off;
 non-streaming requests are then routed like any other.
 
-##  Personas
+## Personas
 
 A persona is a named role with a `default_model`.
 
-| Field | Meaning |
-| --- | --- |
-| `default_model` | Required. The catalog key this persona routes to |
-| `tags` | Tags that route to this persona when no model claims them |
-| `exemplars` | Example prompts for Tier 3 |
-| `description` | Optional note for humans |
+| Field           | Meaning                                                   |
+| --------------- | --------------------------------------------------------- |
+| `default_model` | Required. The catalog key this persona routes to          |
+| `tags`          | Tags that route to this persona when no model claims them |
+| `exemplars`     | Example prompts for Tier 3                                |
+| `description`   | Optional note for humans                                  |
 
 Persona tags are Tier 2's second chance. If a request's tags match no
 model's `capabilities` but do match a persona's `tags`, it goes to
@@ -338,7 +338,7 @@ exactly like a threshold that is too high, and lowering the threshold
 widens every persona at once. `saxby probe` shows scores and margins
 without generating a token.
 
-##  Semantic (Tier 3)
+## Semantic (Tier 3)
 
 ```jsonc
 "semantic": {
@@ -370,7 +370,7 @@ The active profile's model is pinned for the memory broker without
 being asked, since Tier 3 loads it. A profile may carry `size_gib`
 like a catalog entry.
 
-##  Message prefix
+## Message prefix
 
 Off by default. When on, every user message reaches the model with a
 note in front saying when Saxby first saw it, in your zone:
@@ -393,11 +393,11 @@ would.
 }
 ```
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `enabled` | `false` | Put the note on every user message |
-| `timezone` | the machine's zone | An IANA name such as `Europe/Berlin`; the note is written in it |
-| `gap_sentence` | `true` | Say how long the conversation was idle on the latest note |
+| Field          | Default            | Meaning                                                         |
+| -------------- | ------------------ | --------------------------------------------------------------- |
+| `enabled`      | `false`            | Put the note on every user message                              |
+| `timezone`     | the machine's zone | An IANA name such as `Europe/Berlin`; the note is written in it |
+| `gap_sentence` | `true`             | Say how long the conversation was idle on the latest note       |
 
 Why every message, and why this shape, is in the lab's report
 [A sense of time](https://saxby-tools.github.io/lab/reports/003-time-notes/).
@@ -446,7 +446,7 @@ that states the user's zone itself (Open WebUI puts the browser's
 zone in its prompt variables) is not read yet. That is a separate
 issue once a client sends it in a header.
 
-##  Listening
+## Listening
 
 Saxby listens on `127.0.0.1` by default, so only programs on this
 machine can reach it. Two fields change that. Both are accepted as
@@ -454,10 +454,10 @@ written, because the machine is yours; Saxby's part is to say plainly
 what each one means, and to ask every other machine for
 [the API token](#the-api-token).
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `listen_host` | `127.0.0.1` | The address saxbyd binds |
-| `allowed_hosts` | `[]` | `Host` names accepted besides the local ones |
+| Field           | Default     | Meaning                                      |
+| --------------- | ----------- | -------------------------------------------- |
+| `listen_host`   | `127.0.0.1` | The address saxbyd binds                     |
+| `allowed_hosts` | `[]`        | `Host` names accepted besides the local ones |
 
 `listen_host` takes any address the system accepts. `0.0.0.0` binds
 every interface, and saxbyd says so at every boot. A request from
@@ -487,7 +487,7 @@ Both can be written at generation time, without prompts:
 saxby config generate --listen-host 0.0.0.0 --allowed-hosts saxby
 ```
 
-##  Logging
+## Logging
 
 The decision log is a plain SQLite file in the instance's folder,
 `decision-log.db`, with no password and no encryption. Anyone who can
@@ -558,7 +558,7 @@ when it sends an `X-Title` header; see
 The raw `User-Agent` is stored on every row too, so a name added
 later still applies to old traffic.
 
-###  Client defaults
+### Client defaults
 
 `client_defaults` fills in a request field for one client when the
 request leaves it out. It is for a client you cannot configure, such
@@ -599,7 +599,7 @@ restrict what a client may do.
 its log then stays in the instance's folder. See
 [Instances](instances.md).
 
-##  User headers
+## User headers
 
 Open WebUI can name the person at the keyboard on every request it
 sends. With `ENABLE_FORWARD_USER_INFO_HEADERS` set, each one carries
@@ -622,7 +622,7 @@ them on exactly as Open WebUI sent them. Edits apply on save. `saxby
 config generate` writes the key off, with a comment saying when to
 flip it.
 
-##  The API token
+## The API token
 
 A client on the same machine sends Saxby nothing to prove itself. A
 request that does not come straight from this machine must carry the
@@ -691,7 +691,7 @@ the memory broker included. Run only containers you would trust with
 that. Checked on Docker Desktop for macOS, with Saxby installed on
 the Mac and listening on `127.0.0.1`.
 
-##  Trusted proxies
+## Trusted proxies
 
 Saxby listens on `127.0.0.1` and refuses every request that came
 through a proxy. `trusted_proxies` names the one exception: Tailscale
@@ -753,7 +753,7 @@ Two limits to know:
   It could already call Saxby directly, so this gives it nothing
   new, and it would need the token to be treated as proxied.
 
-##  Browser extensions
+## Browser extensions
 
 Saxby refuses every request from a browser, because any web page you
 visit can send requests to your machine. `allowed_origins` lets in a
@@ -804,7 +804,7 @@ signature in `client_names` and `client_defaults`:
 
 Every boot prints the allowed extensions.
 
-##  Memory
+## Memory
 
 ```jsonc
 "memory": {
@@ -818,18 +818,18 @@ Settings for the memory broker, which keeps heavy GPU jobs and model
 loads from overfilling GPU memory. The section is optional and the
 broker is always on.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `margin_gib` | `8` | Kept free beyond every model and job |
-| `wait_timeout_s` | `120` | How long a job or model load waits for room |
-| `heartbeat_interval_s` | `10` | How often jobs check in and dead ones are dropped |
-| `ceiling_gib` | none | The GPU's maximum, used only when it can't be measured |
+| Field                  | Default | Meaning                                                |
+| ---------------------- | ------- | ------------------------------------------------------ |
+| `margin_gib`           | `8`     | Kept free beyond every model and job                   |
+| `wait_timeout_s`       | `120`   | How long a job or model load waits for room            |
+| `heartbeat_interval_s` | `10`    | How often jobs check in and dead ones are dropped      |
+| `ceiling_gib`          | none    | The GPU's maximum, used only when it can't be measured |
 
 On Linux, set `ceiling_gib`: the Linux probe measures no ceiling yet,
 and without one every job is refused. See
 [Memory broker](memory-broker.md).
 
-##  When the file is wrong
+## When the file is wrong
 
 A config that fails validation stops the boot. Saxby prints
 `❌ Invalid config in <path>:` and lists everything that failed; see
