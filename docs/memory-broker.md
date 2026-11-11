@@ -1,4 +1,4 @@
-#  Memory broker
+# Memory broker
 
 Saxby keeps heavy GPU jobs and model loads from overfilling GPU
 memory. Put `saxby reserve` in front of a heavy command:
@@ -19,7 +19,7 @@ no job running, requests are not checked, but every model the chat
 route loads is counted until the backend lists it, so a job cannot
 start in its space.
 
-##  Why it exists
+## Why it exists
 
 On Oct. 27, 2026, a PyTorch job on a Mac's GPU grew to 122 GiB while
 two models held about 40 GiB. On Apple Silicon, GPU memory is
@@ -30,20 +30,20 @@ Two things were missing. Nothing kept the job from starting while the
 models were loaded, and nothing kept it from growing once it ran. The
 broker fixes the first; the PyTorch cap fixes the second.
 
-##  Using it
+## Using it
 
 ```
 saxby [-i <name>] reserve --gib <N> [--timeout <s>] [--label <text>]
     [--no-broker] -- <command> [args...]
 ```
 
-| Flag | Meaning |
-| --- | --- |
-| `--gib` | Required. GPU memory to reserve, in GiB; decimals are fine |
-| `--timeout` | Seconds to wait for room. Default: `memory.wait_timeout_s` |
-| `--label` | Name in the log. Default: the command's name |
-| `--no-broker` | Run without asking saxbyd. Prints a warning |
-| `-i` | Ask a named instance's saxbyd instead of the default one |
+| Flag          | Meaning                                                    |
+| ------------- | ---------------------------------------------------------- |
+| `--gib`       | Required. GPU memory to reserve, in GiB; decimals are fine |
+| `--timeout`   | Seconds to wait for room. Default: `memory.wait_timeout_s` |
+| `--label`     | Name in the log. Default: the command's name               |
+| `--no-broker` | Run without asking saxbyd. Prints a warning                |
+| `-i`          | Ask a named instance's saxbyd instead of the default one   |
 
 The `--` is required. Everything after it is the job, passed through
 untouched, so the job's own flags are never read as Saxby's.
@@ -54,29 +54,29 @@ its own.
 Size the reservation to the job's peak, not its average. The PyTorch
 cap makes a job that goes over fail with an out-of-memory error.
 
-###  Exit codes
+### Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| the job's | The job ran; this is its own exit code |
-| 128 + n | The job was killed by signal n (143 for SIGTERM) |
-| 2 | A usage error, such as no command after `--` |
-| 69 | saxbyd could not be asked, so nothing ran |
-| 75 | saxbyd refused: no room within the timeout, or never enough |
-| 127 | The command could not be started |
-| 130 | You pressed Ctrl-C while it waited; nothing ran |
+| Code      | Meaning                                                     |
+| --------- | ----------------------------------------------------------- |
+| the job's | The job ran; this is its own exit code                      |
+| 128 + n   | The job was killed by signal n (143 for SIGTERM)            |
+| 2         | A usage error, such as no command after `--`                |
+| 69        | saxbyd could not be asked, so nothing ran                   |
+| 75        | saxbyd refused: no room within the timeout, or never enough |
+| 127       | The command could not be started                            |
+| 130       | You pressed Ctrl-C while it waited; nothing ran             |
 
 75 means "try again later." 69 means "the broker is missing." A skill
 can retry on the first and should stop on the second.
 
-###  Signals
+### Signals
 
 `SIGTERM` sent to `saxby reserve` is passed on to the job. Ctrl-C in
 a terminal already reaches the job, because both share the terminal's
 process group, so the wrapper does not pass it on a second time. A
 second Ctrl-C can cut a job's own cleanup short.
 
-##  The budget
+## The budget
 
 One formula decides both jobs and model loads:
 
@@ -84,12 +84,12 @@ One formula decides both jobs and model loads:
 free = ceiling - margin - pinned - loaded - reserved
 ```
 
-| Term | What it is |
-| --- | --- |
-| ceiling | The most the GPU may hold. On macOS, `iogpu.wired_limit_mb` |
-| margin | Kept free beyond everything else. `memory.margin_gib` |
-| pinned | Every pinned model at full size, loaded or not |
-| loaded | Every other model the backend holds now |
+| Term     | What it is                                                    |
+| -------- | ------------------------------------------------------------- |
+| ceiling  | The most the GPU may hold. On macOS, `iogpu.wired_limit_mb`   |
+| margin   | Kept free beyond everything else. `memory.margin_gib`         |
+| pinned   | Every pinned model at full size, loaded or not                |
+| loaded   | Every other model the backend holds now                       |
 | reserved | Every job, plus forwarded loads the backend does not list yet |
 
 A job of N GiB runs when N fits in `free`.
@@ -126,7 +126,7 @@ The current budget, in bytes:
 curl -s http://127.0.0.1:11435/saxby/v1/reservations
 ```
 
-##  Pinned models
+## Pinned models
 
 Mark a model pinned in the catalog:
 
@@ -194,7 +194,7 @@ since the real size changes with the context length the backend
 loads, so `size_gib` is a stand-in until the first whole load, not a
 floor under later ones.
 
-##  Model loads
+## Model loads
 
 Ollama decides whether a model fits by looking at memory that is free
 right now. A job that has reserved 40 GiB but not used it yet looks
@@ -234,16 +234,16 @@ the machine, not the request. `GET /saxby/v1/reservations` shows the
 budget now, and the `memory_events` table records what the gate
 decided for real requests ([The log](#the-log)).
 
-###  Which paths are gated
+### Which paths are gated
 
 Saxby's own chat route, `POST /v1/chat/completions`, and the six
 paths the catch-all forwards whose body names a model:
 
-| Path | What it is |
-| --- | --- |
-| `/api/chat`, `/api/generate` | Ollama's own chat and completion |
-| `/api/embed`, `/api/embeddings` | Ollama's own embedding |
-| `/v1/completions`, `/v1/embeddings` | OpenAI-style, passed through |
+| Path                                | What it is                       |
+| ----------------------------------- | -------------------------------- |
+| `/api/chat`, `/api/generate`        | Ollama's own chat and completion |
+| `/api/embed`, `/api/embeddings`     | Ollama's own embedding           |
+| `/v1/completions`, `/v1/embeddings` | OpenAI-style, passed through     |
 
 On the catch-all paths, a JSON POST is read for its `model` field
 only while a job holds memory. With no job held, and on every other
@@ -289,7 +289,7 @@ The decision-log row of a refused request has the outcome
 `memory_refused`. Its `request_id` matches a row in `memory_events`
 that says why.
 
-##  Reservations end with their process
+## Reservations end with their process
 
 A reservation lists two processes: the `saxby reserve` wrapper and
 the job it started. Every heartbeat interval, saxbyd asks whether
@@ -312,7 +312,7 @@ If saxbyd cannot check processes at all, it keeps every reservation
 and warns once. Dropping one whose job still holds memory is the
 unsafe direction.
 
-##  The cap inside a job
+## The cap inside a job
 
 On macOS, `saxby reserve` sets two variables in the job's
 environment:
@@ -387,7 +387,7 @@ call for a job: the limit lives inside the process, and mflux and
 mlx-lm take no flag for it. The ledger counts an MLX job either way,
 so it cannot start beside models it would not fit with.
 
-##  When saxbyd cannot be asked
+## When saxbyd cannot be asked
 
 The broker fails closed. `saxby reserve` refuses to run the job, and
 exits 69, when:
@@ -405,7 +405,7 @@ again on its next heartbeat. Should saxbyd refuse that, the wrapper
 says so once, and the job runs on uncounted; saxbyd is not asked
 again.
 
-##  Config
+## Config
 
 ```jsonc
 "memory": {
@@ -417,12 +417,12 @@ again.
 
 The whole section is optional. The broker is always on.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `margin_gib` | `8` | Kept free beyond every model and job |
-| `wait_timeout_s` | `120` | How long a job or model load waits for room |
-| `heartbeat_interval_s` | `10` | How often wrappers check in and dead jobs are reaped |
-| `ceiling_gib` | none | The ceiling, used only when it can't be measured |
+| Field                  | Default | Meaning                                              |
+| ---------------------- | ------- | ---------------------------------------------------- |
+| `margin_gib`           | `8`     | Kept free beyond every model and job                 |
+| `wait_timeout_s`       | `120`   | How long a job or model load waits for room          |
+| `heartbeat_interval_s` | `10`    | How often wrappers check in and dead jobs are reaped |
+| `ceiling_gib`          | none    | The ceiling, used only when it can't be measured     |
 
 **The margin** is room for what the budget cannot see: memory the
 kernel wires for itself, and a model whose real size has drifted from
@@ -441,7 +441,7 @@ most one interval.
 ceiling. A measured ceiling always wins. Set it to the GPU's real
 maximum; a guess that is too high lets the broker overfill the GPU.
 
-##  The API
+## The API
 
 All under `/saxby/v1/reservations`, behind the same guard as every
 route: local, non-browser clients only. Sizes are whole bytes.
@@ -491,7 +491,7 @@ means saxbyd restarted.
 `GET /saxby/v1/reservations` returns `budget`, `reservations` and
 `holds`.
 
-##  The log
+## The log
 
 Every wait, admission, refusal, release and reap is a row in the
 `memory_events` table of the instance's decision log. Each row holds
@@ -527,7 +527,7 @@ sqlite3 -header -column ~/.config/saxby/decision-log.db \
      WHERE d.outcome = 'memory_refused' AND m.event = 'refuse';"
 ```
 
-##  Platforms
+## Platforms
 
 Each platform's code sits behind a small adapter, like the service
 and backend adapters.
@@ -537,8 +537,7 @@ and backend adapters.
 0, macOS uses its own default, and only Metal reports that. Ollama
 logs it but has no API for it, so the broker calls the ceiling
 unknown and uses `memory.ceiling_gib`; the boot line says so, and
-the PyTorch cap is then not set (see [The cap inside a
-job](#the-cap-inside-a-job)). Usage is wired pages from `vm_stat`.
+the PyTorch cap is then not set (see [The cap inside a job](#the-cap-inside-a-job)). Usage is wired pages from `vm_stat`.
 
 saxbyd may start exactly three programs, by absolute path, for this:
 `/bin/kill`, `/usr/sbin/sysctl` and `/usr/bin/vm_stat`. It may start
@@ -563,7 +562,7 @@ There is no MLX cap to build: MLX takes its limit from a call, not
 the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
 (see [The cap inside a job](#the-cap-inside-a-job)).
 
-##  Limits
+## Limits
 
 - **Clients that call Ollama directly cannot be gated.** A client
   pointed at Ollama's own port, such as OpenClaw's memory search,
