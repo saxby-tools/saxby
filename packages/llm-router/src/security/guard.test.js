@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import {
     buildAllowedHosts,
     inspectRequest,
+    judgeRequest,
     TOKEN_INVALID,
     TOKEN_MISSING,
     TOKEN_UNAVAILABLE,
@@ -416,6 +417,108 @@ Deno.test("proxy — naming a proxy changes nothing for local clients", () => {
     assertEquals(
         proxiedCode(CURL, { path: "/api/pull" }),
         "management_not_allowed",
+    );
+});
+
+//  =====================================================================
+//  Who called through the proxy
+//  =====================================================================
+//  judgeRequest says what the guard established about a proxied
+//  caller, for the decision log: the proxy's kind from the config,
+//  the login Serve attached and the one tailnet address. Only an
+//  allowed, proxied request has one. The same headers on a direct
+//  request name nobody: a local program could have typed them.
+
+const CALLER = {
+    kind: "tailscale-serve",
+    user: "someone@example.com",
+    addr: "100.64.0.7",
+};
+
+function judgeProxied(headers, overrides = {}) {
+    return judgeRequest({
+        headers: new Headers(headers),
+        path: "/v1/chat/completions",
+        method: "POST",
+        remoteHostname: "127.0.0.1",
+        trustedProxies: TRUSTED,
+        tokenState: TOKEN_VALID,
+        ...overrides,
+    });
+}
+
+Deno.test("caller — a named Serve says who called", () => {
+    assertEquals(judgeProxied(SERVE), { verdict: null, proxyCaller: CALLER });
+});
+
+Deno.test("caller — a tagged device has an address and no login", () => {
+    const tagged = { ...SERVE };
+
+    delete tagged["tailscale-user-login"];
+    delete tagged["tailscale-user-name"];
+    delete tagged["tailscale-user-profile-pic"];
+    delete tagged["tailscale-headers-info"];
+
+    assertEquals(judgeProxied(tagged), {
+        verdict: null,
+        proxyCaller: { ...CALLER, user: null },
+    });
+});
+
+Deno.test("caller — a tailnet IPv6 address is kept as sent", () => {
+    const headers = { ...SERVE, "x-forwarded-for": "fd7a:115c:a1e0::7" };
+
+    assertEquals(judgeProxied(headers).proxyCaller.addr, "fd7a:115c:a1e0::7");
+});
+
+Deno.test("caller — a local client is nobody", () => {
+    for (const headers of [OPEN_WEBUI, OPENCLAW, CURL]) {
+        assertEquals(judgeProxied(headers), {
+            verdict: null,
+            proxyCaller: null,
+        });
+    }
+});
+
+Deno.test("caller — Serve's headers on a direct request name nobody", () => {
+    //  No forwarding header, so the request is direct and allowed,
+    //  and the login beside it is not read.
+    const headers = {
+        ...CURL,
+        "tailscale-user-login": "someone@example.com",
+        "tailscale-user-name": "Someone",
+    };
+
+    assertEquals(judgeProxied(headers), { verdict: null, proxyCaller: null });
+    assertEquals(judgeProxied(headers, { tokenState: TOKEN_MISSING }), {
+        verdict: null,
+        proxyCaller: null,
+    });
+});
+
+Deno.test("caller — a refused request names nobody", () => {
+    const cases = [
+        [SERVE, { trustedProxies: [] }],
+        [SERVE, { tokenState: TOKEN_MISSING }],
+        [{ ...SERVE, "host": "other.example.ts.net" }, {}],
+        [{ ...SERVE, "x-forwarded-for": "203.0.113.7" }, {}],
+        [{ ...SERVE, "tailscale-funnel-request": "?1" }, {}],
+        [SERVE, { path: "/saxby/v1/reservations" }],
+    ];
+
+    for (const [headers, overrides] of cases) {
+        const judged = judgeProxied(headers, overrides);
+
+        assertEquals(judged.verdict === null, false, JSON.stringify(overrides));
+        assertEquals(judged.proxyCaller, null, JSON.stringify(overrides));
+    }
+});
+
+Deno.test("caller — inspectRequest is the verdict alone", () => {
+    assertEquals(inspectProxied(SERVE), null);
+    assertEquals(
+        inspectProxied(SERVE, { trustedProxies: [] }),
+        judgeProxied(SERVE, { trustedProxies: [] }).verdict,
     );
 });
 

@@ -42,7 +42,9 @@
 //  so a web page cannot claim an extension's. Web pages are never let
 //  in: they would also need CORS answers, which Saxby does not give.
 //
-//  Pure: a request in, a refusal or null out. Wired in by main.js.
+//  Pure: a request in, a refusal or null out, plus who called when
+//  the request came through a trusted proxy, for the decision log.
+//  Wired in by main.js.
 
 import { EXTENSION_ORIGIN } from "@saxby/core";
 
@@ -71,6 +73,15 @@ const SERVE_HEADERS = new Set([
 //  Serve sets this on traffic from the public internet (Funnel) and
 //  removes a client's own copy first, so finding it settles it.
 const FUNNEL_HEADER = "tailscale-funnel-request";
+
+//  Serve names the person a device belongs to in this header, and
+//  removes a client's own copy first. A tagged device gets none. Read
+//  only once a request has passed every proxy check: on a direct
+//  request a local program could have sent it. The display name and
+//  profile picture Serve sends beside it are never read.
+const SERVE_LOGIN_HEADER = "tailscale-user-login";
+
+const FORWARDED_FOR_HEADER = "x-forwarded-for";
 
 //  Every tailnet device has an address in 100.64.0.0/10 or in
 //  fd7a:115c:a1e0::/48. Serve overwrites X-Forwarded-For with the
@@ -382,6 +393,20 @@ function notTrusted(message) {
 }
 
 /**
+ * The trusted proxy a request's Host names, or null.
+ * @param {string} hostname - as hostnameOf reads it
+ * @param {{ kind: string, host: string }[]} trustedProxies
+ * @returns {{ kind: string, host: string } | null}
+ */
+function findNamedProxy(hostname, trustedProxies) {
+    const named = trustedProxies.find((proxy) =>
+        proxy.host.toLowerCase() === hostname
+    );
+
+    return named ?? null;
+}
+
+/**
  * Judges a request that carries forwarding headers, once the operator
  * has named a proxy. Every check must pass; the request is refused
  * at the first that does not.
@@ -422,20 +447,16 @@ function inspectProxied(request, trustedProxies) {
     }
 
     const host = headers.get("host") ?? "";
-    const hostname = hostnameOf(host);
+    const named = findNamedProxy(hostnameOf(host), trustedProxies);
 
-    const named = trustedProxies.some((proxy) =>
-        proxy.host.toLowerCase() === hostname
-    );
-
-    if (!named) {
+    if (named === null) {
         return notTrusted(
             `Refused: Host '${host}' is not a proxy named in ` +
                 `trusted_proxies.`,
         );
     }
 
-    const forwardedFor = headers.get("x-forwarded-for") ?? "";
+    const forwardedFor = headers.get(FORWARDED_FOR_HEADER) ?? "";
 
     if (!isTailnetAddress(forwardedFor)) {
         return notTrusted(
@@ -456,6 +477,27 @@ function inspectProxied(request, trustedProxies) {
     }
 
     return null;
+}
+
+/**
+ * What the guard established about a caller, once inspectProxied has
+ * passed the request: which proxy it came through, the login Serve
+ * attached, or null for a tagged device, and the one tailnet address
+ * Serve wrote. Only the decision log reads this, and only the kind
+ * is stored unless `log_proxy_users` says otherwise (log/db.js).
+ * @param {Headers} headers
+ * @param {{ kind: string, host: string }[]} trustedProxies
+ * @returns {{ kind: string, user: string | null, addr: string }}
+ */
+function describeProxyCaller(headers, trustedProxies) {
+    const hostname = hostnameOf(headers.get("host") ?? "");
+    const named = findNamedProxy(hostname, trustedProxies);
+
+    return {
+        kind: named.kind,
+        user: headers.get(SERVE_LOGIN_HEADER),
+        addr: (headers.get(FORWARDED_FOR_HEADER) ?? "").trim(),
+    };
 }
 
 /**
@@ -505,8 +547,15 @@ function inspectOrigin(origin, request, allowedOrigins) {
     );
 }
 
+//  A judgement with nothing to say about the caller: every refusal,
+//  and every allowed request that did not come through a proxy.
+function withoutCaller(verdict) {
+    return { verdict, proxyCaller: null };
+}
+
 /**
- * Decides whether a request may proceed.
+ * Decides whether a request may proceed, and says what the guard
+ * established about who sent it.
  * @param {{ headers: Headers, path: string, method?: string,
  *     remoteHostname?: string,
  *     trustedProxies?: { kind: string, host: string }[],
@@ -519,10 +568,17 @@ function inspectOrigin(origin, request, allowedOrigins) {
  *     TOKEN_ constants and
  *     counts as missing when left out, as an unknown remoteHostname
  *     counts as another machine: both fail closed.
- * @returns {{ status: number, code: string, message: string } | null}
- *     null to allow; otherwise what to refuse with.
+ * @returns {{ verdict: { status: number, code: string,
+ *     message: string } | null,
+ *     proxyCaller: { kind: string, user: string | null,
+ *     addr: string } | null }}
+ *     verdict is null to allow; otherwise what to refuse with.
+ *     proxyCaller is set for an allowed request that came through a
+ *     trusted proxy, and null for every other, a direct request that
+ *     sends Serve's own headers included: on a loopback connection
+ *     with no forwarding header, nothing in those headers is trusted.
  */
-export function inspectRequest(request) {
+export function judgeRequest(request) {
     const { headers, path } = request;
     const trustedProxies = request.trustedProxies ?? [];
     const allowedOrigins = request.allowedOrigins ?? [];
@@ -532,13 +588,13 @@ export function inspectRequest(request) {
 
     if (proxyHeader) {
         if (trustedProxies.length === 0) {
-            return refusal(
+            return withoutCaller(refusal(
                 403,
                 "proxy_attribution_required",
                 `Refused: the request carries '${proxyHeader}', so it ` +
                     `came through a proxy. Saxby only serves clients ` +
                     `on this machine directly. ${DOCS_HINT}`,
-            );
+            ));
         }
     }
 
@@ -548,7 +604,7 @@ export function inspectRequest(request) {
         const verdict = inspectToken(tokenState);
 
         if (verdict) {
-            return verdict;
+            return withoutCaller(verdict);
         }
     }
 
@@ -558,14 +614,23 @@ export function inspectRequest(request) {
         const verdict = inspectOrigin(origin, request, allowedOrigins);
 
         if (verdict) {
-            return verdict;
+            return withoutCaller(verdict);
         }
     }
 
     //  Everything below is about local names, which a proxied request
     //  never carries. It has its own checks, and passes or fails there.
     if (proxyHeader) {
-        return inspectProxied(request, trustedProxies);
+        const verdict = inspectProxied(request, trustedProxies);
+
+        if (verdict) {
+            return withoutCaller(verdict);
+        }
+
+        return {
+            verdict: null,
+            proxyCaller: describeProxyCaller(headers, trustedProxies),
+        };
     }
 
     //  A connection from another address, token in hand. The token
@@ -573,44 +638,54 @@ export function inspectRequest(request) {
     //  so it gets the client routes and not the whole surface.
     if (!direct) {
         if (!isRemoteRoute(request.method, path)) {
-            return refusal(
+            return withoutCaller(refusal(
                 403,
                 "remote_path_not_allowed",
                 `Refused: '${request.method} ${path}' is served only ` +
                     `to programs on the machine running Saxby. Other ` +
                     `machines get ${CLIENT_ROUTES_HINT}. ${DOCS_HINT}`,
-            );
+            ));
         }
     }
 
     const host = headers.get("host");
 
     if (host === null) {
-        return refusal(
+        return withoutCaller(refusal(
             403,
             "host_not_allowed",
             `Refused: the request has no Host header. ${DOCS_HINT}`,
-        );
+        ));
     }
 
     if (!allowedHosts.has(hostnameOf(host))) {
-        return refusal(
+        return withoutCaller(refusal(
             403,
             "host_not_allowed",
             `Refused: Host '${host}' is not a local name. Use ` +
                 `127.0.0.1 or localhost, or add it to allowed_hosts ` +
                 `in config.jsonc. ${DOCS_HINT}`,
-        );
+        ));
     }
 
     if (isManagementPath(path)) {
-        return refusal(
+        return withoutCaller(refusal(
             403,
             "management_not_allowed",
             `Refused: '${path}' manages Ollama's models and is not ` +
                 `served through Saxby. Call Ollama directly. ${DOCS_HINT}`,
-        );
+        ));
     }
 
-    return null;
+    return withoutCaller(null);
+}
+
+/**
+ * Decides whether a request may proceed: judgeRequest's verdict alone.
+ * @param {Parameters<typeof judgeRequest>[0]} request
+ * @returns {{ status: number, code: string, message: string } | null}
+ *     null to allow; otherwise what to refuse with.
+ */
+export function inspectRequest(request) {
+    return judgeRequest(request).verdict;
 }
