@@ -13,7 +13,7 @@ once, when they start, so a daemon that runs before anyone logs in
 means a backend started at login reads the raised value with no
 restart. The script knows nothing about any backend.
 
-##  Install
+## Install
 
 The command comes with `@saxby/cli`; install that package and the
 subcommand is there.
@@ -24,7 +24,7 @@ deno install -g -n saxby \
     --allow-run --allow-sys=uid jsr:@saxby/cli
 ```
 
-##  Example
+## Example
 
 Install the LaunchDaemon, check it, remove it. Each step asks for
 administrator rights, since the daemon lives under `/Library`.
@@ -42,7 +42,7 @@ can never wire. The script sources that file as root, so it refuses
 one that root does not own or that anyone else can write. Uninstall
 leaves the file in place.
 
-##  Use from code
+## Use from code
 
 The export is one cliffy command, for a program that wants to mount
 it under its own name.
@@ -56,11 +56,11 @@ await new Command()
     .parse(Deno.args);
 ```
 
-##  Documentation
+## Documentation
 
 - [Memory broker](https://github.com/saxby-tools/saxby/blob/main/docs/memory-broker.md)
 - [Services](https://github.com/saxby-tools/saxby/blob/main/docs/services.md)
 
-##  License
+## License
 
 AGPL-3.0-or-later.
