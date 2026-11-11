@@ -1,4 +1,4 @@
-#  Roadmap
+# Roadmap
 
 Milestones and their phases, ticked as they land. Open questions and
 ideas past v1 live in
@@ -33,7 +33,7 @@ known gaps are issues labelled
   - [x] Write Cosine Similarity math to compare incoming prompt vectors against cached persona exemplars.
   - [x] Key the exemplar vector cache by embedding model so profiles can be A/B compared.
 - [ ] **Milestone 6: MVP / v1 Release**
-  - [x] **Phase 0 — Instances** *(everything else assumes this)*
+  - [x] **Phase 0 — Instances** _(everything else assumes this)_
     - [x] `getInstanceDir(name)` in `@saxby/core`, replacing the
           current `join(getConfigDir(), "saxby")`. No name resolves
           to the config root; a name resolves to
@@ -97,13 +97,13 @@ known gaps are issues labelled
   - [x] **Phase 3 — Release automation**
     - [x] CI release workflow that attaches artifacts to a tagged
           GitHub release.
-    - [x] Packaging *scaffolding* only, not maintained repos:
+    - [x] Packaging _scaffolding_ only, not maintained repos:
           [`packaging/nfpm.yaml`](../packaging/nfpm.yaml) (deb/rpm),
           [`packaging/PKGBUILD`](../packaging/PKGBUILD) template,
           [`packaging/saxby.rb`](../packaging/saxby.rb) Homebrew
           formula template.
-  - [x] **Memory broker** *(not in the original plan: added after a
-        kernel panic on Oct. 27, 2026; ships in v0.9.6)*
+  - [x] **Memory broker** _(not in the original plan: added after a
+        kernel panic on Oct. 27, 2026; ships in v0.9.6)_
     - [x] `saxby reserve --gib N -- <command>`, and model loads that
           wait for room while a job holds memory
           ([Memory broker](memory-broker.md), #39). Known gaps: #34
@@ -114,14 +114,14 @@ known gaps are issues labelled
     - [x] The inference paths the catch-all forwards take the same
           gate as chat (#33;
           [Which paths are gated](memory-broker.md#which-paths-are-gated)).
-  - [x] **Decision log privacy** *(not in the original plan: added
+  - [x] **Decision log privacy** _(not in the original plan: added
         when the question of other people's prompts came up; ships
-        in v0.9.7)*
+        in v0.9.7)_
     - [x] Prompt text opt-in, detector evidence without user text, a
           keyed prompt hash, owner-only files, `secure_delete`
           ([Logging](configuration.md#logging)).
-  - [x] **Tailnet clients** *(not in the original plan: added on
-        Nov. 8, 2026, for a phone keyboard; ships in v0.9.8)*
+  - [x] **Tailnet clients** _(not in the original plan: added on
+        Nov. 8, 2026, for a phone keyboard; ships in v0.9.8)_
     - [x] `trusted_proxies`: Tailscale Serve may pass requests in,
           for chat and the model list only
           ([Trusted proxies](configuration.md#trusted-proxies)).
@@ -132,19 +132,19 @@ known gaps are issues labelled
     - [x] `allowed_origins`: a browser extension may be let in by
           its exact origin
           ([Browser extensions](configuration.md#browser-extensions)).
-  - [x] **Live config reload** *(not in the original plan: pulled
-        forward from the post-v1 backlog on Nov. 9, 2026)*
+  - [x] **Live config reload** _(not in the original plan: pulled
+        forward from the post-v1 backlog on Nov. 9, 2026)_
     - [x] A saved config is applied without a restart, whole or not
           at all, and `saxby status` says when one was declined
           ([Edits apply on save](configuration.md#edits-apply-on-save)).
-  - [x] **Time note** *(not in the original plan: pulled forward
-        from lab report 003 on Nov. 10, 2026; off by default)*
+  - [x] **Time note** _(not in the original plan: pulled forward
+        from lab report 003 on Nov. 10, 2026; off by default)_
     - [x] `message_prefix`: every user message carries the time Saxby
           first saw it, in the user's zone, and the latest says how
           long the conversation was away
           ([Message prefix](configuration.md#message-prefix)).
-  - [x] **Phase 4 — Documentation** *(last: it documents a surface
-        that is still moving until Phase 2 lands)*
+  - [x] **Phase 4 — Documentation** _(last: it documents a surface
+        that is still moving until Phase 2 lands)_
     - [x] JSDoc sweep (#26, v0.9.9), consistent across the repo:
           every exported symbol, in three passes on Nov. 10, 2026.
     - [x] Create `docs/` — [Getting started](getting-started.md),
@@ -161,9 +161,9 @@ known gaps are issues labelled
           when a UI sits in front of an agent, every capability the
           UI also provides is a second opinion about something
           already decided downstream.
-  - [ ] **Phase 5 — Publishing** *(tracked by the
+  - [ ] **Phase 5 — Publishing** _(tracked by the
         [v1.0.0 milestone](https://github.com/saxby-tools/saxby/milestone/1);
-        v1.0.0 ships when it is empty)*
+        v1.0.0 ships when it is empty)_
     - [x] `v0.9.0` pre-release: proves the tag path of the release
           workflow (#4) and gives the packages real artifacts.
     - [x] Homebrew tap, published from the release workflow (#23).
