@@ -149,8 +149,10 @@ export const ModelSchema = v.strictObject({
     //  The memory broker never lets a job take a pinned model's
     //  space, whether the model is loaded or not.
     pinned: v.optional(v.boolean(), false),
-    //  Used only until the backend is seen holding the model loaded;
-    //  a measured size always wins.
+    //  The least the memory broker counts the model at, loaded or
+    //  not. A larger size the backend reports wins; a smaller one
+    //  does not, since Ollama books a model on its MLX runner at its
+    //  size at load time, before the KV cache grows.
     size_gib: v.optional(SizeGibSchema),
 });
 
@@ -188,7 +190,7 @@ export const SemanticProfileSchema = v.strictObject({
     ),
     //  The active embedder is pinned without asking, since Tier 3
     //  loads it for routed requests, and embedders never sit in the
-    //  catalog where `pinned` lives.
+    //  catalog where `pinned` lives. A floor, as in the catalog.
     size_gib: v.optional(SizeGibSchema),
 });
 
