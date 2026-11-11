@@ -22,6 +22,7 @@ export const getConfigDir = () => {
     // Chaos Hat: If we are running in a severely restricted environment where
     // neither HOME nor USERPROFILE exists, the daemon MUST crash loud.
     throw new Error(
-        "FATAL: Could not determine user home directory. Please set XDG_CONFIG_HOME or HOME.",
+        "FATAL: Could not determine user home directory. " +
+            "Please set XDG_CONFIG_HOME or HOME.",
     );
 };
