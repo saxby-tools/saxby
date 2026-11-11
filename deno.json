@@ -22,6 +22,7 @@
         "test": "deno test --allow-net=127.0.0.1 --allow-env=XDG_CONFIG_HOME,HOME,USERPROFILE --allow-read --allow-write --allow-run=/bin/kill packages/",
         "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run=/bin/kill,/usr/bin/kill,/usr/sbin/sysctl,/usr/bin/vm_stat --watch packages/llm-router/src/main.js --instance dev",
         "build": "deno run --allow-read --allow-write --allow-run=deno,tar scripts/build.js",
+        "sign-macos": "deno run --allow-read --allow-write --allow-env=SAXBY_SIGN_IDENTITY,SAXBY_NOTARY_KEY,SAXBY_NOTARY_KEY_ID,SAXBY_NOTARY_ISSUER,SAXBY_NOTARIZE --allow-run=codesign,ditto,xcrun,tar scripts/sign-macos.js",
         "package": "deno run --allow-read --allow-write scripts/package.js",
         "docker-context": "deno run --allow-read --allow-write scripts/docker-context.js",
         "deploy": "deno run --allow-read --allow-write --allow-env --allow-net=127.0.0.1 --allow-run scripts/deploy.js"
