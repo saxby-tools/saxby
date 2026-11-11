@@ -1,15 +1,15 @@
-#  Clients
+# Clients
 
 Anything that speaks the OpenAI chat API can use Saxby. Point it at
 Saxby instead of your backend, and ask for the model `saxby`.
 
-##  The three settings every client needs
+## The three settings every client needs
 
-| Setting | Value |
-| --- | --- |
-| Base URL | `http://127.0.0.1:11435/v1` |
-| API key | anything non-empty, on the same machine |
-| Model | `saxby` |
+| Setting  | Value                                   |
+| -------- | --------------------------------------- |
+| Base URL | `http://127.0.0.1:11435/v1`             |
+| API key  | anything non-empty, on the same machine |
+| Model    | `saxby`                                 |
 
 On the same machine, Saxby does not check the API key. It passes the
 `Authorization` header on to the backend, and Ollama ignores it, but
@@ -40,12 +40,12 @@ choose can be let in too; see
 Use `saxby/<model>` to skip routing and reach one model directly.
 See [Routing](routing.md).
 
-##  Open WebUI
+## Open WebUI
 
 These settings were checked against Open WebUI v0.12.0 running in
 Docker.
 
-###  Connecting
+### Connecting
 
 Set the connection in the container's environment:
 
@@ -87,7 +87,7 @@ and never reaches the decision log.
 The same connection can be added in the admin panel under Settings,
 Connections, instead of the environment.
 
-###  The task model
+### The task model
 
 Open WebUI generates chat titles, tags and follow-up questions in the
 background. It sends those requests to a **task model**: the External
@@ -103,7 +103,7 @@ Open WebUI sends this background work with `stream: false`, which
 Saxby routes to the model claiming `TAG_BACKGROUND` — a small, fast
 one, ideally. See [Configuration](configuration.md).
 
-###  Telling Open WebUI apart in the log
+### Telling Open WebUI apart in the log
 
 With default settings, Open WebUI's requests carry the `User-Agent`
 of its HTTP library, so the decision log calls it `python`. To have it
@@ -128,7 +128,7 @@ also recognizes. If you rename these headers with the
 `FORWARD_USER_INFO_HEADER_*` variables, Saxby will not recognize
 them.
 
-###  A second connection for the dev instance
+### A second connection for the dev instance
 
 To try the dev instance from the same Open WebUI, add a second
 connection to `http://host.docker.internal:11436/v1` — the dev
@@ -137,7 +137,7 @@ models appear as `dev.saxby` and `dev.saxby/<model>` beside the real
 ones. Open WebUI removes the prefix before the request reaches Saxby.
 See [Instances](instances.md) for the dev instance.
 
-##  OpenClaw
+## OpenClaw
 
 OpenClaw takes Saxby as a custom provider in `openclaw.json`:
 
@@ -201,7 +201,7 @@ See [Naming a client](#naming-a-client).
 OpenClaw's memory search can embed text through Ollama directly.
 Those calls do not pass through Saxby and are not logged.
 
-##  A phone keyboard over Tailscale
+## A phone keyboard over Tailscale
 
 A phone is not on the same machine, so it needs the one way in: a
 proxy you name in `trusted_proxies`. This example is
@@ -209,24 +209,24 @@ proxy you name in `trusted_proxies`. This example is
 keyboard that sends text to an OpenAI-compatible endpoint for
 proofreading and translation.
 
-###  Connecting
+### Connecting
 
 1. Publish Saxby to your tailnet and name the proxy in the config.
    Both steps are in
    [Trusted proxies](configuration.md#trusted-proxies).
 2. In LeanType's AI settings:
 
-| Setting | Value |
-| --- | --- |
-| AI Provider | HF/OpenAI-compatible |
-| Model | `saxby` |
+| Setting      | Value                                                        |
+| ------------ | ------------------------------------------------------------ |
+| AI Provider  | HF/OpenAI-compatible                                         |
+| Model        | `saxby`                                                      |
 | API Endpoint | `https://my-mac.my-tailnet.ts.net:11435/v1/chat/completions` |
-| API Token | the output of `saxby token` |
+| API Token    | the output of `saxby token`                                  |
 
 The phone is another machine, so the token is checked. Run
 `saxby token` on the machine running Saxby and paste the result.
 
-###  Turning reasoning off
+### Turning reasoning off
 
 LeanType's request is fixed: a model, one user message holding its
 instruction and your text, a temperature and a token limit. A model
@@ -244,7 +244,7 @@ has no setting that sends `reasoning_effort` (its source, read Nov.
 The same fixes then took about a second. See
 [Client defaults](configuration.md#client-defaults).
 
-###  Two things to know
+### Two things to know
 
 - **Its text is stored if `log_prompts` is on.** A keyboard sends
   whatever you select in any app. With `log_prompts` set to `true`,
@@ -260,7 +260,7 @@ work; that rule needs an explicit `stream: false`. On the reference
 setup its requests matched no tier and reached the global default
 model.
 
-##  A browser extension
+## A browser extension
 
 An extension runs inside your browser, and Saxby refuses browsers.
 You can let one in by its exact origin. This example is
@@ -287,7 +287,7 @@ pause costs a full round of reasoning.
 As with a keyboard, what it sends is stored if `log_prompts` is on:
 here that is the text of whatever field you are typing in.
 
-##  Scripts and SDKs
+## Scripts and SDKs
 
 `curl`, the OpenAI SDKs and your own scripts work with the three
 settings above. Two things to know:
@@ -302,7 +302,7 @@ settings above. Two things to know:
   `python`, `node`, `curl`, `openai`. Send an `X-Title` header to
   name it yourself, as the next section shows, or use `client_names`.
 
-##  Naming a client
+## Naming a client
 
 The log names a client by the first word of its `User-Agent`, which
 is usually the name of its HTTP library. Two clients built on the
@@ -346,14 +346,14 @@ as a custom endpoint, add an entry with the same URL:
 
 ```yaml
 model:
-  provider: "custom"
-  base_url: "http://127.0.0.1:11435/v1"
+    provider: "custom"
+    base_url: "http://127.0.0.1:11435/v1"
 
 providers:
-  saxby:
-    base_url: "http://127.0.0.1:11435/v1"
-    extra_headers:
-      X-Title: "Hermes"
+    saxby:
+        base_url: "http://127.0.0.1:11435/v1"
+        extra_headers:
+            X-Title: "Hermes"
 ```
 
 Hermes treats header values as secrets and never logs them, so a
@@ -362,15 +362,14 @@ typo in the name shows up in Saxby's log, not in Hermes's. A
 OpenAI-compatible request Hermes sends, which is the simpler form
 when Saxby is its only endpoint.
 
-##  Where else your chats are stored
+## Where else your chats are stored
 
 Saxby keeps prompt text out of its own log unless you turn it on; see
 [Logging](configuration.md#logging). The tools in front of Saxby keep
 their own copies, and Saxby cannot do anything about those.
 
 **Open WebUI** stores every chat in its own database, unencrypted by
-default. Its page [Chat Data Privacy &
-Encryption](https://docs.openwebui.com/security/chat-data-privacy-and-encryption)
+default. Its page [Chat Data Privacy & Encryption](https://docs.openwebui.com/security/chat-data-privacy-and-encryption)
 says what it keeps and how to protect it; the short version is that
 encryption is the job of the database or the filesystem under it.
 
@@ -384,7 +383,7 @@ pages.
 A client's own history is that client's to protect. Check each
 tool's docs before giving other people an account on it.
 
-##  Who owns what
+## Who owns what
 
 When one AI tool sits in front of another — Open WebUI in front of an
 agent, an agent in front of Saxby — each layer should own its own
