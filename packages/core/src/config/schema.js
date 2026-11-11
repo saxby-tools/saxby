@@ -51,6 +51,15 @@ export const EXTENSION_ORIGIN =
  */
 export const REASONING_EFFORT_NONE = "none";
 
+/**
+ * Prefix of the request headers `forward_user_headers` governs, in
+ * lowercase as Headers reports names: Open WebUI's
+ * X-OpenWebUI-User-Name, -Id, -Email, -Role and -Jwt. They name the
+ * person at the keyboard. Every route that forwards to the backend
+ * strips them unless the switch is on (llm-router's routes).
+ */
+export const USER_HEADER_PREFIX = "x-openwebui-user-";
+
 //  A client signature as the router's log/client.js spells it: the
 //  User-Agent's product token, lowercased. "LeanType/1.0" is
 //  "leantype". A key in any other shape would never match a client.
@@ -343,6 +352,11 @@ export const SaxbyConfigSchema = v.strictObject({
     //  SQLite file: anyone who can read it reads every prompt, and
     //  the operator always can. Hashes group repeats without text.
     log_prompts: v.optional(v.boolean(), false),
+    //  Off unless the operator says so. Open WebUI's user headers name
+    //  the person at the keyboard; a local backend ignores them, and a
+    //  backend that meters per user can be given them. One switch for
+    //  every route that forwards to the backend.
+    forward_user_headers: v.optional(v.boolean(), false),
     client_names: v.optional(v.record(v.string(), v.string()), {}),
     //  Keyed by client signature, as client_names is. A client that
     //  cannot be told to send a field itself, such as a phone

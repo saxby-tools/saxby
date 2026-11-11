@@ -165,6 +165,7 @@ live, like any other saxbyd.
 | `semantic` | off | Tier 3 settings; leave out to disable |
 | `route_background_tasks` | `true` | Treat `stream: false` as background |
 | `log_prompts` | `false` | Store prompt text in the decision log |
+| `forward_user_headers` | `false` | Pass Open WebUI's user headers to the backend; see [User headers](#user-headers) |
 | `client_names` | `{}` | Friendly names for client signatures |
 | `client_defaults` | `{}` | Request fields filled in for a client; see [Client defaults](#client-defaults) |
 | `message_prefix` | off | A time note on every user message; see [Message prefix](#message-prefix) |
@@ -597,6 +598,29 @@ restrict what a client may do.
 `log_path` moves the decision log. Leave it unset in a named instance:
 its log then stays in the instance's folder. See
 [Instances](instances.md).
+
+##  User headers
+
+Open WebUI can name the person at the keyboard on every request it
+sends. With `ENABLE_FORWARD_USER_INFO_HEADERS` set, each one carries
+`X-OpenWebUI-User-Name`, `-Id`, `-Email` and `-Role`, or one signed
+`X-OpenWebUI-User-Jwt`. Saxby reads them only to tell Open WebUI
+apart in the decision log, stores none of their values, and by
+default strips them before anything reaches the backend. That holds
+on every route: chat, which never passed them on, and everything
+Saxby proxies through, such as embeddings, which passed them on
+through v0.9.9. A local backend ignores them, so stripping costs
+nothing there.
+
+```jsonc
+"forward_user_headers": true
+```
+
+A backend such as LiteLLM can use them for per-user budgets or
+audit. With `forward_user_headers` set to `true`, both routes pass
+them on exactly as Open WebUI sent them. Edits apply on save. `saxby
+config generate` writes the key off, with a comment saying when to
+flip it.
 
 ##  The API token
 

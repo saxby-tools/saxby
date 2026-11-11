@@ -83,6 +83,12 @@ const CONFIG_COMMENTS = {
         "which still groups repeats. Routing, tags and timings are",
         "logged either way.",
     ],
+    forward_user_headers: [
+        "Pass Open WebUI's X-OpenWebUI-User-* headers on to the backend.",
+        "False by default: they name the person at the keyboard, and a",
+        "local backend ignores them. Set true for a backend that meters",
+        "or audits per user, such as LiteLLM.",
+    ],
     client_defaults: [
         "Request fields Saxby fills in for one client when the request",
         "leaves them out, keyed by client signature: the User-Agent's",
@@ -530,6 +536,10 @@ export const generateCommand = new Command()
                 personas,
                 //  Written either way, so the file shows the choice.
                 log_prompts: logPrompts,
+                //  Written off, not asked: the default is right for a
+                //  local backend, and the comment above it says when
+                //  to flip it.
+                forward_user_headers: false,
                 //  Written empty when off, so the file says the keys
                 //  exist and the comments above them say what they do.
                 //  client_defaults is never filled in here: it names a

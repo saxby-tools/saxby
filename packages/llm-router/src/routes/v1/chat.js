@@ -1,3 +1,4 @@
+import { USER_HEADER_PREFIX } from "@saxby/core";
 import { extractIntent, replaceMessageText } from "../../pipeline/extract.js";
 import { resolvePipeline } from "../../pipeline/resolve.js";
 import { classifyModel } from "../../pipeline/model-name.js";
@@ -24,6 +25,25 @@ const CLIENT_DEFAULT_FIELDS = ["reasoning_effort"];
 //  ---------------------------------------------------------------------
 
 /**
+ * Copies Open WebUI's user headers onto the upstream request, as the
+ * client sent them, when `forward_user_headers` says so. Off, nothing
+ * is copied and the route sends what it always has. The catch-all
+ * reads the same switch (routes/catch-all.js). Headers reports names
+ * in lowercase, so the prefix matches however the client spelt them.
+ */
+function copyUserHeaders(c, headers) {
+    if (!c.get("config").forward_user_headers) {
+        return;
+    }
+
+    for (const [name, value] of c.req.raw.headers) {
+        if (name.startsWith(USER_HEADER_PREFIX)) {
+            headers[name] = value;
+        }
+    }
+}
+
+/**
  * Builds upstream headers. Deliberately minimal: forwarding the
  * client's headers wholesale sends a stale Content-Length (the body
  * is rewritten) and an Accept-Encoding that makes the upstream gzip
@@ -31,6 +51,8 @@ const CLIENT_DEFAULT_FIELDS = ["reasoning_effort"];
  */
 function buildUpstreamHeaders(c) {
     const headers = { "Content-Type": "application/json" };
+
+    copyUserHeaders(c, headers);
 
     //  Saxby's own API token stops here (main.js sets the flag). Any
     //  other Authorization value is the client's business with the

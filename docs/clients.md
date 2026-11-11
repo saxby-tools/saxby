@@ -115,14 +115,12 @@ ENABLE_FORWARD_USER_INFO_HEADERS=true
 
 That makes Open WebUI send each user's name, id, email and role as
 headers. Saxby only checks that the headers are present and never
-stores their values. On chat requests it does not pass them on to the
-backend. Requests Saxby does not route itself — embeddings, for example
-— are passed through with their headers intact, so if Open WebUI embeds
-through Saxby, the backend sees them.
-[Issue #22](https://github.com/saxby-tools/saxby/issues/22) tracks
-whether Saxby should strip them. Whether that is worth it is your call;
-without it, everything still works and the client is simply logged as
-`python`.
+stores their values. It also strips them before anything reaches the
+backend, on chat and on everything it passes through, such as
+embeddings. A backend that meters per user can be given them instead;
+see [User headers](configuration.md#user-headers). Whether any of
+this is worth it is your call; without the setting, everything still
+works and the client is simply logged as `python`.
 
 If you also set `FORWARD_USER_INFO_HEADER_JWT_SECRET`, Open WebUI
 sends one signed `X-OpenWebUI-User-Jwt` header instead, which Saxby
