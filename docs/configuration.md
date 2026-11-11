@@ -193,7 +193,7 @@ what Saxby sends upstream, and what `global_default_model`,
 | `system_prefix` | Optional text sent as a system message to this model only             |
 | `description`   | Optional note for humans                                              |
 | `pinned`        | `true` keeps this model's space safe from heavy jobs, default `false` |
-| `size_gib`      | Optional size in GiB, used until the backend reports a whole load     |
+| `size_gib`      | Optional size in GiB; the least the memory broker counts the model at |
 
 `max_context` matters. Saxby estimates the size of the whole
 request, every message and not just the last one, and skips any model
@@ -214,7 +214,10 @@ a chat request. Embedders belong only in `semantic.profiles`.
 `pinned` and `size_gib` belong to the memory broker. A pinned model's
 space counts as taken whether it is loaded or not, so a job started
 with `saxby reserve` can never displace it. Pin the models you keep
-loaded. See [Memory broker](memory-broker.md).
+loaded. `size_gib` is a floor: a loaded model is counted at the
+larger of what the backend reports and this number, which matters for
+a model on Ollama's MLX runner, booked at load time before its KV
+cache grows. See [Memory broker](memory-broker.md).
 
 ## Capability tags
 

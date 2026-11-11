@@ -107,7 +107,7 @@ function harness(options = {}) {
         //  A pid not in the map is dead; null means "can't check".
         isAlive: (pid) =>
             Promise.resolve(alive.has(pid) ? alive.get(pid) : false),
-        sizes: createSizeCache({ now: () => ms }),
+        sizes: options.sizes ?? createSizeCache({ now: () => ms }),
         record: (event) => events.push(event),
         now: () => ms,
         sleep: (wait) => {
@@ -754,6 +754,119 @@ Deno.test("track — a gated load joins a forwarded hold", async () => {
     const { budget } = await broker.snapshot();
 
     assertEquals(budget.reservedBytes, gibToBytes(30));
+});
+
+//  =====================================================================
+//  The size_gib floor
+//  =====================================================================
+//  A loaded model is counted at the larger of what the backend reports
+//  and its size_gib. Ollama books a model on its MLX runner at the
+//  runner's memory at load time, and the KV cache then grows past it
+//  (issue #45). Nothing pinned here but the embedder, 1 GiB, so free
+//  is 96 - 8 - 1 - loaded.
+
+const MLX = "fixture-mlx:27b";
+
+function mlxHarness(options = {}) {
+    const { config, ...rest } = options;
+
+    return harness({
+        config: {
+            catalog: { [MLX]: { pinned: false, size_gib: 44 } },
+            ...config,
+        },
+        ...rest,
+    });
+}
+
+Deno.test("floor — a load under size_gib counts at size_gib", async () => {
+    const { broker } = mlxHarness({
+        loaded: [{ name: MLX, bytes: gibToBytes(17) }],
+    });
+
+    const { budget } = await broker.snapshot();
+
+    assertEquals(budget.loadedBytes, gibToBytes(44));
+    assertEquals(budget.freeBytes, gibToBytes(96 - 8 - 1 - 44));
+
+    //  A job that the reported 17 GiB would have let in.
+    const got = await reserve(broker, 50, { timeoutMs: 0 });
+
+    assertEquals(got.admitted, false);
+    assertStringIncludes(got.reason, "loaded 44.0 GiB");
+});
+
+Deno.test("floor — a load above its size_gib keeps the larger", async () => {
+    const { broker } = mlxHarness({
+        loaded: [{ name: MLX, bytes: gibToBytes(50) }],
+    });
+
+    const { budget } = await broker.snapshot();
+
+    assertEquals(budget.loadedBytes, gibToBytes(50));
+});
+
+Deno.test("floor — an uncatalogued model keeps its report", async () => {
+    const { broker } = mlxHarness({
+        loaded: [{ name: "fixture-stray:7b", bytes: gibToBytes(7) }],
+    });
+
+    const { budget } = await broker.snapshot();
+
+    assertEquals(budget.loadedBytes, gibToBytes(7));
+});
+
+Deno.test("floor — a pinned model under its floor counts once", async () => {
+    const { broker } = mlxHarness({
+        config: { catalog: { [MLX]: { pinned: true, size_gib: 44 } } },
+        loaded: [{ name: MLX, bytes: gibToBytes(17) }],
+    });
+
+    const { budget } = await broker.snapshot();
+
+    assertEquals(budget.pinned[0], {
+        model: MLX,
+        bytes: gibToBytes(44),
+        source: "size_gib",
+    });
+    assertEquals(budget.pinnedBytes, gibToBytes(44 + 1));
+    assertEquals(budget.loadedBytes, 0);
+    assertEquals(budget.freeBytes, gibToBytes(96 - 8 - 45));
+});
+
+Deno.test("floor — a remembered size is floored, not the row", async () => {
+    const sizes = createSizeCache({ now: () => 0 });
+
+    const control = mlxHarness({
+        sizes,
+        loaded: [{ name: MLX, bytes: gibToBytes(17) }],
+    });
+
+    //  Seen loaded whole at 17 GiB, then unloaded.
+    await control.broker.snapshot();
+    control.setLoaded([]);
+
+    //  The cache keeps what the backend said...
+    assertEquals(sizes.get(MLX)?.bytes, gibToBytes(17));
+
+    //  ...and every count of it is floored: a forwarded load holds 44,
+    //  and a gated load needs 44.
+    const hold = track(control.broker, MLX);
+    const held = await control.broker.snapshot();
+
+    assertEquals(held.budget.reservedBytes, gibToBytes(44));
+
+    hold.release();
+
+    await reserve(control.broker, 1);
+
+    const got = await gate(control.broker, MLX);
+    const admit = control.events.at(-1);
+
+    assert(got.admitted);
+    assertEquals(admit.event, "admit");
+    assertEquals(admit.bytes, gibToBytes(44));
+    assertStringIncludes(admit.reason, "needs 44.0 GiB");
 });
 
 //  =====================================================================

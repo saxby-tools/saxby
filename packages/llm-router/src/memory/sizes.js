@@ -22,6 +22,12 @@
 //  inflates the number until the table is cleared, which errs the
 //  safe way: a bigger size only makes the broker more careful.
 //
+//  A row is what the backend reported, nothing more. The catalog's
+//  size_gib is a floor under every size the broker counts, measured
+//  or live (broker.js, floorSize), and it is applied when a row is
+//  read, not when it is written: a floor baked into the row would
+//  outlive a lowered size_gib and pass as a measurement.
+//
 //  Kept in the decision-log file (table model_sizes), like the
 //  exemplar vectors, so a saxbyd restart does not forget them. A cache
 //  only ever makes the broker less careful than it needs to be, never

@@ -492,16 +492,19 @@ something in front of the loads can make them wait, and Saxby already
 proxies them. vram-guard-mac stays a boot-time script that reads no
 backend state. One formula judges jobs and loads: `ceiling − margin −
 pinned − loaded − reserved`, with pinned models counted at full size
-loaded or not, and every other loaded model counted because a job
-cannot evict it. Any unknown term admits nothing. If saxbyd can't be
-asked, the job does not run: no answer from the broker is never a
-yes. `--no-broker` runs anyway, loudly. The gate runs only while a job
-holds a reservation, chat and catch-all alike; with none, the chat
-route only notes the load in the ledger, synchronously, so the fast
-path never awaits. Each instance's broker is its own, and a boot
-names every other instance it finds running, since a job reserved
-there is invisible here; a shared ledger is post-v1 work.
-The gate is load-bearing; its log rows are not.
+loaded or not, every other loaded model counted because a job
+cannot evict it, and every loaded model counted at no less than its
+`size_gib`, because Ollama books an MLX model at its size at load
+time and the KV cache grows after (#45). Any unknown term admits
+nothing. If saxbyd can't be asked, the job does not run: no answer
+from the broker is never a yes. `--no-broker` runs anyway, loudly.
+The gate runs only while a job holds a reservation, chat and
+catch-all alike; with none, the chat route only notes the load in
+the ledger, synchronously, so the fast path never awaits. Each
+instance's broker is its own, and a boot names every other instance
+it finds running, since a job reserved there is invisible here; a
+shared ledger is post-v1 work. The gate is load-bearing; its log
+rows are not.
 
 **saxbyd may start exactly `kill`, `sysctl` and `vm_stat`, by absolute
 path.** It used to start nothing, so a bug in request handling could

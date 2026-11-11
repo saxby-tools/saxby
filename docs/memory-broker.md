@@ -89,7 +89,7 @@ free = ceiling - margin - pinned - loaded - reserved
 | ceiling  | The most the GPU may hold. On macOS, `iogpu.wired_limit_mb`   |
 | margin   | Kept free beyond everything else. `memory.margin_gib`         |
 | pinned   | Every pinned model at full size, loaded or not                |
-| loaded   | Every other model the backend holds now                       |
+| loaded   | Every other model the backend holds now, `size_gib` or more   |
 | reserved | Every job, plus forwarded loads the backend does not list yet |
 
 A job of N GiB runs when N fits in `free`.
@@ -102,6 +102,27 @@ has unloaded, its space is still held for it.
 model loaded for one request holds its space until the backend
 unloads it. That includes models loaded straight through Ollama, by
 clients that skip Saxby.
+
+**A loaded model is counted at the larger of what the backend reports
+and its `size_gib`.** Pinned or not, in the catalog or in the
+embedder's profile. A model the config gives no size keeps the
+backend's number. A larger report always wins, since a bigger size
+only makes the broker more careful; a smaller one never lowers the
+count, because the backend's number can be wrong in the one direction
+that matters.
+
+For a model on Ollama's MLX runner, it is. Ollama books such a model
+at the runner's memory at load time, which is the weights, and never
+asks again. The KV cache then grows with every conversation, and
+MLX's memory is pageable, so the Mac's wired-memory probe does not
+see it either. On Oct. 30, 2026, a model booked at 16.9 GiB held
+78.8 GiB when the reference machine panicked. The real fix is
+upstream: Ollama booking an honest size, which the broker would
+inherit with no change. Until then, a well-set `size_gib` and this
+floor are what keep a job out of memory the model is already using
+([#45](https://github.com/saxby-tools/saxby/issues/45)). Set it to
+the model's size at the context length it is loaded with, not to the
+weights alone.
 
 **A request that can never fit is refused at once.** If N is more
 than the ceiling minus the margin and the pinned models, waiting
@@ -152,6 +173,10 @@ A pinned model's size comes from, in order:
 2. the largest size the backend has reported for it loaded whole
 3. `size_gib` in the config
 
+`size_gib` is also a floor under the first two: a report smaller than
+it is counted at `size_gib`, as for any loaded model
+([The budget](#the-budget)).
+
 Only a whole load is a measurement. When memory is tight, Ollama
 spills layers to the CPU, and the GPU part it reports then is less
 than the model needs to load whole; remembering it would undercount
@@ -189,10 +214,10 @@ fills in. If none of the three exists, the size is unknown, and
 ```
 
 That fixes itself the first time the model loads whole. Set
-`size_gib` to skip the wait. A measured size always beats `size_gib`,
-since the real size changes with the context length the backend
-loads, so `size_gib` is a stand-in until the first whole load, not a
-floor under later ones.
+`size_gib` to skip the wait. A measured size larger than `size_gib`
+wins, since the real size grows with the context length the backend
+loads; a smaller one does not, so `size_gib` is the least the model
+is ever counted at, loaded or not.
 
 ## Model loads
 
@@ -220,9 +245,9 @@ A real one, from a test with a 5-second wait:
 }
 ```
 
-A model's size comes from the largest whole load the backend has
-reported for it or the catalog's `size_gib`, as for a pinned model. A
-model with neither waits until no job is held.
+A model's size is the larger of the biggest whole load the backend
+has reported for it and the catalog's `size_gib`, as for a pinned
+model. A model with neither waits until no job is held.
 
 `saxby/<model>` bypass requests and raw model names are checked the
 same way. They load models too.
@@ -269,9 +294,9 @@ is about to take is not free: without the hold, two different models
 could both be let through into the same free space, and a job that
 arrives while a model is still loading could be admitted into its
 space. The hold costs no call to the backend: the model is counted
-at the size the backend last reported for it, else its `size_gib`.
-With neither, its size is unknown, and a job waits until the hold
-ends. A pinned model needs no hold; its space is already held.
+at the larger of the size the backend last reported for it and its
+`size_gib`. With neither, its size is unknown, and a job waits until
+the hold ends. A pinned model needs no hold; its space is already held.
 
 A second request for the same model, while it is still loading,
 joins that hold rather than adding one: the backend loads the model
@@ -575,6 +600,14 @@ the environment, so an MLX job sets it from `SAXBY_RESERVED_BYTES`
   mflux and mlx-lm do not make it. The call has not yet been run
   under a reservation with a small cap.
   [Issue #34](https://github.com/saxby-tools/saxby/issues/34).
+- **An MLX model's growth is not measured.** A model on Ollama's MLX
+  runner is counted at the larger of Ollama's number and its
+  `size_gib`, never less. What is still not counted is what neither
+  knows: the KV cache the runner grows after load, which Ollama does
+  not report and the wired-memory probe does not see. A model with no
+  `size_gib` is counted at Ollama's number alone. The fix is upstream,
+  an honest booked size from Ollama; Saxby inherits it with no change.
+  [Issue #45](https://github.com/saxby-tools/saxby/issues/45).
 - **Waiters are not in line.** Each waiting job or load checks again
   once a second. A big job can be passed by smaller ones that fit
   sooner. [Issue #35](https://github.com/saxby-tools/saxby/issues/35).
