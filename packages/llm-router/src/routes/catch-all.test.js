@@ -67,11 +67,11 @@ function stubUpstream() {
     };
 }
 
-function app(broker, sentApiToken = false) {
+function app(broker, sentApiToken = false, config = CONFIG) {
     const server = new Hono();
 
     server.use("*", async (c, next) => {
-        c.set("config", CONFIG);
+        c.set("config", config);
         c.set("broker", broker);
 
         if (sentApiToken) {
@@ -367,4 +367,67 @@ Deno.test("catch-all — any other Authorization is passed on", async () => {
     const headers = await upstreamHeadersFor(false);
 
     assertEquals(headers.get("authorization"), "Bearer the-secret");
+});
+
+//  =====================================================================
+//  Open WebUI's user headers
+//  =====================================================================
+//  With ENABLE_FORWARD_USER_INFO_HEADERS on, Open WebUI names the
+//  person at the keyboard in X-OpenWebUI-User-* headers, on embedding
+//  requests as well as chat. Through v0.9.9 the catch-all passed them
+//  on while the chat route did not (issue #22). Now they stop here
+//  unless forward_user_headers says otherwise, and a header that only
+//  shares the vendor prefix is left alone either way.
+
+const USER_HEADERS = {
+    "X-OpenWebUI-User-Name": "Someone",
+    "X-OpenWebUI-User-Id": "00000000-0000-0000-0000-000000000000",
+    "X-OpenWebUI-User-Email": "someone@example.com",
+    "X-OpenWebUI-User-Role": "admin",
+    "X-OpenWebUI-User-Jwt": "a.b.c",
+};
+
+const OTHER_HEADER = "X-OpenWebUI-Other";
+
+async function upstreamHeadersWith(config) {
+    const upstream = stubUpstream();
+    const { broker } = fakeBroker({ hasJobs: false });
+
+    try {
+        const res = await quietly(() =>
+            post(app(broker, false, config), "/v1/embeddings", "{}", {
+                ...USER_HEADERS,
+                [OTHER_HEADER]: "kept",
+            })
+        );
+
+        await res.text();
+
+        return upstream.requests[0].headers;
+    } finally {
+        upstream.restore();
+    }
+}
+
+Deno.test("catch-all — user headers stop at Saxby by default", async () => {
+    const headers = await upstreamHeadersWith(CONFIG);
+
+    for (const name of Object.keys(USER_HEADERS)) {
+        assertEquals(headers.get(name), null, name);
+    }
+
+    assertEquals(headers.get(OTHER_HEADER), "kept");
+});
+
+Deno.test("catch-all — the switch passes them on as sent", async () => {
+    const headers = await upstreamHeadersWith({
+        ...CONFIG,
+        forward_user_headers: true,
+    });
+
+    for (const [name, value] of Object.entries(USER_HEADERS)) {
+        assertEquals(headers.get(name), value, name);
+    }
+
+    assertEquals(headers.get(OTHER_HEADER), "kept");
 });

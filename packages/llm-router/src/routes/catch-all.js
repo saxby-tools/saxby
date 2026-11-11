@@ -2,10 +2,13 @@
 //  The catch-all
 //  =====================================================================
 //  Whatever no route serves goes to the backend as it arrived, minus
-//  the headers that break the forwarding and Saxby's own API token.
-//  Local programs only: the guard keeps proxied, remote and extension
-//  clients to chat and the model list before any route runs, so
-//  nothing here loosens that (security/guard.js).
+//  the headers that break the forwarding, Saxby's own API token and,
+//  unless `forward_user_headers` says otherwise, the headers that
+//  name a person: the chat route reads the same switch, so the two
+//  routes follow one rule (issue #22). Local programs only: the guard
+//  keeps proxied, remote and extension clients to chat and the model
+//  list before any route runs, so nothing here loosens that
+//  (security/guard.js).
 //
 //  Six of the paths it forwards load the model their body names:
 //  Ollama's own inference paths and the two OpenAI-style ones Saxby
@@ -23,6 +26,7 @@
 //  load it cannot name, and the backend will say what is wrong with
 //  the request.
 
+import { USER_HEADER_PREFIX } from "@saxby/core";
 import { observeResponse } from "../observability/stream.js";
 import { startTrace } from "../observability/trace.js";
 import {
@@ -63,10 +67,32 @@ const DROPPED_REQUEST_HEADERS = [
 const DROPPED_RESPONSE_HEADERS = ["content-encoding", "content-length"];
 
 /**
+ * Removes every header `forward_user_headers` governs. Headers
+ * reports names in lowercase, so the prefix matches however the
+ * client spelt them. The names are collected first: deleting from a
+ * Headers while walking it skips entries.
+ */
+function dropUserHeaders(headers) {
+    const named = [];
+
+    for (const name of headers.keys()) {
+        if (name.startsWith(USER_HEADER_PREFIX)) {
+            named.push(name);
+        }
+    }
+
+    for (const name of named) {
+        headers.delete(name);
+    }
+}
+
+/**
  * The client's headers as they arrived, minus what breaks the
  * forwarding. Saxby's own API token stops here (main.js sets the
  * flag); any other Authorization value is the client's business with
- * the backend.
+ * the backend. Open WebUI's user headers stop here too unless the
+ * config says to pass them on; the chat route reads the same switch
+ * (routes/v1/chat.js).
  */
 function buildUpstreamHeaders(c) {
     const headers = new Headers(c.req.raw.headers);
@@ -77,6 +103,10 @@ function buildUpstreamHeaders(c) {
 
     if (c.get("sentApiToken")) {
         headers.delete("authorization");
+    }
+
+    if (!c.get("config").forward_user_headers) {
+        dropUserHeaders(headers);
     }
 
     return headers;
