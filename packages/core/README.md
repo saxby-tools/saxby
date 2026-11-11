@@ -11,13 +11,13 @@ Most people never import it. `@saxby/cli` and `@saxby/llm-router`
 do, and anything that wants to read a Saxby config the way the
 daemon does can too.
 
-##  Install
+## Install
 
 ```bash
 deno add jsr:@saxby/core
 ```
 
-##  Example
+## Example
 
 Load and validate the config of a named instance. The instance name
 comes from the flag, then `SAXBY_INSTANCE`, then the default
@@ -35,7 +35,7 @@ console.log(config.global_default_model);
 A config that does not validate throws with every problem listed,
 not just the first.
 
-##  What is in it
+## What is in it
 
 - `config/` — the schema (valibot), the loader, instance folders and
   the API token
@@ -47,12 +47,12 @@ not just the first.
 - `utils/` — the config root, plist rendering, fetch errors and
   probing a host
 
-##  Documentation
+## Documentation
 
 - [Configuration](https://github.com/saxby-tools/saxby/blob/main/docs/configuration.md)
 - [Instances](https://github.com/saxby-tools/saxby/blob/main/docs/instances.md)
 - [Architecture](https://github.com/saxby-tools/saxby/blob/main/docs/architecture.md)
 
-##  License
+## License
 
 AGPL-3.0-or-later.
