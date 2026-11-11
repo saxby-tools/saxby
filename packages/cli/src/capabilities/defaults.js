@@ -13,6 +13,15 @@
 //  tag, the tag stops differentiating and the tiebreak decides —
 //  which defeats the point of having the tag at all.
 //
+//  TAG_REASONING follows the same rule: reasoning specialists only.
+//  Generalists used to claim it too, which put the tag on most of a
+//  generated catalog, so it told nothing apart and the tiebreak
+//  decided. The log agreed it was not earning its keep: one request
+//  in 4,185 carried it, beside TAG_MATH. It is a preference, so it
+//  stays curated. The backend's `thinking` capability is NOT used to
+//  suggest it — every modern generalist reports thinking, and that
+//  would put the tag back on all of them.
+//
 //  Only tags the extractor emits are suggested. TAG_WRITER and
 //  TAG_LONG_CONTEXT are reserved — nothing emits them yet — and
 //  seeding them wrote routing rules into every generated config that
@@ -84,20 +93,23 @@ const PATTERNS = [
     },
 
     //  ---- Generalists -----------------------------------------------
+    //  Deliberately no TAG_REASONING — see the header note. A
+    //  generalist that should take reasoning work gets the tag by
+    //  hand in config.jsonc.
     {
         match: "gemma",
-        tags: [TAGS.REASONING],
-        why: "general-purpose generalist",
+        tags: [],
+        why: "generalist — claims no preference tag by default",
     },
     {
         match: "llama",
-        tags: [TAGS.REASONING],
-        why: "general-purpose generalist",
+        tags: [],
+        why: "generalist — claims no preference tag by default",
     },
     {
         match: "mistral",
-        tags: [TAGS.REASONING],
-        why: "general-purpose generalist",
+        tags: [],
+        why: "generalist — claims no preference tag by default",
     },
     {
         match: "phi",
