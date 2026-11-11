@@ -513,11 +513,12 @@ command yet. Run `rehash`, or open a new terminal.
 **"Background Items Added".** macOS shows this the first time a
 service is installed. It is expected.
 
-**A downloaded binary will not open on macOS.** Release binaries are not
-signed yet, so Gatekeeper blocks them when the archive came through a
-browser. [Issue #7](https://github.com/saxby-tools/saxby/issues/7)
-tracks signing. Until then, clear the quarantine flag yourself, only on
-a download you trust:
+**A downloaded binary will not open on macOS.** Releases after
+v0.9.9 are signed with a Developer ID and notarized, so Gatekeeper
+lets them run however they were downloaded. Binaries from v0.9.9 and
+earlier are not, and Gatekeeper blocks them when the archive came
+through a browser. For one of those, clear the quarantine flag
+yourself, only on a download you trust:
 
 ```bash
 xattr -d com.apple.quarantine saxbyd saxby
