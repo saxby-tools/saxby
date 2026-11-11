@@ -41,7 +41,7 @@
 import { basename, join } from "@std/path";
 import { readLockstepVersion } from "./version.js";
 
-const DIST_DIR = "dist";
+export const DIST_DIR = "dist";
 const ARCHIVE_PREFIX = "saxby";
 
 const ALL_KEYWORD = "all";
@@ -243,7 +243,7 @@ async function sha256Hex(path) {
 
 //  Same line format as `shasum -a 256` and `sha256sum`, so either
 //  tool can check it with -c from inside dist/.
-async function writeChecksum(archivePath) {
+export async function writeChecksum(archivePath) {
     const hex = await sha256Hex(archivePath);
     const line = `${hex}  ${basename(archivePath)}\n`;
 
@@ -252,7 +252,7 @@ async function writeChecksum(archivePath) {
 
 //  --no-xattrs plus COPYFILE_DISABLE keep macOS metadata (._ files,
 //  quarantine attributes) out of an archive Linux will unpack.
-async function pack(stageName) {
+export async function pack(stageName) {
     const archivePath = join(DIST_DIR, `${stageName}.tar.gz`);
 
     await run(
