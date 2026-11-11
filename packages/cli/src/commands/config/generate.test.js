@@ -26,6 +26,7 @@ const FRESH_PAYLOAD = {
     },
     personas: {},
     log_prompts: false,
+    log_proxy_users: false,
     forward_user_headers: false,
     client_defaults: {},
     trusted_proxies: [],
@@ -80,6 +81,20 @@ Deno.test("fresh config — the file says both keys exist", () => {
             `${key}'s comment does not say it is off`,
         );
     }
+});
+
+Deno.test("fresh config — proxied callers are written off, and why", () => {
+    const config = loadRendered(FRESH_PAYLOAD);
+    const comments = commentAbove(
+        renderJsoncConfig(FRESH_PAYLOAD),
+        "log_proxy_users",
+    );
+
+    assertEquals(config.log_proxy_users, false);
+    assert(
+        comments.some((line) => line.includes("False by default")),
+        "log_proxy_users's comment does not say it is off",
+    );
 });
 
 Deno.test("fresh config — user headers are written off, and why", () => {

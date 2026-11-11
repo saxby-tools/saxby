@@ -49,6 +49,18 @@ Deno.test("config — prompt text is not logged unless asked for", () => {
     assertEquals(parsed.log_prompts, false);
 });
 
+Deno.test("config — proxied callers are not logged unless asked for", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.log_proxy_users, false);
+});
+
+Deno.test("config — log_proxy_users takes true", () => {
+    const parsed = validateConfig(config({ log_proxy_users: true }));
+
+    assertEquals(parsed.log_proxy_users, true);
+});
+
 Deno.test("config — user headers are not forwarded unless asked for", () => {
     const parsed = validateConfig(config());
 

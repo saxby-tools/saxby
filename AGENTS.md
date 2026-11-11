@@ -426,8 +426,10 @@ it**: every connection is from 127.0.0.1, and a program on this
 machine can send the same headers — but it could already call Saxby
 directly, and it is why the token exists. Proxied requests reach chat
 and the model list ONLY, never the memory broker, status, explain or
-the catch-all. The log does not yet say who called through the proxy
-(#50), because a login names a person and `log/client.js` stores apps.
+the catch-all. Every proxied row stores the proxy's kind; the login
+and tailnet address, which name a person or a device, are stored
+only with `log_proxy_users` on, off by default like prompt text, and
+`client_id` stays the app because `log/client.js` stores apps.
 
 **One kind of browser client may be let in: an extension, by its
 exact origin in `allowed_origins`.** Off by default. A browser sets
