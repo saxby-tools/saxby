@@ -1,10 +1,10 @@
-#  Getting started
+# Getting started
 
 From nothing to a routed request, then to a service that starts on
 its own. Plan on about fifteen minutes, most of it downloading
 models.
 
-##  What you need
+## What you need
 
 - **macOS or Linux**, on arm64 or x64.
 - **Ollama**, running, with at least one chat model pulled. Other
@@ -16,11 +16,11 @@ models.
 ollama pull bge-m3
 ```
 
-##  Install
+## Install
 
 Pick one. Each way installs both programs, `saxby` and `saxbyd`.
 
-###  With Homebrew
+### With Homebrew
 
 On macOS or Linux:
 
@@ -35,7 +35,7 @@ both: they would fight over the same port. After `brew upgrade
 saxby`, run `saxby service restart` so the service picks up the new
 build.
 
-###  From the AUR
+### From the AUR
 
 On Arch Linux, with an AUR helper such as `yay`:
 
@@ -56,7 +56,7 @@ makepkg -si
 Shell completions come with it. After an upgrade, run `saxby service
 restart`.
 
-###  From JSR
+### From JSR
 
 With Deno 2.9 or newer. These commands give each program the same
 permissions the release binaries have:
@@ -91,7 +91,7 @@ To run Saxby as a service, use one of the other ways instead. The
 start with a `PATH` that does not include it
 ([#31](https://github.com/saxby-tools/saxby/issues/31)).
 
-###  From a release
+### From a release
 
 Pick your platform — `darwin-arm64`, `darwin-x64`, `linux-x64` or
 `linux-arm64` — and the version from the releases page:
@@ -135,7 +135,7 @@ answer. Downloading with `curl` avoids the macOS quarantine flag that
 a browser download gets. If you did use a browser, see
 [Troubleshooting](troubleshooting.md).
 
-###  From source
+### From source
 
 With Deno 2.9 or newer:
 
@@ -153,7 +153,7 @@ install -m 755 dist/saxby-*/{saxbyd,saxby} ~/.local/bin/
 
 `deno task build` builds for the machine you are on.
 
-##  Configure
+## Configure
 
 ```bash
 saxby config generate
@@ -170,7 +170,7 @@ Tailscale Serve. The last two default to no. It writes
 The generated file is a starting point. [Configuration](configuration.md)
 explains every field.
 
-##  Try it
+## Try it
 
 Start Saxby in a terminal:
 
@@ -195,7 +195,7 @@ real request the same way, to `/v1/chat/completions` instead of
 
 [Routing](routing.md) explains what you are seeing.
 
-##  Run it as a service
+## Run it as a service
 
 Stop the terminal copy with Ctrl-C, then:
 
@@ -217,13 +217,13 @@ answers on the instance's port.
 See [Services](services.md) for logs, restarts and updating to a new
 build.
 
-##  Point your apps at it
+## Point your apps at it
 
 Any OpenAI-compatible app works: set its base URL to
 `http://127.0.0.1:11435/v1`, any API key, and the model `saxby`.
 [Clients](clients.md) walks through Open WebUI and OpenClaw.
 
-##  Next
+## Next
 
 - [Routing](routing.md) — how a model is chosen, and how to see why.
 - [Configuration](configuration.md) — tags, personas, exemplars and Tier 3.
