@@ -40,19 +40,33 @@
 import { EXTENSION_ORIGIN } from "@saxby/core";
 
 //  Headers that identify an application more precisely than its HTTP
-//  library's User-Agent does. Presence alone is the signal — the
-//  values are not read, because they identify a PERSON rather than an
-//  application and the archive does not need them.
+//  library's User-Agent does. Two kinds of rule.
 //
-//  Open WebUI sends either the separate user headers or, when
-//  FORWARD_USER_INFO_HEADER_JWT_SECRET is set, one signed JWT in
-//  their place (utils/headers.py, v0.12). Both default names are
-//  listed; renamed headers cannot be recognized.
+//  A value rule takes the header's value as the name. X-Title is
+//  OpenRouter's convention for a client to say what it is, and it is
+//  how two clients built on the same SDK, which send the same
+//  User-Agent, log apart (#21). It goes first: a client that names
+//  itself has been more precise than one that only shows it is there.
+//
+//  A presence rule names the app itself, and the value is not read,
+//  because it identifies a PERSON rather than an application and the
+//  archive does not need it. Open WebUI sends either the separate
+//  user headers or, when FORWARD_USER_INFO_HEADER_JWT_SECRET is set,
+//  one signed JWT in their place (utils/headers.py, v0.12). Both
+//  default names are listed; renamed headers cannot be recognized.
 const APP_HEADERS = [
+    { header: "x-title", fromValue: true },
     { header: "x-openwebui-user-id", signature: "open-webui" },
     { header: "x-openwebui-user-name", signature: "open-webui" },
     { header: "x-openwebui-user-jwt", signature: "open-webui" },
 ];
+
+//  A title is reduced to the character set of a product token (below),
+//  lowercased, so it is a key client_names can hold: each run of
+//  anything else becomes one hyphen, and the ends are trimmed.
+//  "My Agent (dev)" -> "my-agent-dev"
+const TITLE_OTHER = /[^a-z0-9_.-]+/g;
+const TITLE_EDGE = /^-+|-+$/g;
 
 //  Prefix of a browser extension's signature: "ext-<id>". The prefix
 //  keeps a Firefox id, which may start with a digit, in the shape
@@ -82,15 +96,45 @@ function readExtensionOrigin(origin) {
 }
 
 /**
+ * Reduces a client's own name for itself to a signature. An empty
+ * or blank title is no name at all, and the User-Agent applies.
+ */
+function readTitle(value) {
+    const title = value
+        .trim()
+        .toLowerCase()
+        .replace(TITLE_OTHER, "-")
+        .replace(TITLE_EDGE, "");
+
+    if (!title) {
+        return null;
+    }
+
+    return title;
+}
+
+/**
  * Finds an app header that identifies the client.
  */
 function readAppHeader(getHeader) {
     for (const candidate of APP_HEADERS) {
-        if (!getHeader(candidate.header)) {
+        const value = getHeader(candidate.header);
+
+        if (!value) {
             continue;
         }
 
-        return candidate.signature;
+        if (!candidate.fromValue) {
+            return candidate.signature;
+        }
+
+        const title = readTitle(value);
+
+        if (!title) {
+            continue;
+        }
+
+        return title;
     }
 
     return null;

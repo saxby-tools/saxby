@@ -185,17 +185,20 @@ smallest models means long conversations get rerouted, and refused
 only when no model in the catalog fits.
 
 OpenClaw uses the OpenAI JavaScript SDK, so the decision log calls it
-`openai`. To name it, add this to Saxby's config:
+`openai`, and so is any other client built on that SDK. To have it
+logged as `openclaw`, add a `headers` entry to the provider:
 
 ```json
-"client_names": { "openai": "openclaw" }
+"saxby": {
+    "baseUrl": "http://127.0.0.1:11435/v1",
+    "api": "openai-completions",
+    "apiKey": "saxby",
+    "headers": { "X-Title": "OpenClaw" },
+    "models": [ ... ]
+}
 ```
 
-Any other client built on the same SDK gets the same name — on one
-machine, OpenClaw and another app both logged as `openai`, so this
-mapping would mislabel the other one.
-[Issue #21](https://github.com/saxby-tools/saxby/issues/21) tracks a way
-to tell them apart.
+See [Naming a client](#naming-a-client).
 
 OpenClaw's memory search can embed text through Ollama directly.
 Those calls do not pass through Saxby and are not logged.
@@ -298,8 +301,68 @@ settings above. Two things to know:
   [Issue #1](https://github.com/saxby-tools/saxby/issues/1) tracks a
   better rule.
 - The log names a script by the first word of its `User-Agent`:
-  `python`, `node`, `curl`, `openai`. Use `client_names` to tell them
-  apart.
+  `python`, `node`, `curl`, `openai`. Send an `X-Title` header to
+  name it yourself, as the next section shows, or use `client_names`.
+
+##  Naming a client
+
+The log names a client by the first word of its `User-Agent`, which
+is usually the name of its HTTP library. Two clients built on the
+same SDK get the same name: OpenClaw and another app on the OpenAI
+JavaScript SDK both log as `openai`, and `client_names` cannot tell
+them apart, since it keys on that name.
+
+Any client can name itself instead by sending an `X-Title` header.
+The convention is [OpenRouter's](https://openrouter.ai/docs/api-reference/overview#headers),
+where the header names an app for its rankings; OpenRouter now
+spells it `X-OpenRouter-Title` and still accepts `X-Title`. Saxby
+takes the value as the client's signature, lowercased, with each run
+of anything other than letters, digits, `_`, `.` and `-` replaced by
+one hyphen: `X-Title: OpenClaw` logs as `openclaw`, and `My Agent
+(dev)` as `my-agent-dev`. An empty value is ignored and the
+`User-Agent` applies. The raw `User-Agent` is still stored on every
+row, and Saxby does not pass the header on to the backend on chat
+requests.
+
+`client_names` and `client_defaults` key on the signature, so
+`{"openclaw": "OpenClaw"}` still applies. Rows written before a
+client started sending the header keep the signature they were
+written with.
+
+**OpenClaw** takes a `headers` map on each provider,
+`models.providers.<id>.headers`
+([custom providers](https://docs.openclaw.ai/gateway/config-tools/custom-providers),
+read Nov. 10, 2026; `src/config/types.models.ts` at v2026.11.3):
+
+```json
+"headers": { "X-Title": "OpenClaw" }
+```
+
+The full provider entry is under [OpenClaw](#openclaw).
+
+**Hermes Agent** takes an `extra_headers` map on a named provider
+entry under `providers`, matched to a request by its `base_url`
+(`cli-config.yaml.example` and `hermes_cli/config_providers.py` at
+v0.23.1, read Nov. 10, 2026). With the model block pointed at Saxby
+as a custom endpoint, add an entry with the same URL:
+
+```yaml
+model:
+  provider: "custom"
+  base_url: "http://127.0.0.1:11435/v1"
+
+providers:
+  saxby:
+    base_url: "http://127.0.0.1:11435/v1"
+    extra_headers:
+      X-Title: "Hermes"
+```
+
+Hermes treats header values as secrets and never logs them, so a
+typo in the name shows up in Saxby's log, not in Hermes's. A
+`default_headers` map under `model` does the same for every
+OpenAI-compatible request Hermes sends, which is the simpler form
+when Saxby is its only endpoint.
 
 ##  Where else your chats are stored
 

@@ -546,7 +546,9 @@ but it is in the file.
 `client_names` turns a client's signature into a friendly name in the
 log. The signature is the first word of the `User-Agent` in
 lowercase — `OpenClaw/2026.6.11` becomes `openclaw` — or `open-webui`
-when Open WebUI's own headers are present:
+when Open WebUI's own headers are present, or the client's own name
+when it sends an `X-Title` header; see
+[Naming a client](clients.md#naming-a-client):
 
 ```jsonc
 "client_names": { "python-httpx": "my-script" }
