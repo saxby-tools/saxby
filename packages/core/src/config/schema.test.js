@@ -49,6 +49,18 @@ Deno.test("config — prompt text is not logged unless asked for", () => {
     assertEquals(parsed.log_prompts, false);
 });
 
+Deno.test("config — user headers are not forwarded unless asked for", () => {
+    const parsed = validateConfig(config());
+
+    assertEquals(parsed.forward_user_headers, false);
+});
+
+Deno.test("config — forward_user_headers takes true", () => {
+    const parsed = validateConfig(config({ forward_user_headers: true }));
+
+    assertEquals(parsed.forward_user_headers, true);
+});
+
 //  =====================================================================
 //  Listening
 //  =====================================================================
