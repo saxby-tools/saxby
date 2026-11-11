@@ -160,6 +160,30 @@ The workflow opens a **draft** release with the four tarballs, their
 and [`saxby.rb`](../packaging/saxby.rb). Read it over, then click
 Publish. Nothing is public until then.
 
+**Signing.** On the macOS runner, after the build, the workflow
+imports the Developer ID certificate into a throwaway keychain,
+signs `saxbyd` and `saxby` for both darwin targets with the hardened
+runtime, the JIT entitlements V8 needs
+([`scripts/macos-entitlements.plist`](../scripts/macos-entitlements.plist))
+and a timestamp, submits each pair to Apple's notary service
+and waits for the verdict, then packs the tarballs again
+(`deno task sign-macos`, [`scripts/sign-macos.js`](../scripts/sign-macos.js)).
+A bare executable cannot be stapled, so the ticket stays with Apple
+and Gatekeeper checks it online. The step runs only when these five
+repository secrets exist, so a fork builds unsigned:
+
+| Secret                   | Holds                                                        |
+| ------------------------ | ------------------------------------------------------------ |
+| `MACOS_SIGNING_P12`      | the Developer ID Application certificate, base64 of the .p12 |
+| `MACOS_SIGNING_PASSWORD` | the .p12 password                                            |
+| `NOTARY_KEY_P8`          | the App Store Connect API key, base64 of the .p8             |
+| `NOTARY_KEY_ID`          | its key id                                                   |
+| `NOTARY_ISSUER_ID`       | its issuer id                                                |
+
+To check a build locally with no certificate, sign ad hoc and skip
+the notary: `SAXBY_SIGN_IDENTITY=- SAXBY_NOTARIZE=skip deno task
+sign-macos` after `deno task build`.
+
 **Publishing updates the packages.**
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml)
 runs when the release is published. It commits the release's
@@ -224,7 +248,11 @@ instead.) The binary prints one warning about it at boot. Recheck this
 when upgrading Deno, since the new behavior is meant to become the
 default.
 
-**macOS quarantines downloaded archives.** A tarball downloaded
-through a browser gets a quarantine attribute, and Gatekeeper blocks
-the unsigned binaries inside. Local builds are not affected. Signing
-and notarization are not set up.
+**macOS binaries are signed only when the secrets exist.** The
+release workflow signs and notarizes the two darwin binaries when
+the repository holds a Developer ID certificate and a notary key
+(see Signing above); without them it builds unsigned and prints a
+line saying so. An unsigned tarball downloaded through a browser
+gets a quarantine attribute, and Gatekeeper blocks the binaries
+inside; [Troubleshooting](troubleshooting.md) has the workaround.
+Local builds are not affected.
