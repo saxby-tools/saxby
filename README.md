@@ -125,11 +125,11 @@ deno task dev
 so the service on your machine keeps running untouched. See
 [Instances](docs/instances.md).
 
-| Package | What it is |
-| --- | --- |
-| `packages/llm-router` | `saxbyd`, the daemon |
-| `packages/cli` | `saxby`, the command line |
-| `packages/core` | Contracts shared by both |
+| Package                   | What it is                             |
+| ------------------------- | -------------------------------------- |
+| `packages/llm-router`     | `saxbyd`, the daemon                   |
+| `packages/cli`            | `saxby`, the command line              |
+| `packages/core`           | Contracts shared by both               |
 | `packages/vram-guard-mac` | Apple Silicon VRAM ceiling, macOS only |
 
 ## License
