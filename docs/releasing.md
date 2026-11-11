@@ -1,10 +1,10 @@
-#  Releasing
+# Releasing
 
 The checklist for cutting a release and for deploying a local build
 to the service on this machine. It works by hand the first time and
 drifts silently by the third, which is why it is written down.
 
-##  Version
+## Version
 
 Every package carries the same version. Bump all four together in the
 release commit:
@@ -20,7 +20,7 @@ packages/vram-guard-mac/deno.json
 cannot ship. The running daemon reports its version at
 `/saxby/v1/status`, and `saxby instance list` shows it.
 
-##  Build
+## Build
 
 With no argument, this builds `saxbyd` and `saxby` for the machine
 you are on. That is all a local deploy needs, and it takes a few
@@ -51,7 +51,7 @@ The first build for a target other than your own machine downloads
 that target's Deno runtime, about 40 MB, and prints nothing while it
 does. It is not stuck.
 
-##  Verify
+## Verify
 
 Check every archive against its checksum. On macOS:
 
@@ -78,7 +78,7 @@ default instance your clients use:
 curl -s http://127.0.0.1:11436/saxby/v1/status
 ```
 
-##  Deploy to this machine
+## Deploy to this machine
 
 One command builds this checkout, installs it, restarts the service
 and checks the result:
@@ -111,7 +111,7 @@ A restart does not rewrite the service file. When a release changes
 what that file contains — a new environment variable, for example —
 run `saxby service install` once after deploying.
 
-###  By hand
+### By hand
 
 The same steps, if you need them. Use `install`, never `cp`:
 
@@ -131,7 +131,7 @@ once its code signature no longer matches the pages on disk.
 `saxby instance list` shows the version each running instance
 reports, so a stale build is visible at a glance.
 
-##  Release
+## Release
 
 Releases are built by
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) on a
@@ -189,7 +189,7 @@ secrets:
 `HOMEBREW_TAP_DEPLOY_KEY`, a deploy key with write access to the tap,
 and `AUR_SSH_KEY`, the key registered with the AUR account.
 
-##  Packaging
+## Packaging
 
 None of the templates in `packaging/` is edited by hand per release.
 
@@ -206,7 +206,7 @@ before attaching the results to the draft release.
 and reads its version, architecture and staged directory from the
 environment. Its header shows the command. It is not run in CI.
 
-##  Known caveats
+## Known caveats
 
 **Compiled binaries run with legacy `request.signal` semantics.**
 `deno compile` ignores the `unstable` list in
