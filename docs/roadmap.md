@@ -107,10 +107,10 @@ known gaps are issues labelled
     - [x] `saxby reserve --gib N -- <command>`, and model loads that
           wait for room while a job holds memory
           ([Memory broker](memory-broker.md), #39). Known gaps: #34
-          through #38, and #71.
-    - [x] Every forwarded chat load is counted until the backend
-          lists it (#40), and a model's size is its largest whole
-          load (#41).
+          through #38.
+    - [x] Every forwarded load is counted until the backend lists it,
+          through chat (#40) and the catch-all (#71), and a model's
+          size is its largest whole load (#41).
     - [x] The inference paths the catch-all forwards take the same
           gate as chat (#33;
           [Which paths are gated](memory-broker.md#which-paths-are-gated)).
